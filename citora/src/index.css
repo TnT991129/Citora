@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand-rgb: 82 67 229;
+}
+
+html { -webkit-tap-highlight-color: transparent; }
+body { min-height: 100dvh; }
+
+@layer components {
+  .input {
+    @apply w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-base text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20 disabled:bg-slate-100;
+  }
+  .label { @apply mb-1.5 block text-sm font-medium text-slate-700; }
+  .card { @apply rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5; }
+  .chip { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium; }
+}
+
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
