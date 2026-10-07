@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { PageLoader } from './components/ui'
 import { supabaseConfigured } from './lib/supabase'
 
@@ -39,12 +39,29 @@ export default function App() {
         <Route path="/restablecer" element={<ResetPassword />} />
         <Route path="/panel/*" element={<Panel />} />
         <Route path="/admin/*" element={<Admin />} />
-        <Route path="/:slug" element={<BusinessHome />} />
-        <Route path="/:slug/reservar" element={<BookingFlow />} />
-        <Route path="/:slug/cita/:token" element={<BookingPage />} />
-        <Route path="/:slug/mis-citas" element={<MyAppointments />} />
+
+        {/* Cada negocio: su web de clientes y su panel */}
+        <Route path="/:slug/client" element={<BusinessHome />} />
+        <Route path="/:slug/client/reservar" element={<BookingFlow />} />
+        <Route path="/:slug/client/cita/:token" element={<BookingPage />} />
+        <Route path="/:slug/client/mis-citas" element={<MyAppointments />} />
+        <Route path="/:slug/panel-admin/*" element={<Panel />} />
+
+        {/* Direcciones de antes (enlaces ya enviados por WhatsApp): llevan a las nuevas */}
+        <Route path="/:slug" element={<ToClient />} />
+        <Route path="/:slug/reservar" element={<ToClient sub="reservar" />} />
+        <Route path="/:slug/cita/:token" element={<ToClient sub="cita" />} />
+        <Route path="/:slug/mis-citas" element={<ToClient sub="mis-citas" />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>
   )
+}
+
+/** Redirige una dirección antigua (/barberia-leo/...) a la web de clientes (/barberia-leo/client/...) */
+function ToClient({ sub }: { sub?: string }) {
+  const { slug, token } = useParams()
+  const { search } = useLocation()
+  const tail = sub === 'cita' ? `/cita/${token}` : sub ? `/${sub}` : ''
+  return <Navigate to={`/${slug}/client${tail}${search}`} replace />
 }

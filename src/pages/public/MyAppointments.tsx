@@ -4,6 +4,7 @@ import { PageLoader, StatusBadge } from '../../components/ui'
 import { dateKey, dayTitle, fullDateFromIso, money, timeOf } from '../../lib/format'
 import { forgetBooking, savedBookings } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
+import { clientPath } from '../../lib/url'
 import type { PublicBooking } from '../../lib/types'
 import NotFound from '../NotFound'
 import { Centered, PoweredBy, PublicHeader, usePublicBusiness } from './shared'
@@ -59,7 +60,7 @@ export default function MyAppointments() {
             <p className="text-slate-600">Todavía no tienes citas guardadas en este móvil.</p>
             <p className="mt-1 text-sm text-slate-500">Si reservaste desde otro móvil, abre el enlace de tu cita y quedará guardada aquí.</p>
             {business.accepting && (
-              <Link to={`/${business.slug}/reservar`} className="mt-4 flex w-full items-center justify-center rounded-2xl bg-brand py-3.5 font-bold text-white">
+              <Link to={clientPath(business.slug, 'reservar')} className="mt-4 flex w-full items-center justify-center rounded-2xl bg-brand py-3.5 font-bold text-white">
                 Reservar cita
               </Link>
             )}
@@ -83,7 +84,7 @@ export default function MyAppointments() {
                 <BookingList items={upcoming} slug={business.slug} tz={tz} currency={currency} />
               )}
               {business.accepting && (
-                <Link to={`/${business.slug}/reservar`} className="mt-3 flex w-full items-center justify-center rounded-2xl bg-brand py-3.5 font-bold text-white">
+                <Link to={clientPath(business.slug, 'reservar')} className="mt-3 flex w-full items-center justify-center rounded-2xl bg-brand py-3.5 font-bold text-white">
                   Reservar otra cita
                 </Link>
               )}
@@ -109,7 +110,7 @@ function BookingList({ items, slug, tz, currency }: { items: PublicBooking[]; sl
     <ul className="mt-2 divide-y divide-slate-100">
       {items.map((b) => (
         <li key={b.token}>
-          <Link to={`/${slug}/cita/${b.token}`} className="flex items-center justify-between gap-3 py-3">
+          <Link to={clientPath(slug, `cita/${b.token}`)} className="flex items-center justify-between gap-3 py-3">
             <span className="min-w-0">
               <span className="block font-semibold">
                 {dayTitle(dateKey(b.starts_at, tz))} <span className="font-normal text-slate-500">· {timeOf(b.starts_at, tz)}</span>

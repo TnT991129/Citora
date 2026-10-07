@@ -14,7 +14,7 @@ import { usePanel } from './context'
 import { NewAppointment } from './NewAppointment'
 
 export default function Today() {
-  const { business, status } = usePanel()
+  const { business, status, link } = usePanel()
   const tz = business.timezone
   const today = todayKey(tz)
   const tomorrow = addDays(today, 1)
@@ -132,7 +132,7 @@ export default function Today() {
       </section>
 
       <p className="text-center text-sm text-slate-500">
-        <Link to="/panel/agenda" className="font-semibold text-brand">Ver toda la agenda →</Link>
+        <Link to={link('agenda')} className="font-semibold text-brand">Ver toda la agenda →</Link>
       </p>
 
       {open && <AppointmentModal appointment={open} onClose={() => setOpen(null)} onChanged={() => { setOpen(null); load() }} />}

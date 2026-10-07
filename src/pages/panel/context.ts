@@ -7,6 +7,12 @@ export interface PanelCtx {
   services: Service[]
   reloadBusiness: () => Promise<void>
   reloadServices: () => Promise<void>
+  /** Inicio del panel de este negocio, ej. "/barberia-leo/panel-admin" */
+  base: string
+  /** Ruta de una sección del panel, ej. link('agenda') */
+  link: (sub?: string) => string
+  /** El dueño cambió su enlace: se actualiza la dirección del panel */
+  slugChanged: (slug: string) => void
 }
 
 export const PanelContext = createContext<PanelCtx | null>(null)

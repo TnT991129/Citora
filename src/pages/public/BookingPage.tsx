@@ -9,7 +9,7 @@ import { dateKey, duration, longDate, money, timeOf, todayKey, weekdayOf, dayTit
 import { rememberBooking } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
 import type { PublicBooking, PublicBusiness } from '../../lib/types'
-import { bookingUrl } from '../../lib/url'
+import { bookingUrl, clientPath } from '../../lib/url'
 import { waLink } from '../../lib/whatsapp'
 import { Centered, PoweredBy, PublicHeader, Stars } from './shared'
 
@@ -33,7 +33,7 @@ export default function BookingPage() {
     setBooking(b)
     if (b) {
       setBrandColor(b.business.color_primary)
-      setAppManifest({ name: b.business.name, path: b.business.slug, color: b.business.color_primary, logo: b.business.logo_url })
+      setAppManifest({ name: b.business.name, path: clientPath(b.business.slug).slice(1), color: b.business.color_primary, logo: b.business.logo_url })
       document.title = `Tu cita · ${b.business.name}`
       rememberBooking({ token: b.token, slug: b.business.slug, starts_at: b.starts_at })
     }
@@ -50,7 +50,7 @@ export default function BookingPage() {
       <Centered>
         <h1 className="text-xl font-bold">No encontramos esta cita</h1>
         <p className="text-slate-600">Revisa el enlace.</p>
-        <Link to={`/${slug}`} className="font-semibold text-brand">Ir al negocio</Link>
+        <Link to={clientPath(slug || '')} className="font-semibold text-brand">Ir al negocio</Link>
       </Centered>
     )
   }
@@ -136,7 +136,7 @@ export default function BookingPage() {
             {booking.customer.visits === 1
               ? <>Ya has venido <b>1 vez</b> a {b.name}.</>
               : <>Llevas <b>{booking.customer.visits} visitas</b> a {b.name}. ¡Gracias por volver!</>}
-            {' '}<Link to={`/${b.slug}/mis-citas`} className="font-semibold text-brand">Mis citas</Link>
+            {' '}<Link to={clientPath(b.slug, 'mis-citas')} className="font-semibold text-brand">Mis citas</Link>
           </p>
         )}
 
@@ -169,7 +169,7 @@ export default function BookingPage() {
         )}
 
         {!active && (
-          <Link to={`/${b.slug}/reservar`} className="flex w-full items-center justify-center rounded-2xl bg-brand py-4 text-lg font-bold text-white">
+          <Link to={clientPath(b.slug, 'reservar')} className="flex w-full items-center justify-center rounded-2xl bg-brand py-4 text-lg font-bold text-white">
             Reservar otra cita
           </Link>
         )}

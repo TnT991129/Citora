@@ -9,7 +9,7 @@ import { errorMessage } from '../lib/errors'
 import { cleanPhone, duration, money, slugify, WEEKDAYS_SHORT } from '../lib/format'
 import { supabase } from '../lib/supabase'
 import { BUSINESS_TYPES, businessType } from '../lib/templates'
-import { publicUrl } from '../lib/url'
+import { panelPath, publicUrl, siteUrl } from '../lib/url'
 import { shareLink } from '../lib/whatsapp'
 
 const STEPS = ['Tipo', 'Negocio', 'Servicios', 'Horario', 'Cuenta']
@@ -255,7 +255,7 @@ export default function Create() {
             }
           >
             <div className="flex items-center overflow-hidden rounded-xl border border-slate-300 bg-white focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20">
-              <span className="shrink-0 bg-slate-50 py-2.5 pl-3 pr-1 text-sm text-slate-500">{publicUrl('').replace(/^https?:\/\//, '')}</span>
+              <span className="shrink-0 bg-slate-50 py-2.5 pl-3 pr-1 text-sm text-slate-500">{siteUrl().replace(/^https?:\/\//, '')}</span>
               <input
                 className="w-full min-w-0 py-2.5 pr-3 text-base outline-none"
                 value={draft.slug}
@@ -511,7 +511,7 @@ function Success({ slug, name }: { slug: string; name: string }) {
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <LinkButton href={url} variant="secondary" size="lg" newTab>Ver mi app</LinkButton>
-        <Link to="/panel" className="inline-flex items-center justify-center rounded-xl bg-brand px-5 py-3.5 font-semibold text-white">Ir a mi panel</Link>
+        <Link to={panelPath(slug)} className="inline-flex items-center justify-center rounded-xl bg-brand px-5 py-3.5 font-semibold text-white">Ir a mi panel</Link>
       </div>
     </Shell>
   )

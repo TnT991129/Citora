@@ -6,6 +6,7 @@ import { dateKey, duration, money, timeOf, WEEKDAYS, dayTitle } from '../../lib/
 import { savedBookings, type SavedBooking } from '../../lib/storage'
 import { waLink } from '../../lib/whatsapp'
 import { supabase } from '../../lib/supabase'
+import { clientPath } from '../../lib/url'
 import type { GalleryPhoto, PublicBooking, PublicReview } from '../../lib/types'
 import NotFound from '../NotFound'
 import { Centered, Closed, PoweredBy, Stars, usePublicBusiness } from './shared'
@@ -107,7 +108,7 @@ export default function BusinessHome() {
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur safe-bottom">
           <div className="mx-auto max-w-xl">
             <Link
-              to={`/${business.slug}/reservar`}
+              to={clientPath(business.slug, 'reservar')}
               className="flex w-full items-center justify-center rounded-2xl bg-brand py-4 text-lg font-bold text-white shadow-lg shadow-brand/30 active:scale-[0.98]"
             >
               Reservar cita
@@ -140,7 +141,7 @@ function MyBookings({ slug, tz }: { slug: string; tz: string }) {
   if (visible.length === 0) {
     if (!hasHistory) return null
     return (
-      <Link to={`/${slug}/mis-citas`} className="card flex items-center justify-between font-semibold">
+      <Link to={clientPath(slug, 'mis-citas')} className="card flex items-center justify-between font-semibold">
         <span>📋 Mis citas</span>
         <span className="text-brand">Ver historial →</span>
       </Link>
@@ -150,14 +151,14 @@ function MyBookings({ slug, tz }: { slug: string; tz: string }) {
     <section className="card">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-lg font-bold">Tus próximas citas</h2>
-        <Link to={`/${slug}/mis-citas`} className="text-sm font-semibold text-brand">Ver todas</Link>
+        <Link to={clientPath(slug, 'mis-citas')} className="text-sm font-semibold text-brand">Ver todas</Link>
       </div>
       <ul className="mt-2 divide-y divide-slate-100">
         {visible.map((b) => {
           const start = b.data?.starts_at || b.starts_at
           return (
             <li key={b.token}>
-              <Link to={`/${slug}/cita/${b.token}`} className="flex items-center justify-between gap-2 py-3">
+              <Link to={clientPath(slug, `cita/${b.token}`)} className="flex items-center justify-between gap-2 py-3">
                 <span>
                   <span className="font-semibold">{dayTitle(dateKey(start, tz))}</span>
                   <span className="text-slate-500"> · {timeOf(start, tz)}</span>

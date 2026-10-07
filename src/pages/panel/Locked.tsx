@@ -10,13 +10,14 @@ export function useModule(module: ModuleKey): boolean {
 
 /** Aviso cuando el plan actual no incluye un módulo */
 export function Locked({ module }: { module: ModuleKey }) {
+  const { link } = usePanel()
   const needed = PLAN_ORDER.find((p) => PLAN_MODULES[p].includes(module))!
   return (
     <div className="card mx-auto max-w-md text-center">
       <p className="text-4xl">🔒</p>
       <h1 className="mt-2 text-xl font-bold">{MODULES[module].name}</h1>
       <p className="mt-1 text-slate-600">Está incluido desde el plan <b>{PLAN_NAMES[needed]}</b>.</p>
-      <Link to="/panel/plan" className="mt-4 inline-flex items-center justify-center rounded-xl bg-brand px-5 py-3 font-semibold text-white">
+      <Link to={link('plan')} className="mt-4 inline-flex items-center justify-center rounded-xl bg-brand px-5 py-3 font-semibold text-white">
         Ver planes
       </Link>
     </div>

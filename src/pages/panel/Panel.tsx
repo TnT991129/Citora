@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Alert, BusinessAvatar, Button, CitoraLogo, PageLoader } from '../../components/ui'
 import { useSession } from '../../lib/auth'
 import { setBrandColor } from '../../lib/brand'
@@ -9,6 +9,7 @@ import { errorMessage } from '../../lib/errors'
 import { daysLeft, hoursLeft } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import type { Business, MyStatus, Service } from '../../lib/types'
+import { panelPath } from '../../lib/url'
 import Agenda from './Agenda'
 import { PanelContext } from './context'
 import Backup from './Backup'
@@ -29,6 +30,9 @@ import Today from './Today'
 export default function Panel() {
   const session = useSession()
   const navigate = useNavigate()
+  const location = useLocation()
+  // /:slug/panel-admin/*  (o /panel/* de antes, que lleva al panel propio)
+  const { slug, '*': rest = '' } = useParams()
   const [business, setBusiness] = useState<Business | null | undefined>(undefined)
   const [status, setStatus] = useState<MyStatus | null>(null)
   const [services, setServices] = useState<Service[]>([])
@@ -48,7 +52,7 @@ export default function Panel() {
     if (b) {
       const biz = b as Business
       setBrandColor(biz.color_primary)
-      setAppManifest({ name: `${biz.name} · Panel`, shortName: biz.name, path: 'panel', color: biz.color_primary, logo: biz.logo_url })
+      setAppManifest({ name: `${biz.name} · Panel`, shortName: biz.name, path: panelPath(biz.slug).slice(1), color: biz.color_primary, logo: biz.logo_url })
     }
   }, [])
 
@@ -86,12 +90,17 @@ export default function Panel() {
     })()
   }, [session, navigate, reloadBusiness, reloadServices])
 
-  if (session === null) return <Navigate to="/entrar" replace />
+  const slugChanged = useCallback((newSlug: string) => {
+    setBusiness((b) => (b ? { ...b, slug: newSlug } : b))
+    navigate(panelPath(newSlug, rest), { replace: true })
+  }, [navigate, rest])
+
+  if (session === null) return <Navigate to={`/entrar?next=${encodeURIComponent(location.pathname)}`} replace />
   if (error && !business) {
     return (
       <div className="mx-auto max-w-md p-6">
         <Alert>{error}</Alert>
-        <Button className="mt-4" variant="secondary" onClick={() => location.reload()}>Reintentar</Button>
+        <Button className="mt-4" variant="secondary" onClick={() => window.location.reload()}>Reintentar</Button>
       </div>
     )
   }
@@ -107,10 +116,39 @@ export default function Panel() {
     )
   }
 
+  // Dirección antigua (/panel): se lleva al panel propio con su enlace
+  if (!slug) return <Navigate to={panelPath(business.slug, rest)} replace />
+  // El panel de otro negocio: no se muestra nada suyo
+  if (slug.toLowerCase() !== business.slug) {
+    return (
+      <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 p-6 text-center">
+        <CitoraLogo className="text-xl" />
+        <h1 className="text-xl font-bold">Este panel es de otro negocio</h1>
+        <p className="text-slate-600">
+          Estás conectado como <b>{session.user.email}</b>, dueño de <b>{business.name}</b>.
+        </p>
+        <Link to={panelPath(business.slug)} className="w-full rounded-xl bg-citora-600 px-5 py-3 font-semibold text-white">
+          Ir al panel de {business.name}
+        </Link>
+        <button
+          onClick={async () => {
+            await supabase.auth.signOut()
+            navigate(`/entrar?next=${encodeURIComponent(location.pathname)}`, { replace: true })
+          }}
+          className="w-full rounded-xl px-5 py-3 font-semibold text-slate-700 ring-1 ring-slate-300"
+        >
+          Entrar con la cuenta de este negocio
+        </button>
+      </div>
+    )
+  }
+
   const blocked = status.status === 'vencido'
+  const base = panelPath(business.slug)
+  const link = (sub = '') => panelPath(business.slug, sub)
 
   return (
-    <PanelContext.Provider value={{ business, status, services, reloadBusiness, reloadServices }}>
+    <PanelContext.Provider value={{ business, status, services, reloadBusiness, reloadServices, base, link, slugChanged }}>
       <div className="min-h-dvh pb-24 md:pb-8">
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
           <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-2.5">
@@ -120,13 +158,13 @@ export default function Panel() {
               <p className="truncate text-xs text-slate-500">Código {business.code}</p>
             </div>
             <nav className="hidden gap-1 md:flex">
-              {!blocked && NAV.map((n) => <TopLink key={n.to} {...n} />)}
-              {blocked && <TopLink to="/panel/plan" label="Plan" />}
+              {!blocked && NAV.map((n) => <TopLink key={n.sub} base={base} to={link(n.sub)} label={n.label} />)}
+              {blocked && <TopLink base={base} to={link('plan')} label="Plan" />}
             </nav>
           </div>
         </header>
 
-        <StatusBanner status={status} />
+        <StatusBanner status={status} planLink={link('plan')} />
 
         <main className="mx-auto max-w-4xl px-4 py-5">
           {blocked ? (
@@ -150,14 +188,14 @@ export default function Panel() {
               <Route path="respaldo" element={<Backup />} />
               <Route path="mas" element={<More />} />
               <Route path="plan" element={<PlanPage />} />
-              <Route path="*" element={<Navigate to="/panel" replace />} />
+              <Route path="*" element={<Navigate to={base} replace />} />
             </Routes>
           )}
         </main>
 
         {!blocked && (
           <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white safe-bottom md:hidden">
-            {NAV.map((n) => <BottomLink key={n.to} {...n} />)}
+            {NAV.map((n) => <BottomLink key={n.sub} base={base} to={link(n.sub)} label={n.label} icon={n.icon} />)}
           </nav>
         )}
       </div>
@@ -166,25 +204,25 @@ export default function Panel() {
 }
 
 const NAV = [
-  { to: '/panel', label: 'Hoy', icon: 'home' },
-  { to: '/panel/agenda', label: 'Agenda', icon: 'calendar' },
-  { to: '/panel/clientes', label: 'Clientes', icon: 'users' },
-  { to: '/panel/servicios', label: 'Servicios', icon: 'list' },
-  { to: '/panel/mas', label: 'Más', icon: 'grid' },
+  { sub: '', label: 'Hoy', icon: 'home' },
+  { sub: 'agenda', label: 'Agenda', icon: 'calendar' },
+  { sub: 'clientes', label: 'Clientes', icon: 'users' },
+  { sub: 'servicios', label: 'Servicios', icon: 'list' },
+  { sub: 'mas', label: 'Más', icon: 'grid' },
 ] as const
 
 // Secciones a las que se llega desde "Más": la pestaña "Más" queda marcada en ellas
-const MORE_PATHS = ['/panel/mas', '/panel/estadisticas', '/panel/opiniones', '/panel/galeria', '/panel/recordatorios', '/panel/espera', '/panel/cupones', '/panel/respaldo', '/panel/horario', '/panel/ajustes', '/panel/plan']
+const MORE_SUBS = ['mas', 'estadisticas', 'opiniones', 'galeria', 'recordatorios', 'espera', 'cupones', 'respaldo', 'horario', 'ajustes', 'plan']
 
-function useIsActive(to: string): boolean {
+function useIsActive(to: string, base: string): boolean {
   const { pathname } = useLocation()
-  const path = pathname.replace(/\/+$/, '') || '/panel'
-  if (to === '/panel/mas') return MORE_PATHS.some((p) => path === p)
-  return to === '/panel' ? path === '/panel' : path === to || path.startsWith(to + '/')
+  const path = pathname.replace(/\/+$/, '')
+  if (to === `${base}/mas`) return MORE_SUBS.some((s) => path === `${base}/${s}`)
+  return to === base ? path === base : path === to || path.startsWith(to + '/')
 }
 
-function TopLink({ to, label }: { to: string; label: string }) {
-  const active = useIsActive(to)
+function TopLink({ to, label, base }: { to: string; label: string; base: string }) {
+  const active = useIsActive(to, base)
   return (
     <Link
       to={to}
@@ -195,8 +233,8 @@ function TopLink({ to, label }: { to: string; label: string }) {
   )
 }
 
-function BottomLink({ to, label, icon }: { to: string; label: string; icon: string }) {
-  const active = useIsActive(to)
+function BottomLink({ to, label, icon, base }: { to: string; label: string; icon: string; base: string }) {
+  const active = useIsActive(to, base)
   return (
     <Link to={to} className={`flex flex-col items-center gap-0.5 py-2 text-[11px] font-semibold ${active ? 'text-brand' : 'text-slate-500'}`}>
       <Icon name={icon} />
@@ -205,7 +243,7 @@ function BottomLink({ to, label, icon }: { to: string; label: string; icon: stri
   )
 }
 
-function StatusBanner({ status }: { status: MyStatus }) {
+function StatusBanner({ status, planLink }: { status: MyStatus; planLink: string }) {
   if (status.status === 'prueba') {
     const h = hoursLeft(status.trial_ends_at)
     const left = h > 24 ? `${daysLeft(status.trial_ends_at)} días` : `${h} horas`
@@ -213,7 +251,7 @@ function StatusBanner({ status }: { status: MyStatus }) {
       <div className="border-b border-violet-200 bg-violet-50">
         <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-2 px-4 py-2 text-sm text-violet-900">
           <span>Prueba gratis con todo incluido · te quedan <b>{left}</b></span>
-          <Link to="/panel/plan" className="font-semibold underline">Elegir plan</Link>
+          <Link to={planLink} className="font-semibold underline">Elegir plan</Link>
         </div>
       </div>
     )
@@ -223,7 +261,7 @@ function StatusBanner({ status }: { status: MyStatus }) {
       <div className="border-b border-amber-200 bg-amber-50">
         <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-2 px-4 py-2 text-sm text-amber-900">
           <span>Tu plan vence en <b>{daysLeft(status.paid_until)} días</b>. Renueva para no perder reservas.</span>
-          <Link to="/panel/plan" className="font-semibold underline">Renovar</Link>
+          <Link to={planLink} className="font-semibold underline">Renovar</Link>
         </div>
       </div>
     )

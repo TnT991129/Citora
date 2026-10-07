@@ -6,11 +6,11 @@ import { slugify } from '../../lib/format'
 import { resizeImage } from '../../lib/image'
 import { supabase } from '../../lib/supabase'
 import { BUSINESS_TYPES } from '../../lib/templates'
-import { publicUrl } from '../../lib/url'
+import { panelUrl, publicUrl } from '../../lib/url'
 import { usePanel } from './context'
 
 export default function Settings() {
-  const { business, reloadBusiness } = usePanel()
+  const { business, reloadBusiness, slugChanged } = usePanel()
   const [form, setForm] = useState({
     name: business.name,
     slug: business.slug,
@@ -52,6 +52,7 @@ export default function Settings() {
     setBusy(false)
     if (error) return setError(errorMessage(error))
     flash('Guardado')
+    if (form.slug !== business.slug) slugChanged(form.slug)
     reloadBusiness()
   }
 
@@ -112,7 +113,7 @@ export default function Settings() {
       <section className="card space-y-4">
         <h2 className="font-bold">Tu negocio</h2>
         <Field label="Nombre"><input className="input" value={form.name} maxLength={60} onChange={(e) => set({ name: e.target.value })} /></Field>
-        <Field label="Enlace" hint={publicUrl(form.slug).replace(/^https?:\/\//, '')}>
+        <Field label="Enlace" hint={<>Clientes: {publicUrl(form.slug).replace(/^https?:\/\//, '')}<br />Tu panel: {panelUrl(form.slug).replace(/^https?:\/\//, '')}</>}>
           <input className="input" value={form.slug} maxLength={40} onChange={(e) => set({ slug: slugify(e.target.value) })} />
         </Field>
         {form.slug !== business.slug && (

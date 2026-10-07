@@ -6,6 +6,7 @@ import { setAppManifest } from '../../lib/pwa'
 import { errorMessage } from '../../lib/errors'
 import { supabase } from '../../lib/supabase'
 import type { PublicBusiness } from '../../lib/types'
+import { clientPath } from '../../lib/url'
 
 /** Carga los datos públicos de un negocio y aplica su color */
 export function usePublicBusiness(slug: string | undefined) {
@@ -26,7 +27,7 @@ export function usePublicBusiness(slug: string | undefined) {
       if (b) {
         setBrandColor(b.color_primary)
         document.title = b.name
-        setAppManifest({ name: b.name, path: b.slug, color: b.color_primary, logo: b.logo_url })
+        setAppManifest({ name: b.name, path: clientPath(b.slug).slice(1), color: b.color_primary, logo: b.logo_url })
       }
     })
     return () => {
@@ -42,11 +43,11 @@ export function PublicHeader({ business, back }: { business: Pick<PublicBusiness
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="mx-auto flex max-w-xl items-center gap-3 px-4 py-3">
         {back && (
-          <Link to={`/${business.slug}`} className="-ml-2 rounded-full p-2 text-slate-600 hover:bg-slate-100" aria-label="Volver">
+          <Link to={clientPath(business.slug)} className="-ml-2 rounded-full p-2 text-slate-600 hover:bg-slate-100" aria-label="Volver">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 6l-6 6 6 6" /></svg>
           </Link>
         )}
-        <Link to={`/${business.slug}`} className="flex min-w-0 items-center gap-2.5">
+        <Link to={clientPath(business.slug)} className="flex min-w-0 items-center gap-2.5">
           <BusinessAvatar name={business.name} logo={business.logo_url} size={34} />
           <span className="truncate font-bold">{business.name}</span>
         </Link>

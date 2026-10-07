@@ -1,14 +1,18 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Alert, Button, CitoraLogo, Field } from '../components/ui'
 import { useSession } from '../lib/auth'
 import { setBrandColor } from '../lib/brand'
 import { errorMessage } from '../lib/errors'
 import { supabase } from '../lib/supabase'
+import { panelPath } from '../lib/url'
 
 export default function Login() {
   const session = useSession()
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  // Página a la que volver después de entrar (solo rutas internas)
+  const next = (params.get('next') || '').startsWith('/') && !(params.get('next') || '').startsWith('//') ? params.get('next') : null
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -21,8 +25,14 @@ export default function Login() {
     document.title = 'Entrar · Citora'
   }, [])
 
-  const goToPanel = () =>
-    supabase.rpc('is_platform_admin').then(({ data }) => navigate(data ? '/admin' : '/panel', { replace: true }))
+  // El administrador va a su panel; el dueño, al panel de su negocio
+  const goToPanel = async () => {
+    if (next) return navigate(next, { replace: true })
+    const { data: isAdmin } = await supabase.rpc('is_platform_admin')
+    if (isAdmin) return navigate('/admin', { replace: true })
+    const { data: biz } = await supabase.from('businesses').select('slug').maybeSingle()
+    navigate(biz ? panelPath((biz as { slug: string }).slug) : '/panel', { replace: true })
+  }
 
   // Al entrar: el administrador va a su panel, el dueño al suyo
   useEffect(() => {

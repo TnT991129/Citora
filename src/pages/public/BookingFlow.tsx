@@ -7,6 +7,7 @@ import { duration, money, weekdayOf, zonedToIso, dayTitle } from '../../lib/form
 import { hasModule } from '../../lib/plans'
 import { load, rememberBooking, save } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
+import { clientPath } from '../../lib/url'
 import NotFound from '../NotFound'
 import { Closed, PublicHeader, usePublicBusiness } from './shared'
 
@@ -91,7 +92,7 @@ export default function BookingFlow() {
     }
     const token = data as string
     rememberBooking({ token, slug: business.slug, starts_at: zonedToIso(date!, time!, business.timezone) })
-    navigate(`/${business.slug}/cita/${token}?nueva=1`, { replace: true })
+    navigate(`${clientPath(business.slug, `cita/${token}`)}?nueva=1`, { replace: true })
   }
 
   return (
