@@ -1526,3 +1526,7 @@ begin
   end if;
 end;
 $$;
+-- ---------------------------------------------------------------------
+-- 10. Avisa a la API de Supabase de que hay funciones o tablas nuevas
+-- ---------------------------------------------------------------------
+notify pgrst, 'reload schema';
