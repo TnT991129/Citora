@@ -1,5 +1,5 @@
 -- =====================================================================
--- CITORA · Base de datos (Fases 1 y 2)
+-- CITORA · Base de datos (Fases 1, 2 y 3)
 -- Ejecutar completo en Supabase > SQL Editor > New query > Run.
 -- Se puede volver a ejecutar sin romper nada (usa "if not exists" y
 -- "create or replace" siempre que se puede).
@@ -197,6 +197,40 @@ alter table public.gallery_photos add column if not exists created_at timestampt
 alter table public.customer_notes add column if not exists note text check (char_length(note) <= 1000);
 alter table public.customer_notes add column if not exists tags text[] not null default '{}';
 alter table public.customer_notes add column if not exists updated_at timestamptz not null default now();
+
+-- Lista de espera: clientes que quieren un hueco en un día lleno
+create table if not exists public.waitlist (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  day date not null,
+  customer_name text not null,
+  customer_phone text not null,
+  note text check (char_length(note) <= 300),
+  status text not null default 'esperando' check (status in ('esperando', 'avisado', 'descartado')),
+  created_at timestamptz not null default now()
+);
+create index if not exists waitlist_business_idx on public.waitlist (business_id, day);
+
+-- Cupones de descuento: porcentaje o importe fijo (uno de los dos)
+create table if not exists public.discounts (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  code text not null check (code ~ '^[A-Z0-9-]{3,20}$'),
+  percent int check (percent between 1 and 100),
+  amount numeric(10, 2) check (amount > 0),
+  active boolean not null default true,
+  valid_until date,
+  max_uses int check (max_uses > 0),
+  uses int not null default 0,
+  created_at timestamptz not null default now(),
+  check ((percent is null) <> (amount is null)),
+  unique (business_id, code)
+);
+
+-- Fase 3 en las citas: cupón aplicado y recordatorio enviado
+alter table public.appointments add column if not exists discount_code text;
+alter table public.appointments add column if not exists discount numeric(10, 2) not null default 0;
+alter table public.appointments add column if not exists reminded_at timestamptz;
 
 -- ---------------------------------------------------------------------
 -- 2. FUNCIONES DE APOYO
@@ -426,6 +460,57 @@ create policy notes_owner_all on public.customer_notes for all to authenticated
   using (business_id = my_business_id() and my_plan_has('clientes'))
   with check (business_id = my_business_id() and my_plan_has('clientes'));
 
+alter table public.waitlist enable row level security;
+alter table public.discounts enable row level security;
+
+-- waitlist: el dueño ve y gestiona la suya (los clientes se apuntan con join_waitlist)
+drop policy if exists waitlist_owner_select on public.waitlist;
+create policy waitlist_owner_select on public.waitlist for select to authenticated
+  using (business_id = my_business_id() and my_business_active());
+drop policy if exists waitlist_owner_update on public.waitlist;
+create policy waitlist_owner_update on public.waitlist for update to authenticated
+  using (business_id = my_business_id() and my_plan_has('espera'))
+  with check (business_id = my_business_id());
+drop policy if exists waitlist_owner_delete on public.waitlist;
+create policy waitlist_owner_delete on public.waitlist for delete to authenticated
+  using (business_id = my_business_id());
+
+-- discounts: el dueño ve los suyos y los gestiona si su plan incluye descuentos
+drop policy if exists discounts_owner_select on public.discounts;
+create policy discounts_owner_select on public.discounts for select to authenticated
+  using (business_id = my_business_id());
+drop policy if exists discounts_owner_insert on public.discounts;
+create policy discounts_owner_insert on public.discounts for insert to authenticated
+  with check (business_id = my_business_id() and my_plan_has('descuentos'));
+drop policy if exists discounts_owner_update on public.discounts;
+create policy discounts_owner_update on public.discounts for update to authenticated
+  using (business_id = my_business_id() and my_plan_has('descuentos'))
+  with check (business_id = my_business_id());
+drop policy if exists discounts_owner_delete on public.discounts;
+create policy discounts_owner_delete on public.discounts for delete to authenticated
+  using (business_id = my_business_id());
+
+-- Código en mayúsculas; el dueño no puede tocar el contador de usos
+create or replace function public.discounts_guard()
+returns trigger language plpgsql as $$
+begin
+  new.code := upper(btrim(new.code));
+  if current_user in ('authenticated', 'anon') then
+    if tg_op = 'INSERT' then
+      new.uses := 0;
+    else
+      new.uses := old.uses;
+      new.business_id := old.business_id;
+      new.created_at := old.created_at;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists discounts_guard on public.discounts;
+create trigger discounts_guard before insert or update on public.discounts
+  for each row execute function public.discounts_guard();
+
 -- El dueño solo puede tocar "hidden" y "reply" de una opinión
 create or replace function public.reviews_guard()
 returns trigger language plpgsql as $$
@@ -630,13 +715,66 @@ returns text language sql immutable as $$
   select regexp_replace(coalesce(p, ''), '\D', '', 'g');
 $$;
 
+-- Valida un cupón y devuelve el descuento sobre un subtotal. Con p_lock bloquea la fila para usarlo.
+create or replace function public._discount_for(p_business uuid, p_code text, p_subtotal numeric, p_lock boolean default false)
+returns table (code text, percent int, amount numeric, discount numeric)
+language plpgsql volatile security definer set search_path = public as $$
+declare
+  b businesses;
+  d discounts;
+begin
+  select * into b from businesses where id = p_business;
+  if not plan_has(business_effective_plan(b.plan, b.trial_ends_at, b.paid_until), 'descuentos') then
+    raise exception 'CUPON_INVALIDO';
+  end if;
+  if p_lock then
+    select * into d from discounts x where x.business_id = p_business and x.code = upper(btrim(p_code)) for update;
+  else
+    select * into d from discounts x where x.business_id = p_business and x.code = upper(btrim(p_code));
+  end if;
+  if not found or not d.active then raise exception 'CUPON_INVALIDO'; end if;
+  if d.valid_until is not null and d.valid_until < (now() at time zone b.timezone)::date then
+    raise exception 'CUPON_VENCIDO';
+  end if;
+  if d.max_uses is not null and d.uses >= d.max_uses then raise exception 'CUPON_AGOTADO'; end if;
+  code := d.code;
+  percent := d.percent;
+  amount := d.amount;
+  discount := least(p_subtotal, coalesce(d.amount, round(p_subtotal * d.percent / 100.0, 2)));
+  return next;
+end;
+$$;
+
+-- Comprueba un cupón antes de reservar (no lo gasta)
+create or replace function public.check_discount(p_slug text, p_code text, p_service_ids uuid[])
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+declare
+  b businesses;
+  v_sub numeric;
+  r record;
+begin
+  select * into b from businesses where slug = lower(p_slug);
+  if not found or business_effective_plan(b.plan, b.trial_ends_at, b.paid_until) is null then
+    raise exception 'NEGOCIO_INACTIVO';
+  end if;
+  select coalesce(sum(price), 0) into v_sub
+    from services where business_id = b.id and active and id = any (coalesce(p_service_ids, '{}'));
+  select * into r from _discount_for(b.id, p_code, v_sub);
+  return jsonb_build_object('code', r.code, 'percent', r.percent, 'amount', r.amount,
+                            'subtotal', v_sub, 'discount', r.discount, 'total', v_sub - r.discount);
+end;
+$$;
+
 -- Reserva desde la web pública
+drop function if exists public.create_booking(text, uuid[], date, text, text, text, text);
 create or replace function public.create_booking(
   p_slug text, p_service_ids uuid[], p_date date, p_time text,
-  p_name text, p_phone text, p_note text default null)
+  p_name text, p_phone text, p_note text default null, p_code text default null)
 returns text language plpgsql volatile security definer set search_path = public as $$
 declare
   b businesses;
+  v_disc numeric := 0;
+  v_code text;
   v_phone text;
   v_name text;
   v_count int;
@@ -685,13 +823,20 @@ begin
   if v_check = 'invalido' then raise exception 'TURNO_INVALIDO'; end if;
   if v_check = 'ocupado' then raise exception 'TURNO_OCUPADO'; end if;
 
+  -- Cupón: se valida y se gasta en la misma transacción que la reserva
+  if nullif(btrim(coalesce(p_code, '')), '') is not null then
+    select d.code, d.discount into v_code, v_disc from _discount_for(b.id, p_code, v_total, true) d;
+    update discounts set uses = uses + 1 where business_id = b.id and code = v_code;
+  end if;
+
   v_start := (p_date + p_time::time) at time zone b.timezone;
   v_token := replace(gen_random_uuid()::text, '-', '');
   begin
     insert into appointments (business_id, token, starts_at, ends_at, customer_name, customer_phone,
-                              customer_note, total, status, source)
+                              customer_note, total, status, source, discount_code, discount)
     values (b.id, v_token, v_start, v_start + make_interval(mins => v_dur), v_name, v_phone,
-            nullif(left(btrim(coalesce(p_note, '')), 500), ''), v_total, 'pendiente', 'web')
+            nullif(left(btrim(coalesce(p_note, '')), 500), ''), v_total - v_disc, 'pendiente', 'web',
+            v_code, v_disc)
     returning id into v_id;
   exception when exclusion_violation then
     raise exception 'TURNO_OCUPADO';
@@ -717,6 +862,8 @@ returns jsonb language sql stable security definer set search_path = public as $
     'customer_phone', a.customer_phone,
     'customer_note', a.customer_note,
     'total', a.total,
+    'discount', a.discount,
+    'discount_code', a.discount_code,
     'status', a.status,
     'reschedule_count', a.reschedule_count,
     'can_change', a.status in ('pendiente', 'confirmada')
@@ -817,6 +964,39 @@ begin
   values (a.business_id, a.id, a.customer_name, p_rating, nullif(left(btrim(coalesce(p_comment, '')), 500), ''))
   on conflict (appointment_id) do update
     set rating = excluded.rating, comment = excluded.comment, updated_at = now();
+end;
+$$;
+
+-- El cliente se apunta a la lista de espera de un día lleno
+create or replace function public.join_waitlist(p_slug text, p_date date, p_name text, p_phone text, p_note text default null)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  b businesses;
+  v_phone text := _clean_phone(p_phone);
+  v_today date;
+begin
+  select * into b from businesses where slug = lower(p_slug);
+  if not found then raise exception 'NEGOCIO_NO_EXISTE'; end if;
+  if business_effective_plan(b.plan, b.trial_ends_at, b.paid_until) is null then raise exception 'NEGOCIO_INACTIVO'; end if;
+  if not plan_has(business_effective_plan(b.plan, b.trial_ends_at, b.paid_until), 'espera') then
+    raise exception 'NO_DISPONIBLE';
+  end if;
+  if char_length(btrim(coalesce(p_name, ''))) not between 2 and 80 then raise exception 'NOMBRE_INVALIDO'; end if;
+  if char_length(v_phone) not between 8 and 15 then raise exception 'TELEFONO_INVALIDO'; end if;
+  v_today := (now() at time zone b.timezone)::date;
+  if p_date is null or p_date < v_today or p_date > v_today + b.max_days_ahead then raise exception 'TURNO_INVALIDO'; end if;
+
+  -- Ya apuntado ese día: no se duplica
+  if exists (select 1 from waitlist where business_id = b.id and day = p_date
+             and customer_phone = v_phone and status = 'esperando') then
+    return;
+  end if;
+  if (select count(*) from waitlist where business_id = b.id and customer_phone = v_phone
+      and status = 'esperando' and day >= v_today) >= 3 then
+    raise exception 'LIMITE_ESPERA';
+  end if;
+  insert into waitlist (business_id, day, customer_name, customer_phone, note)
+  values (b.id, p_date, btrim(p_name), v_phone, nullif(left(btrim(coalesce(p_note, '')), 300), ''));
 end;
 $$;
 
@@ -1242,7 +1422,9 @@ revoke execute on all functions in schema public from public;
 grant execute on function public.get_public_prices() to anon, authenticated;
 grant execute on function public.get_public_business(text) to anon, authenticated;
 grant execute on function public.get_available_slots(text, date, int) to anon, authenticated;
-grant execute on function public.create_booking(text, uuid[], date, text, text, text, text) to anon, authenticated;
+grant execute on function public.create_booking(text, uuid[], date, text, text, text, text, text) to anon, authenticated;
+grant execute on function public.check_discount(text, text, uuid[]) to anon, authenticated;
+grant execute on function public.join_waitlist(text, date, text, text, text) to anon, authenticated;
 grant execute on function public.get_booking(text) to anon, authenticated;
 grant execute on function public.cancel_booking(text) to anon, authenticated;
 grant execute on function public.reschedule_booking(text, date, text) to anon, authenticated;
@@ -1266,6 +1448,7 @@ grant execute on function public.my_plan_has(text) to authenticated;
 grant execute on function public.plan_has(text, text) to anon, authenticated;
 grant execute on function public._appt_done(text, timestamptz) to anon, authenticated;
 grant execute on function public.reviews_guard() to authenticated;
+grant execute on function public.discounts_guard() to authenticated;
 
 -- Funciones usadas dentro de las reglas RLS y disparadores
 grant execute on function public.my_business_id() to authenticated;
@@ -1283,6 +1466,7 @@ grant execute on function public.schedule_days_normalize() to authenticated;
 revoke execute on function public._is_range_free(uuid, timestamptz, timestamptz, uuid) from anon, authenticated;
 revoke execute on function public._check_slot(uuid, date, text, int, uuid) from anon, authenticated;
 revoke execute on function public._owner_business(text) from anon, authenticated;
+revoke execute on function public._discount_for(uuid, text, numeric, boolean) from anon, authenticated;
 
 -- Las tablas: sin acceso directo para visitantes anónimos
 revoke all on all tables in schema public from anon;

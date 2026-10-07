@@ -285,6 +285,51 @@ do $$ declare s jsonb := owner_stats(current_date - 100, current_date + 10); beg
   assert s->'top_services'->0->>'name' = 'Corte', 'servicio más pedido';
 end $$;
 select expect_error($$select owner_stats(current_date, current_date - 1)$$, 'RANGO_INVALIDO');
+
+-- ===== Fase 3: cupones y lista de espera (el negocio 1 tiene Ultra) =====
+insert into discounts (business_id, code, percent, uses) values (my_business_id(), ' promo10 ', 10, 99);
+insert into discounts (business_id, code, amount, max_uses) values (my_business_id(), 'MENOS200', 200, 1);
+insert into discounts (business_id, code, percent, valid_until) values (my_business_id(), 'VIEJO', 50, current_date - 1);
+do $$ begin assert (select uses from discounts where code = 'PROMO10') = 0, 'código en mayúsculas y usos a 0'; end $$;
+select expect_error($$insert into discounts (business_id, code, percent, amount) values (my_business_id(), 'AMBOS', 10, 10)$$, 'check');
+update discounts set uses = 50 where code = 'PROMO10';
+do $$ begin assert (select uses from discounts where code = 'PROMO10') = 0, 'el dueño no toca los usos'; end $$;
+reset role;
+set role anon;
+do $$ declare j jsonb := check_discount('barberia-leo', 'promo10', array[(select v from ctx where k='corte')::uuid]); begin
+  assert (j->>'discount')::numeric = 50 and (j->>'total')::numeric = 450, 'cupón 10%: ' || j;
+end $$;
+select expect_error($$select check_discount('barberia-leo', 'NOEXISTE', '{}')$$, 'CUPON_INVALIDO');
+select expect_error($$select check_discount('barberia-leo', 'VIEJO', '{}')$$, 'CUPON_VENCIDO');
+select expect_error('select * from discounts', 'permission denied');
+insert into ctx select 'tc', create_booking('barberia-leo', array[(select v from ctx where k='corte')::uuid], (select v from ctx where k='day')::date, '10:00', 'Ana Cupón', '5355550000', null, 'menos200');
+do $$ declare j jsonb := get_booking((select v from ctx where k='tc')); begin
+  assert (j->>'total')::numeric = 300 and (j->>'discount')::numeric = 200 and j->>'discount_code' = 'MENOS200', 'reserva con cupón: ' || j;
+end $$;
+select expect_error($$select create_booking('barberia-leo', array['$$ || (select v from ctx where k='corte') || $$'::uuid], '$$ || (select v from ctx where k='day') || $$', '11:00', 'Luis', '5355550001', null, 'MENOS200')$$, 'CUPON_AGOTADO');
+do $$ begin assert (select available from get_available_slots('barberia-leo', (select v from ctx where k='day')::date, 30) where slot = '11:00'), 'un cupón rechazado no ocupa el turno'; end $$;
+
+select join_waitlist('barberia-leo', (select v from ctx where k='day')::date, 'Pepe Espera', '+53 5 999 0000', 'cualquier hora');
+select join_waitlist('barberia-leo', (select v from ctx where k='day')::date, 'Pepe Espera', '5359990000');
+select expect_error($$select join_waitlist('barberia-leo', '2020-01-01', 'Pepe', '5359990000')$$, 'TURNO_INVALIDO');
+select expect_error($$select join_waitlist('barberia-leo', current_date + 1, 'Pepe', '123')$$, 'TELEFONO_INVALIDO');
+select expect_error('select * from waitlist', 'permission denied');
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+do $$ begin
+  assert (select count(*) from waitlist) = 1, 'apuntarse dos veces el mismo día no duplica';
+  assert (select uses from discounts where code = 'MENOS200') = 1, 'el cupón se gastó una vez';
+end $$;
+update waitlist set status = 'avisado';
+do $$ begin assert (select status from waitlist) = 'avisado'; end $$;
+update appointments set reminded_at = now() where token = (select v from ctx where k='tc');
+do $$ begin assert (select reminded_at from appointments where token = (select v from ctx where k='tc')) is not null, 'recordatorio marcado'; end $$;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+do $$ begin
+  assert (select count(*) from waitlist) = 0, 'dueño 2 no ve la lista de espera ajena';
+  assert (select count(*) from discounts) = 0, 'ni los cupones ajenos';
+end $$;
 reset role;
 set role authenticated;
 set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';

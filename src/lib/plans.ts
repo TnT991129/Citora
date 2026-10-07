@@ -9,13 +9,13 @@ export const MODULES = {
   galeria: { name: 'Galería de trabajos', ready: true },
   opiniones: { name: 'Opiniones', ready: true },
   complementos: { name: 'Complementos o extras', ready: false },
-  espera: { name: 'Lista de espera', ready: false },
+  espera: { name: 'Lista de espera', ready: true },
   finanzas: { name: 'Cobros y estadísticas', ready: true },
-  descuentos: { name: 'Descuentos y fidelidad', ready: false },
+  descuentos: { name: 'Cupones de descuento', ready: true },
   empleados: { name: 'Varios empleados', ready: false },
   sucursales: { name: 'Sucursales', ready: false },
-  recordatorios: { name: 'Recordatorios por email', ready: false },
-  respaldo: { name: 'Respaldo y permisos', ready: false },
+  recordatorios: { name: 'Recordatorios por WhatsApp', ready: true },
+  respaldo: { name: 'Respaldo de datos (Excel)', ready: true },
 } as const
 
 export type ModuleKey = keyof typeof MODULES

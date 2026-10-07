@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Calendar, SlotPicker } from '../../components/Calendar'
 import { Alert, Button, LinkButton, Modal, PageLoader, StatusBadge, WhatsAppIcon } from '../../components/ui'
 import { setBrandColor } from '../../lib/brand'
+import { setAppManifest } from '../../lib/pwa'
 import { errorMessage } from '../../lib/errors'
 import { dateKey, duration, longDate, money, timeOf, todayKey, weekdayOf, dayTitle } from '../../lib/format'
 import { rememberBooking } from '../../lib/storage'
@@ -32,6 +33,7 @@ export default function BookingPage() {
     setBooking(b)
     if (b) {
       setBrandColor(b.business.color_primary)
+      setAppManifest({ name: b.business.name, path: b.business.slug, color: b.business.color_primary, logo: b.business.logo_url })
       document.title = `Tu cita · ${b.business.name}`
       rememberBooking({ token: b.token, slug: b.business.slug, starts_at: b.starts_at })
     }
@@ -109,6 +111,12 @@ export default function BookingPage() {
                 <span>{money(s.price, b.currency)}</span>
               </div>
             ))}
+            {Number(booking.discount || 0) > 0 && (
+              <div className="flex justify-between py-1 font-medium text-emerald-700">
+                <span>Descuento{booking.discount_code ? ` (${booking.discount_code})` : ''}</span>
+                <span>-{money(Number(booking.discount), b.currency)}</span>
+              </div>
+            )}
             <div className="mt-2 flex justify-between border-t border-slate-100 pt-2 font-bold">
               <span>Total</span>
               <span>{money(booking.total, b.currency)}</span>

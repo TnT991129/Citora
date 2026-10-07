@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { Alert, Button, CitoraLogo, Field, LinkButton, Modal, PageLoader, StatusBadge, WhatsAppIcon, flash } from '../../components/ui'
 import { useSession } from '../../lib/auth'
-import { setBrandColor } from '../../lib/brand'
+import { CITORA_COLOR, setBrandColor } from '../../lib/brand'
+import { setAppManifest } from '../../lib/pwa'
 import { errorMessage } from '../../lib/errors'
 import { daysLeft, fullDateFromIso, money } from '../../lib/format'
 import { PLAN_NAMES, PLAN_ORDER } from '../../lib/plans'
@@ -47,6 +48,7 @@ export default function Admin() {
   useEffect(() => {
     setBrandColor(null)
     document.title = 'Administración · Citora'
+    setAppManifest({ name: 'Citora Admin', path: 'admin', color: CITORA_COLOR })
   }, [])
 
   useEffect(() => {

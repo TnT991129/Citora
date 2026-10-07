@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { InstallButton } from '../../components/InstallButton'
 import { BusinessAvatar, LinkButton, PageLoader, StatusBadge, WhatsAppIcon } from '../../components/ui'
 import { dateKey, duration, money, timeOf, WEEKDAYS, dayTitle } from '../../lib/format'
 import { savedBookings, type SavedBooking } from '../../lib/storage'
@@ -98,6 +99,7 @@ export default function BusinessHome() {
             <WhatsAppIcon /> Escribir por WhatsApp
           </LinkButton>
         )}
+        <InstallButton appName={business.name} label={`Instalar la app de ${business.name}`} block />
         <PoweredBy />
       </main>
 

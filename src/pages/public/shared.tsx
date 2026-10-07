@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { BusinessAvatar } from '../../components/ui'
 import { setBrandColor } from '../../lib/brand'
+import { setAppManifest } from '../../lib/pwa'
 import { errorMessage } from '../../lib/errors'
 import { supabase } from '../../lib/supabase'
 import type { PublicBusiness } from '../../lib/types'
@@ -25,6 +26,7 @@ export function usePublicBusiness(slug: string | undefined) {
       if (b) {
         setBrandColor(b.color_primary)
         document.title = b.name
+        setAppManifest({ name: b.name, path: b.slug, color: b.color_primary, logo: b.logo_url })
       }
     })
     return () => {

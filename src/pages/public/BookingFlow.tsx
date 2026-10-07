@@ -1,9 +1,10 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Calendar, SlotPicker } from '../../components/Calendar'
 import { Alert, Button, Field, PageLoader } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { duration, money, weekdayOf, zonedToIso, dayTitle } from '../../lib/format'
+import { hasModule } from '../../lib/plans'
 import { load, rememberBooking, save } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
 import NotFound from '../NotFound'
@@ -25,6 +26,7 @@ export default function BookingFlow() {
   const [phone, setPhone] = useState(saved.phone)
   const [note, setNote] = useState('')
   const [accepted, setAccepted] = useState(false)
+  const [coupon, setCoupon] = useState<{ code: string; discount: number; total: number } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -32,6 +34,9 @@ export default function BookingFlow() {
   const chosen = useMemo(() => services.filter((s) => selected.includes(s.id)), [services, selected])
   const total = chosen.reduce((a, s) => a + Number(s.price), 0)
   const minutes = chosen.reduce((a, s) => a + s.duration_min, 0)
+
+  // Si cambian los servicios, el descuento se vuelve a calcular
+  useEffect(() => setCoupon(null), [selected])
 
   if (business === undefined) return <PageLoader />
   if (business === null) return <NotFound />
@@ -71,6 +76,7 @@ export default function BookingFlow() {
       p_name: name.trim(),
       p_phone: phone.trim(),
       p_note: note.trim() || null,
+      p_code: coupon?.code || null,
     })
     setBusy(false)
     if (error) {
@@ -80,6 +86,7 @@ export default function BookingFlow() {
         setTime(null)
         setStep(1)
       }
+      if (/código de descuento/i.test(msg)) setCoupon(null)
       return
     }
     const token = data as string
@@ -141,7 +148,14 @@ export default function BookingFlow() {
             {date && (
               <div>
                 <h2 className="mb-2 font-semibold">{dayTitle(date)}</h2>
-                <SlotPicker slug={business.slug} date={date} duration={minutes} value={time} onChange={setTime} />
+                <SlotPicker
+                  slug={business.slug}
+                  date={date}
+                  duration={minutes}
+                  value={time}
+                  onChange={setTime}
+                  whenFull={hasModule(business.plan, 'espera') ? <WaitlistForm slug={business.slug} date={date} name={name} phone={phone} /> : null}
+                />
               </div>
             )}
           </div>
@@ -175,13 +189,22 @@ export default function BookingFlow() {
                     <span>{money(s.price, currency)}</span>
                   </div>
                 ))}
+                {coupon && (
+                  <div className="flex justify-between py-1 font-medium text-emerald-700">
+                    <span>Descuento ({coupon.code})</span>
+                    <span>-{money(coupon.discount, currency)}</span>
+                  </div>
+                )}
                 <div className="mt-2 flex justify-between border-t border-slate-100 pt-2 text-lg font-bold">
                   <span>Total</span>
-                  <span>{money(total, currency)}</span>
+                  <span>{money(coupon ? coupon.total : total, currency)}</span>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">Se paga en el negocio. Duración aproximada: {duration(minutes)}.</p>
               </div>
             </div>
+            {hasModule(business.plan, 'descuentos') && (
+              <CouponBox slug={business.slug} serviceIds={selected} applied={coupon} onApplied={setCoupon} />
+            )}
             <label className="flex items-start gap-3 rounded-xl bg-white p-3 ring-1 ring-slate-200">
               <input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} className="mt-1 h-5 w-5 accent-[rgb(var(--brand-rgb))]" />
               <span className="text-sm text-slate-700">
@@ -216,6 +239,104 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
     <div className="flex justify-between gap-3">
       <span className="text-slate-500">{label}</span>
       <span className="text-right font-semibold">{value}</span>
+    </div>
+  )
+}
+
+function CouponBox({ slug, serviceIds, applied, onApplied }: {
+  slug: string
+  serviceIds: string[]
+  applied: { code: string } | null
+  onApplied: (c: { code: string; discount: number; total: number } | null) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [code, setCode] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  if (applied) {
+    return (
+      <div className="flex items-center justify-between rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-900 ring-1 ring-emerald-200">
+        <span>Código <b>{applied.code}</b> aplicado</span>
+        <button onClick={() => onApplied(null)} className="font-semibold underline">Quitar</button>
+      </div>
+    )
+  }
+  if (!open) {
+    return <button onClick={() => setOpen(true)} className="text-sm font-semibold text-brand">¿Tienes un código de descuento?</button>
+  }
+
+  const apply = async () => {
+    if (!code.trim()) return
+    setBusy(true)
+    setError(null)
+    const { data, error } = await supabase.rpc('check_discount', { p_slug: slug, p_code: code.trim(), p_service_ids: serviceIds })
+    setBusy(false)
+    if (error) return setError(errorMessage(error))
+    const d = data as { code: string; discount: number; total: number }
+    onApplied({ code: d.code, discount: Number(d.discount), total: Number(d.total) })
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <input
+          className="input uppercase"
+          placeholder="CÓDIGO"
+          value={code}
+          maxLength={20}
+          onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
+          onKeyDown={(e) => e.key === 'Enter' && apply()}
+          aria-label="Código de descuento"
+        />
+        <Button variant="secondary" onClick={apply} loading={busy}>Aplicar</Button>
+      </div>
+      {error && <Alert>{error}</Alert>}
+    </div>
+  )
+}
+
+function WaitlistForm({ slug, date, name: initialName, phone: initialPhone }: { slug: string; date: string; name: string; phone: string }) {
+  const [name, setName] = useState(initialName)
+  const [phone, setPhone] = useState(initialPhone)
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => setDone(false), [date])
+
+  if (done) {
+    return (
+      <div className="rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-900 ring-1 ring-emerald-200">
+        <b>¡Te apuntamos!</b> Si se libera un hueco el {dayTitle(date).toLowerCase()}, el negocio te escribirá por WhatsApp.
+      </div>
+    )
+  }
+
+  const join = async () => {
+    if (name.trim().length < 2) return setError('Escribe tu nombre.')
+    if (phone.replace(/\D/g, '').length < 8) return setError('Escribe tu teléfono (al menos 8 dígitos).')
+    setBusy(true)
+    setError(null)
+    save('citora:cliente', { name: name.trim(), phone: phone.trim() })
+    const { error } = await supabase.rpc('join_waitlist', { p_slug: slug, p_date: date, p_name: name.trim(), p_phone: phone.trim(), p_note: note.trim() || null })
+    setBusy(false)
+    if (error) return setError(errorMessage(error))
+    setDone(true)
+  }
+
+  return (
+    <div className="card space-y-3">
+      <div>
+        <h3 className="font-bold">Apúntate a la lista de espera</h3>
+        <p className="text-sm text-slate-500">Si alguien cancela, el negocio te avisa por WhatsApp.</p>
+      </div>
+      <input className="input" placeholder="Tu nombre" autoComplete="name" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
+      <input className="input" placeholder="Tu teléfono (WhatsApp)" type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+      <input className="input" placeholder="Horario que te viene bien (opcional)" value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} />
+      {error && <Alert>{error}</Alert>}
+      <Button block variant="secondary" onClick={join} loading={busy}>Avisarme si se libera un hueco</Button>
     </div>
   )
 }

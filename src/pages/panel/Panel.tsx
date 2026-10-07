@@ -3,6 +3,7 @@ import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-r
 import { Alert, BusinessAvatar, Button, CitoraLogo, PageLoader } from '../../components/ui'
 import { useSession } from '../../lib/auth'
 import { setBrandColor } from '../../lib/brand'
+import { setAppManifest } from '../../lib/pwa'
 import { createBusinessFromDraft, loadDraft } from '../../lib/draft'
 import { errorMessage } from '../../lib/errors'
 import { daysLeft, hoursLeft } from '../../lib/format'
@@ -10,15 +11,19 @@ import { supabase } from '../../lib/supabase'
 import type { Business, MyStatus, Service } from '../../lib/types'
 import Agenda from './Agenda'
 import { PanelContext } from './context'
+import Backup from './Backup'
 import Customers from './Customers'
+import Discounts from './Discounts'
 import Gallery from './Gallery'
 import More from './More'
 import PlanPage from './PlanPage'
+import Reminders from './Reminders'
 import Reviews from './Reviews'
 import Schedule from './Schedule'
 import Services from './Services'
 import Settings from './Settings'
 import Stats from './Stats'
+import Waitlist from './Waitlist'
 import Today from './Today'
 
 export default function Panel() {
@@ -40,7 +45,11 @@ export default function Panel() {
     }
     setBusiness(b as Business | null)
     setStatus(st as MyStatus | null)
-    if (b) setBrandColor((b as Business).color_primary)
+    if (b) {
+      const biz = b as Business
+      setBrandColor(biz.color_primary)
+      setAppManifest({ name: `${biz.name} · Panel`, shortName: biz.name, path: 'panel', color: biz.color_primary, logo: biz.logo_url })
+    }
   }, [])
 
   const reloadServices = useCallback(async () => {
@@ -135,6 +144,10 @@ export default function Panel() {
               <Route path="estadisticas" element={<Stats />} />
               <Route path="opiniones" element={<Reviews />} />
               <Route path="galeria" element={<Gallery />} />
+              <Route path="recordatorios" element={<Reminders />} />
+              <Route path="espera" element={<Waitlist />} />
+              <Route path="cupones" element={<Discounts />} />
+              <Route path="respaldo" element={<Backup />} />
               <Route path="mas" element={<More />} />
               <Route path="plan" element={<PlanPage />} />
               <Route path="*" element={<Navigate to="/panel" replace />} />
@@ -161,7 +174,7 @@ const NAV = [
 ] as const
 
 // Secciones a las que se llega desde "Más": la pestaña "Más" queda marcada en ellas
-const MORE_PATHS = ['/panel/mas', '/panel/estadisticas', '/panel/opiniones', '/panel/galeria', '/panel/horario', '/panel/ajustes', '/panel/plan']
+const MORE_PATHS = ['/panel/mas', '/panel/estadisticas', '/panel/opiniones', '/panel/galeria', '/panel/recordatorios', '/panel/espera', '/panel/cupones', '/panel/respaldo', '/panel/horario', '/panel/ajustes', '/panel/plan']
 
 function useIsActive(to: string): boolean {
   const { pathname } = useLocation()

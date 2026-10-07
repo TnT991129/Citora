@@ -1,12 +1,17 @@
 import { Link } from 'react-router-dom'
-import { hasModule, PLAN_NAMES, type ModuleKey } from '../../lib/plans'
+import { InstallButton } from '../../components/InstallButton'
+import { hasModule, PLAN_MODULES, PLAN_NAMES, PLAN_ORDER, type ModuleKey } from '../../lib/plans'
 import { publicUrl } from '../../lib/url'
 import { usePanel } from './context'
 
 const ITEMS: { to: string; label: string; desc: string; emoji: string; module?: ModuleKey }[] = [
+  { to: '/panel/recordatorios', label: 'Recordatorios', desc: 'Avisa por WhatsApp a los clientes de mañana', emoji: '🔔', module: 'recordatorios' },
   { to: '/panel/estadisticas', label: 'Estadísticas', desc: 'Ingresos, asistencia y lo más pedido', emoji: '📊', module: 'finanzas' },
+  { to: '/panel/espera', label: 'Lista de espera', desc: 'Clientes que quieren un hueco', emoji: '⏳', module: 'espera' },
+  { to: '/panel/cupones', label: 'Cupones', desc: 'Códigos de descuento', emoji: '🎁', module: 'descuentos' },
   { to: '/panel/opiniones', label: 'Opiniones', desc: 'Lo que dicen tus clientes', emoji: '⭐', module: 'opiniones' },
   { to: '/panel/galeria', label: 'Galería', desc: 'Fotos de tus trabajos', emoji: '📷', module: 'galeria' },
+  { to: '/panel/respaldo', label: 'Respaldo', desc: 'Descarga tus datos en Excel', emoji: '💾', module: 'respaldo' },
   { to: '/panel/horario', label: 'Horario', desc: 'Turnos, días cerrados y reglas', emoji: '🕒' },
   { to: '/panel/ajustes', label: 'Ajustes', desc: 'Logo, color, enlace y políticas', emoji: '⚙️' },
   { to: '/panel/plan', label: 'Plan', desc: 'Tu plan y cómo pagar', emoji: '💳' },
@@ -28,7 +33,7 @@ export default function More() {
                   <span className="block font-semibold">{it.label}</span>
                   <span className="block truncate text-sm text-slate-500">{it.desc}</span>
                 </span>
-                {locked && <span className="chip bg-slate-100 text-xs text-slate-600">🔒 {it.module === 'finanzas' ? PLAN_NAMES.ultra : PLAN_NAMES.plus}</span>}
+                {locked && <span className="chip bg-slate-100 text-xs text-slate-600">🔒 {PLAN_NAMES[PLAN_ORDER.find((p) => PLAN_MODULES[p].includes(it.module!))!]}</span>}
               </Link>
             </li>
           )
@@ -38,6 +43,7 @@ export default function More() {
         <span>🌐 Ver mi web de reservas</span>
         <span className="text-brand">→</span>
       </a>
+      <InstallButton appName="tu panel" label="Instalar el panel en este móvil" block />
     </div>
   )
 }

@@ -72,7 +72,34 @@ export interface Appointment {
   reschedule_count: number
   internal_note: string | null
   created_at: string
+  discount_code: string | null
+  discount: number
+  reminded_at: string | null
   appointment_services?: AppointmentService[]
+}
+
+export interface Discount {
+  id: string
+  business_id: string
+  code: string
+  percent: number | null
+  amount: number | null
+  active: boolean
+  valid_until: string | null
+  max_uses: number | null
+  uses: number
+  created_at: string
+}
+
+export interface WaitlistEntry {
+  id: string
+  business_id: string
+  day: string
+  customer_name: string
+  customer_phone: string
+  note: string | null
+  status: 'esperando' | 'avisado' | 'descartado'
+  created_at: string
 }
 
 export interface MyStatus {
@@ -189,6 +216,8 @@ export interface PublicBooking {
   customer_phone: string
   customer_note: string | null
   total: number
+  discount?: number
+  discount_code?: string | null
   status: AppointmentStatus
   reschedule_count: number
   can_change: boolean

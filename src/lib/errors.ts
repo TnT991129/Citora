@@ -26,6 +26,10 @@ const MESSAGES: Record<string, string> = {
   OPINION_FUERA_DE_PLAZO: 'Ya pasó el plazo para opinar sobre esta cita.',
   VALORACION_INVALIDA: 'Elige de 1 a 5 estrellas.',
   RANGO_INVALIDO: 'Rango de fechas no válido.',
+  CUPON_INVALIDO: 'Ese código de descuento no existe o ya no está activo.',
+  CUPON_VENCIDO: 'Ese código de descuento ya venció.',
+  CUPON_AGOTADO: 'Ese código de descuento ya se usó todas las veces permitidas.',
+  LIMITE_ESPERA: 'Ya estás en la lista de espera de varios días. Espera a que el negocio te escriba.',
 }
 
 export function errorMessage(err: unknown): string {

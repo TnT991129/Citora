@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { addDays, MONTHS, WEEKDAYS_SHORT, weekdayOf } from '../lib/format'
 import { supabase } from '../lib/supabase'
 import { errorMessage } from '../lib/errors'
@@ -97,10 +97,12 @@ interface SlotPickerProps {
   duration: number
   value: string | null
   onChange: (slot: string) => void
+  /** Se muestra debajo del aviso cuando el día está lleno (ej. lista de espera) */
+  whenFull?: ReactNode
 }
 
 /** Turnos de un día, con los ocupados bloqueados */
-export function SlotPicker({ slug, date, duration, value, onChange }: SlotPickerProps) {
+export function SlotPicker({ slug, date, duration, value, onChange, whenFull }: SlotPickerProps) {
   const [slots, setSlots] = useState<{ slot: string; available: boolean }[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -123,7 +125,12 @@ export function SlotPicker({ slug, date, duration, value, onChange }: SlotPicker
   if (error) return <Alert>{error}</Alert>
   if (!slots) return <div className="flex justify-center py-6 text-slate-400"><Spinner /></div>
   if (!slots.some((s) => s.available)) {
-    return <Alert kind="warning">No quedan turnos libres este día. Prueba con otro día.</Alert>
+    return (
+      <div className="space-y-3">
+        <Alert kind="warning">No quedan turnos libres este día. Prueba con otro día.</Alert>
+        {slots.length > 0 && whenFull}
+      </div>
+    )
   }
   return (
     <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
