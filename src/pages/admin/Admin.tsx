@@ -14,21 +14,26 @@ import { publicUrl } from '../../lib/url'
 import { waLink } from '../../lib/whatsapp'
 import AdminStats from './AdminStats'
 
-interface AdminBusiness {
-  id: string
-  name: string
-  slug: string
-  code: string
-  business_type: string
-  whatsapp: string
+// Una cuenta de dueño. Los campos del negocio son null si se registró pero no terminó de crearlo.
+interface AdminOwner {
+  user_id: string
+  email: string | null
+  signed_up_at: string
+  last_sign_in_at: string | null
+  id: string | null
+  name: string | null
+  slug: string | null
+  code: string | null
+  business_type: string | null
+  whatsapp: string | null
   plan: PlanKey | null
-  trial_ends_at: string
+  trial_ends_at: string | null
   paid_until: string | null
-  created_at: string
-  status: BusinessStatus
-  owner_email: string | null
-  appointments_count: number
+  created_at: string | null
+  status: BusinessStatus | 'sin_negocio'
 }
+
+type OwnerWithBusiness = AdminOwner & { id: string; name: string; code: string }
 
 interface Settings {
   card_number: string
@@ -43,7 +48,7 @@ interface Settings {
 export default function Admin() {
   const session = useSession()
   const [isAdmin, setIsAdmin] = useState<boolean | undefined>(undefined)
-  const [tab, setTab] = useState<'negocios' | 'estadisticas' | 'ajustes'>('negocios')
+  const [tab, setTab] = useState<'duenos' | 'estadisticas' | 'ajustes'>('duenos')
 
   useEffect(() => {
     setBrandColor(null)
@@ -56,9 +61,20 @@ export default function Admin() {
     supabase.rpc('is_platform_admin').then(({ data }) => setIsAdmin(Boolean(data)))
   }, [session])
 
-  if (session === null) return <Navigate to="/entrar" replace />
+  if (session === null) return <Navigate to="/entrar?next=%2Fadmin" replace />
   if (session === undefined || isAdmin === undefined) return <PageLoader />
-  if (!isAdmin) return <Navigate to="/panel" replace />
+  if (!isAdmin) {
+    return (
+      <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 p-6 text-center">
+        <CitoraLogo className="text-xl" />
+        <h1 className="text-xl font-bold">Esta cuenta no es de administrador</h1>
+        <p className="text-slate-600">
+          Estás conectado como <b>{session.user.email}</b>, que es la cuenta de un negocio. Para ver tu panel de administrador entra con tu correo de administrador.
+        </p>
+        <Button block onClick={() => supabase.auth.signOut()}>Entrar con otra cuenta</Button>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-dvh">
@@ -69,32 +85,40 @@ export default function Admin() {
             <span className="chip bg-slate-900 text-white">Admin</span>
           </div>
           <div className="flex items-center gap-1">
-            {(['negocios', 'estadisticas', 'ajustes'] as const).map((t) => (
+            {(['duenos', 'estadisticas', 'ajustes'] as const).map((t) => (
               <button key={t} onClick={() => setTab(t)} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${tab === t ? 'bg-citora-100 text-citora-700' : 'text-slate-600 hover:bg-slate-100'}`}>
-                {t === 'negocios' ? 'Negocios' : t === 'estadisticas' ? 'Estadísticas' : 'Ajustes'}
+                {t === 'duenos' ? 'Dueños' : t === 'estadisticas' ? 'Estadísticas' : 'Ajustes'}
               </button>
             ))}
             <button onClick={() => supabase.auth.signOut()} className="ml-1 rounded-lg px-2 py-1.5 text-sm text-slate-500 hover:bg-slate-100">Salir</button>
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-5">{tab === 'negocios' ? <Businesses /> : tab === 'estadisticas' ? <AdminStats /> : <SettingsForm />}</main>
+      <main className="mx-auto max-w-5xl px-4 py-5">{tab === 'duenos' ? <Owners /> : tab === 'estadisticas' ? <AdminStats /> : <SettingsForm />}</main>
     </div>
   )
 }
 
-function Businesses() {
-  const [list, setList] = useState<AdminBusiness[] | null>(null)
+type Filter = 'todos' | BusinessStatus | 'sin_negocio'
+type Sort = 'recientes' | 'pago'
+
+const FILTER_LABEL: Record<Filter, string> = {
+  todos: 'Todos', activo: 'Pagando', prueba: 'En prueba', vencido: 'Vencidos', sin_negocio: 'Sin negocio',
+}
+
+function Owners() {
+  const [list, setList] = useState<AdminOwner[] | null>(null)
   const [prices, setPrices] = useState({ basico: 1500, plus: 2000, ultra: 2500 })
   const [error, setError] = useState<string | null>(null)
-  const [filter, setFilter] = useState<'todos' | BusinessStatus>('todos')
+  const [filter, setFilter] = useState<Filter>('todos')
+  const [sort, setSort] = useState<Sort>('recientes')
   const [q, setQ] = useState('')
-  const [activating, setActivating] = useState<AdminBusiness | null>(null)
+  const [activating, setActivating] = useState<OwnerWithBusiness | null>(null)
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.rpc('admin_list_businesses')
+    const { data, error } = await supabase.rpc('admin_list_owners')
     if (error) setError(errorMessage(error))
-    else setList(data as AdminBusiness[])
+    else setList(data as AdminOwner[])
     const { data: p } = await supabase.rpc('get_public_prices')
     if (p) setPrices(p as typeof prices)
   }, [])
@@ -103,41 +127,37 @@ function Businesses() {
     load()
   }, [load])
 
+  // Fecha en la que le toca pagar: fin del plan pagado o fin de la prueba
+  const dueDate = (o: AdminOwner) => (o.status === 'activo' ? o.paid_until : o.status === 'prueba' ? o.trial_ends_at : null)
+
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
-    return (list || []).filter((b) =>
-      (filter === 'todos' || b.status === filter) &&
-      (!term || [b.name, b.code, b.slug, b.whatsapp, b.owner_email || ''].some((x) => x.toLowerCase().includes(term))),
+    const out = (list || []).filter((o) =>
+      (filter === 'todos' || o.status === filter) &&
+      (!term || [o.email, o.name, o.code, o.slug, o.whatsapp].some((x) => (x || '').toLowerCase().includes(term))),
     )
-  }, [list, filter, q])
+    if (sort === 'pago') {
+      // Primero los que pagan antes; los que no tienen fecha, al final
+      out.sort((a, b) => (dueDate(a) || '9999').localeCompare(dueDate(b) || '9999'))
+    }
+    return out
+  }, [list, filter, q, sort])
 
   if (error) return <Alert>{error}</Alert>
   if (!list) return <PageLoader />
 
-  const counts = {
-    todos: list.length,
-    prueba: list.filter((b) => b.status === 'prueba').length,
-    activo: list.filter((b) => b.status === 'activo').length,
-    vencido: list.filter((b) => b.status === 'vencido').length,
-  }
+  const count = (f: Filter) => (f === 'todos' ? list.length : list.filter((o) => o.status === f).length)
   const monthly = list
-    .filter((b) => b.status === 'activo' && b.plan)
-    .reduce((s, b) => s + prices[b.plan!], 0)
+    .filter((o) => o.status === 'activo' && o.plan)
+    .reduce((s, o) => s + prices[o.plan!], 0)
+  const thisMonth = new Date().toISOString().slice(0, 7)
+  const newThisMonth = list.filter((o) => o.signed_up_at.slice(0, 7) === thisMonth).length
 
-  const extendTrial = async (b: AdminBusiness) => {
-    const { error } = await supabase.rpc('admin_extend_trial', { p_business: b.id, p_days: 3 })
+  const act = async (fn: 'admin_extend_trial' | 'admin_deactivate_business', o: AdminOwner, msg: string) => {
+    const { error } = await supabase.rpc(fn, fn === 'admin_extend_trial' ? { p_business: o.id, p_days: 3 } : { p_business: o.id })
     if (error) setError(errorMessage(error))
     else {
-      flash('3 días más de prueba')
-      load()
-    }
-  }
-
-  const deactivate = async (b: AdminBusiness) => {
-    const { error } = await supabase.rpc('admin_deactivate_business', { p_business: b.id })
-    if (error) setError(errorMessage(error))
-    else {
-      flash('Inhabilitado')
+      flash(msg)
       load()
     }
   }
@@ -145,49 +165,69 @@ function Businesses() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Negocios" value={String(counts.todos)} />
-        <Stat label="En prueba" value={String(counts.prueba)} />
-        <Stat label="Pagando" value={String(counts.activo)} />
+        <Stat label="Dueños registrados" value={String(list.length)} hint={`${newThisMonth} nuevos este mes`} />
+        <Stat label="Pagando" value={String(count('activo'))} />
+        <Stat label="En prueba gratis" value={String(count('prueba'))} />
         <Stat label="Ingreso mensual" value={money(monthly, 'CUP')} />
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <input className="input sm:max-w-xs" placeholder="Buscar por nombre, código, correo…" value={q} onChange={(e) => setQ(e.target.value)} />
-        <div className="flex flex-wrap gap-1">
-          {(['todos', 'prueba', 'activo', 'vencido'] as const).map((f) => (
-            <button key={f} onClick={() => setFilter(f)} className={`rounded-full px-3 py-1.5 text-sm font-semibold ${filter === f ? 'bg-slate-900 text-white' : 'bg-white ring-1 ring-slate-300'}`}>
-              {f === 'todos' ? 'Todos' : f === 'prueba' ? 'Prueba' : f === 'activo' ? 'Activos' : 'Vencidos'} ({counts[f]})
-            </button>
-          ))}
-        </div>
+        <input className="input sm:max-w-xs" placeholder="Buscar por correo, negocio o código…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <select className="input w-auto" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Ordenar">
+          <option value="recientes">Más recientes primero</option>
+          <option value="pago">Próximo pago primero</option>
+        </select>
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {(['todos', 'activo', 'prueba', 'vencido', 'sin_negocio'] as const).map((f) => (
+          <button key={f} onClick={() => setFilter(f)} className={`rounded-full px-3 py-1.5 text-sm font-semibold ${filter === f ? 'bg-slate-900 text-white' : 'bg-white ring-1 ring-slate-300'}`}>
+            {FILTER_LABEL[f]} ({count(f)})
+          </button>
+        ))}
       </div>
 
       <div className="space-y-2">
-        {filtered.length === 0 && <p className="py-6 text-center text-slate-500">No hay negocios con ese filtro.</p>}
-        {filtered.map((b) => (
-          <div key={b.id} className="card">
+        {filtered.length === 0 && <p className="py-6 text-center text-slate-500">No hay dueños con ese filtro.</p>}
+        {filtered.map((o) => (
+          <div key={o.user_id} className="card">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="font-bold">{businessType(b.business_type).emoji} {b.name} <span className="font-mono text-sm font-semibold text-slate-500">{b.code}</span></p>
-                <p className="text-sm text-slate-500">{b.owner_email} · {b.appointments_count} {b.appointments_count === 1 ? 'cita' : 'citas'} · alta {fullDateFromIso(b.created_at, 'America/Havana')}</p>
-                <p className="mt-1 text-sm">
-                  {b.status === 'prueba' && <>Prueba: quedan {daysLeft(b.trial_ends_at)} días</>}
-                  {b.status === 'activo' && <>Plan {PLAN_NAMES[b.plan!]} hasta {fullDateFromIso(b.paid_until!, 'America/Havana')} ({daysLeft(b.paid_until!)} días)</>}
-                  {b.status === 'vencido' && <>Sin plan activo{b.plan ? ` · último plan: ${PLAN_NAMES[b.plan]}` : ''}</>}
+                <p className="truncate font-bold">{o.email}</p>
+                <p className="text-sm text-slate-500">
+                  Se registró el {fullDateFromIso(o.signed_up_at, TZ)}
+                  {o.last_sign_in_at && <> · último acceso {fullDateFromIso(o.last_sign_in_at, TZ)}</>}
                 </p>
+                {o.id ? (
+                  <p className="mt-1 text-sm">
+                    {businessType(o.business_type).emoji} <b>{o.name}</b> <span className="font-mono text-slate-500">{o.code}</span>
+                  </p>
+                ) : (
+                  <p className="mt-1 text-sm text-amber-700">Se registró pero no terminó de crear su negocio.</p>
+                )}
               </div>
-              <StatusBadge status={b.status} />
+              {o.status === 'sin_negocio' ? <span className="chip bg-slate-100 text-xs text-slate-600">Sin negocio</span> : <StatusBadge status={o.status} />}
             </div>
+
+            {o.id && (
+              <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-sm">
+                {o.status === 'activo' && <>💳 Plan <b>{PLAN_NAMES[o.plan!]}</b> · próximo pago el <b>{fullDateFromIso(o.paid_until!, TZ)}</b> ({daysLeft(o.paid_until!)} días) · {money(prices[o.plan!], 'CUP')}/mes</>}
+                {o.status === 'prueba' && <>🎁 Prueba gratis · termina el <b>{fullDateFromIso(o.trial_ends_at!, TZ)}</b> ({daysLeft(o.trial_ends_at!)} días)</>}
+                {o.status === 'vencido' && <>⛔ Sin pagar{o.paid_until ? <> desde el {fullDateFromIso(o.paid_until, TZ)}</> : <> desde que terminó la prueba</>}{o.plan ? ` · último plan: ${PLAN_NAMES[o.plan]}` : ''}</>}
+              </p>
+            )}
+
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button size="sm" onClick={() => setActivating(b)}>Activar plan</Button>
-              {b.whatsapp && (
-                <LinkButton href={waLink(b.whatsapp, `Hola, te escribo de Citora sobre ${b.name}.`)} variant="whatsapp" size="sm" newTab>
+              {o.id && <Button size="sm" onClick={() => setActivating(o as OwnerWithBusiness)}>Registrar pago</Button>}
+              {o.whatsapp && (
+                <LinkButton href={waLink(o.whatsapp, `Hola, te escribo de Citora sobre ${o.name}.`)} variant="whatsapp" size="sm" newTab>
                   <WhatsAppIcon className="h-4 w-4" /> WhatsApp
                 </LinkButton>
               )}
-              <LinkButton href={publicUrl(b.slug)} variant="secondary" size="sm" newTab>Ver web</LinkButton>
-              <Button size="sm" variant="ghost" onClick={() => extendTrial(b)}>+3 días prueba</Button>
-              {b.status !== 'vencido' && <Button size="sm" variant="ghost" className="text-red-600" onClick={() => deactivate(b)}>Inhabilitar</Button>}
+              {o.slug && <LinkButton href={publicUrl(o.slug)} variant="secondary" size="sm" newTab>Ver su web</LinkButton>}
+              {o.id && <Button size="sm" variant="ghost" onClick={() => act('admin_extend_trial', o, '3 días más de prueba')}>+3 días prueba</Button>}
+              {o.id && o.status !== 'vencido' && (
+                <Button size="sm" variant="ghost" className="text-red-600" onClick={() => act('admin_deactivate_business', o, 'Inhabilitado')}>Inhabilitar</Button>
+              )}
             </div>
           </div>
         ))}
@@ -208,8 +248,10 @@ function Businesses() {
   )
 }
 
+const TZ = 'America/Havana'
+
 function ActivateModal({ business, prices, onClose, onDone }: {
-  business: AdminBusiness
+  business: { id: string; name: string; code: string; plan: PlanKey | null }
   prices: Record<PlanKey, number>
   onClose: () => void
   onDone: () => void
@@ -325,11 +367,12 @@ function SettingsForm() {
   )
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
       <p className="text-xs font-medium text-slate-500">{label}</p>
       <p className="mt-1 truncate text-xl font-extrabold">{value}</p>
+      {hint && <p className="mt-0.5 truncate text-xs text-slate-400">{hint}</p>}
     </div>
   )
 }

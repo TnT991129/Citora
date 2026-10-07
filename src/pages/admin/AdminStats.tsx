@@ -7,7 +7,6 @@ import { PLAN_NAMES } from '../../lib/plans'
 import { supabase } from '../../lib/supabase'
 import { businessType } from '../../lib/templates'
 import type { PlanKey } from '../../lib/types'
-import { publicUrl } from '../../lib/url'
 import { waLink } from '../../lib/whatsapp'
 
 interface AdminStatsData {
@@ -59,7 +58,7 @@ export default function AdminStats() {
         <Stat label="Cobrado este mes" value={cup(thisMonth?.revenue || 0)} />
         <Stat label="Cobrado en total" value={cup(t.revenue)} />
         <Stat label="Conversión prueba → pago" value={conversion === null ? '—' : `${conversion}%`} hint={`${t.converted} de ${t.ended_trials} pruebas terminadas`} />
-        <Stat label="Negocios con citas (30 días)" value={`${t.active_30d} / ${t.businesses}`} hint={`${t.appointments_30d} citas en 30 días`} />
+        <Stat label="Dueños con negocio" value={String(t.businesses)} hint={`${paying} pagando ahora`} />
       </div>
 
       {s.expiring.length > 0 && (
@@ -103,18 +102,10 @@ export default function AdminStats() {
           />
         </section>
         <section className="card">
-          <h2 className="font-bold">Negocios nuevos por mes</h2>
+          <h2 className="font-bold">Dueños nuevos por mes</h2>
           <BarChart
             barClass="bg-citora-500"
-            bars={s.months.map((m) => ({ label: monthLabel(m.month), value: m.signups, tip: `${monthLabel(m.month, true)} · ${m.signups} ${m.signups === 1 ? 'negocio nuevo' : 'negocios nuevos'}` }))}
-          />
-        </section>
-        <section className="card">
-          <h2 className="font-bold">Citas reservadas por mes</h2>
-          <p className="text-sm text-slate-500">En todos los negocios · {t.appointments} en total</p>
-          <BarChart
-            barClass="bg-citora-500"
-            bars={s.months.map((m) => ({ label: monthLabel(m.month), value: m.appointments, tip: `${monthLabel(m.month, true)} · ${m.appointments} citas` }))}
+            bars={s.months.map((m) => ({ label: monthLabel(m.month), value: m.signups, tip: `${monthLabel(m.month, true)} · ${m.signups} ${m.signups === 1 ? 'dueño nuevo' : 'dueños nuevos'}` }))}
           />
         </section>
         <section className="card">
@@ -140,17 +131,6 @@ export default function AdminStats() {
               <RankBars barClass="bg-citora-500" items={s.by_type.map((x) => ({ label: `${businessType(x.type).emoji} ${businessType(x.type).name}`, value: x.count }))} />
             )}
           </div>
-        </section>
-        <section className="card">
-          <h2 className="font-bold">Más citas en 30 días</h2>
-          <div className="mt-3">
-            {s.top_businesses.length === 0 ? <p className="text-slate-500">Sin citas en los últimos 30 días.</p> : (
-              <RankBars barClass="bg-citora-500" items={s.top_businesses.map((x) => ({ label: x.name, value: x.count, extra: x.code }))} />
-            )}
-          </div>
-          {s.top_businesses[0] && (
-            <a href={publicUrl(s.top_businesses[0].slug)} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm font-semibold text-citora-700">Ver la web del primero →</a>
-          )}
         </section>
       </div>
 

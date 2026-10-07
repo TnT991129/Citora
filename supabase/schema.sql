@@ -1312,6 +1312,26 @@ begin
 end;
 $$;
 
+-- Todas las cuentas de dueños (con o sin negocio creado), sin contar a los administradores
+create or replace function public.admin_list_owners()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'user_id', u.id, 'email', u.email, 'signed_up_at', u.created_at, 'last_sign_in_at', u.last_sign_in_at,
+      'id', b.id, 'name', b.name, 'slug', b.slug, 'code', b.code, 'business_type', b.business_type,
+      'whatsapp', b.whatsapp, 'plan', b.plan, 'trial_ends_at', b.trial_ends_at,
+      'paid_until', b.paid_until, 'created_at', b.created_at,
+      'status', case when b.id is null then 'sin_negocio'
+                     else business_status(b.plan, b.trial_ends_at, b.paid_until) end
+    ) order by u.created_at desc)
+    from auth.users u
+    left join businesses b on b.owner_id = u.id
+    where not exists (select 1 from platform_admins a where a.user_id = u.id)), '[]'::jsonb);
+end;
+$$;
+
 create or replace function public.admin_activate_plan(
   p_business uuid, p_plan text, p_months int, p_amount numeric default null, p_note text default null)
 returns timestamptz language plpgsql volatile security definer set search_path = public as $$
@@ -1449,6 +1469,7 @@ grant execute on function public.owner_create_appointment(uuid[], date, text, te
 grant execute on function public.owner_reschedule_appointment(uuid, date, text) to authenticated;
 grant execute on function public.is_platform_admin() to authenticated;
 grant execute on function public.admin_list_businesses() to authenticated;
+grant execute on function public.admin_list_owners() to authenticated;
 grant execute on function public.admin_activate_plan(uuid, text, int, numeric, text) to authenticated;
 grant execute on function public.admin_deactivate_business(uuid) to authenticated;
 grant execute on function public.admin_extend_trial(uuid, int) to authenticated;

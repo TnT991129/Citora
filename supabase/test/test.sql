@@ -138,6 +138,7 @@ end $$;
 update businesses set name = 'Hackeado' where slug = 'barberia-leo';
 select expect_error($$insert into services (business_id, name) values ('$$ || (select v from ctx where k='biz1') || $$', 'Intruso')$$, 'row-level security');
 select expect_error('select admin_list_businesses()', 'NO_AUTORIZADO');
+select expect_error('select admin_list_owners()', 'NO_AUTORIZADO');
 select expect_error($$select admin_activate_plan('$$ || (select v from ctx where k='biz1') || $$', 'ultra', 12)$$, 'NO_AUTORIZADO');
 do $$ begin assert (select count(*) from platform_settings) = 0, 'el dueño no lee los ajustes directamente'; end $$;
 do $$ begin assert get_payment_info()->>'card_number' = '9200 1111 2222 3333'; end $$;
@@ -163,6 +164,10 @@ end $$;
 -- ===== El administrador activa el plan Plus =====
 set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 do $$ begin assert jsonb_array_length(admin_list_businesses()) = 2; end $$;
+do $$ declare o jsonb := admin_list_owners(); begin
+  assert jsonb_array_length(o) = 2, 'dos dueños (el administrador no cuenta): ' || o;
+  assert (select count(*) from jsonb_array_elements(o) x where x->>'email' = 'leo@test.com' and x->>'status' = 'vencido') = 1;
+end $$;
 select admin_activate_plan((select v from ctx where k='biz1')::uuid, 'plus', 1, 2000, 'Captura WhatsApp') as hasta;
 select admin_activate_plan((select v from ctx where k='biz1')::uuid, 'plus', 2) as hasta_sumado;
 do $$ begin
