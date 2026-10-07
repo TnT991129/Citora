@@ -278,7 +278,7 @@ function StatusBanner({ status, planLink }: { status: MyStatus; planLink: string
     return (
       <div className="border-b border-red-200 bg-red-50">
         <div className="mx-auto max-w-4xl px-4 py-2 text-sm text-red-800">
-          Tu app está <b>inhabilitada</b>: tus clientes no pueden reservar. Elige un plan y paga para activarla. Tus datos están guardados.
+          Tu app está <b>inhabilitada</b>: tus clientes no pueden reservar. Paga la mensualidad para activarla. Tus datos están guardados.
         </div>
       </div>
     )

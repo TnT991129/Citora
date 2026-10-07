@@ -247,7 +247,8 @@ do $$ declare j jsonb; begin
 end $$;
 insert into gallery_photos (business_id, url, caption) values (my_business_id(), 'https://x.supabase.co/storage/v1/object/public/logos/a.jpg', 'Degradado');
 select expect_error($$insert into gallery_photos (business_id, url) values (my_business_id(), 'javascript:alert(1)')$$, 'check');
-select expect_error($$select owner_stats(current_date - 30, current_date)$$, 'NO_DISPONIBLE');
+-- Un solo plan: cualquier negocio pagando tiene también las estadísticas
+do $$ begin assert owner_stats(current_date - 30, current_date) is not null; end $$;
 select expect_error('select admin_stats()', 'NO_AUTORIZADO');
 
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';

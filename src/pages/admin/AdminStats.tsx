@@ -3,7 +3,6 @@ import { BarChart, RankBars } from '../../components/BarChart'
 import { Alert, LinkButton, PageLoader, WhatsAppIcon } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { daysLeft, fullDateFromIso, MONTHS, money } from '../../lib/format'
-import { PLAN_NAMES } from '../../lib/plans'
 import { supabase } from '../../lib/supabase'
 import { businessType } from '../../lib/templates'
 import type { PlanKey } from '../../lib/types'
@@ -115,9 +114,7 @@ export default function AdminStats() {
             <RankBars
               barClass="bg-citora-500"
               items={[
-                { label: `Plan ${PLAN_NAMES.basico}`, value: s.by_plan.basico },
-                { label: `Plan ${PLAN_NAMES.plus}`, value: s.by_plan.plus },
-                { label: `Plan ${PLAN_NAMES.ultra}`, value: s.by_plan.ultra },
+                { label: 'Pagando', value: paying },
                 { label: 'En prueba', value: s.by_plan.prueba },
                 { label: 'Vencidos', value: s.by_plan.vencido },
               ]}
@@ -140,14 +137,14 @@ export default function AdminStats() {
           <div className="mt-2 overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="text-xs text-slate-500">
-                <tr><th className="py-1.5 pr-3 font-medium">Fecha</th><th className="pr-3 font-medium">Negocio</th><th className="pr-3 font-medium">Plan</th><th className="pr-3 text-right font-medium">Importe</th></tr>
+                <tr><th className="py-1.5 pr-3 font-medium">Fecha</th><th className="pr-3 font-medium">Negocio</th><th className="pr-3 font-medium">Meses</th><th className="pr-3 text-right font-medium">Importe</th></tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {s.recent_payments.map((p, i) => (
                   <tr key={i}>
                     <td className="whitespace-nowrap py-2 pr-3 text-slate-500">{fullDateFromIso(p.created_at, TZ)}</td>
                     <td className="pr-3"><span className="font-medium">{p.name}</span> <span className="font-mono text-xs text-slate-400">{p.code}</span>{p.note && <span className="block text-xs text-slate-400">{p.note}</span>}</td>
-                    <td className="whitespace-nowrap pr-3">{PLAN_NAMES[p.plan]} · {p.months} {p.months === 1 ? 'mes' : 'meses'}</td>
+                    <td className="whitespace-nowrap pr-3">{p.months} {p.months === 1 ? 'mes' : 'meses'}</td>
                     <td className="whitespace-nowrap pr-3 text-right font-semibold">{p.amount === null ? '—' : cup(Number(p.amount))}</td>
                   </tr>
                 ))}

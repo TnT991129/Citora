@@ -2,10 +2,10 @@
 
 Plataforma para que cualquier negocio con citas cree su propia app de reservas.
 
-- **Portada de Citora** (`/`): presentación, planes y botón "Crear mi app".
+- **Portada de Citora** (`/`): presentación, precio (un solo plan de 1.500 CUP/mes con todo incluido) y botón "Crear mi app".
 - **Creador** (`/crear`): el dueño elige tipo de negocio, nombre, enlace, color, servicios y horario, y crea su cuenta. Empieza su prueba gratis de 3 días con todo incluido.
 - **Web de reservas de cada negocio** (`/barberia-leo/client`): servicios, galería de trabajos, opiniones con estrellas, lista de espera cuando un día está lleno, códigos de descuento, reservar en 4 pasos, página privada de la cita (cambiar fecha una vez, cancelar, avisar por WhatsApp, dejar su opinión después de ir), y **Mis citas** (`/barberia-leo/client/mis-citas`) con el historial y el número de visitas del cliente. Cada negocio se puede **instalar como app** en el móvil, con su nombre y su logo.
-- **Panel del dueño** (`/barberia-leo/panel-admin`, solo con la cuenta del dueño; `/panel` lleva al tuyo): Hoy, Agenda (día y semana), detalle de cita con mensajes de WhatsApp, citas manuales, Servicios, Horario (turnos por día, días cerrados y reglas), Ajustes (logo, color, enlace, políticas) y Plan (cómo pagar). Con Plus: **Clientes** (ficha con historial, gasto, etiquetas y notas privadas), **Opiniones** (ocultar o responder) y **Galería**. Con Ultra: **Estadísticas** (ingresos, asistencia, clientes nuevos, servicios, días y horas más pedidos), **Recordatorios** (las citas de mañana con su WhatsApp listo para enviar), **Lista de espera**, **Cupones**, **Equipo** (varios profesionales, cada uno con su agenda; el cliente elige con quién o "Cualquiera") y **Respaldo** (citas, clientes y servicios en Excel). El propio panel también se instala como app.
+- **Panel del dueño** (`/barberia-leo/panel-admin`, solo con la cuenta del dueño; `/panel` lleva al tuyo): Hoy, Agenda (día y semana), detalle de cita con mensajes de WhatsApp, citas manuales, Servicios, Horario (turnos por día, días cerrados y reglas), Ajustes (logo, color, enlace, políticas) y Mensualidad (cómo pagar). Además, todo incluido: **Clientes** (ficha con historial, gasto, etiquetas y notas privadas), **Opiniones** (ocultar o responder) y **Galería**, **Estadísticas** (ingresos, asistencia, clientes nuevos, servicios, días y horas más pedidos), **Recordatorios** (las citas de mañana con su WhatsApp listo para enviar), **Lista de espera**, **Cupones**, **Equipo** (varios profesionales, cada uno con su agenda; el cliente elige con quién o "Cualquiera") y **Respaldo** (citas, clientes y servicios en Excel). El propio panel también se instala como app.
 - **Tu panel de administrador** (`/admin`): lista de negocios, activar plan tras confirmar el pago, dar días de prueba, inhabilitar; **Estadísticas** (cobros, altas y citas por mes, conversión de prueba a pago, negocios por plan y tipo, los más activos, últimos pagos y a quién escribir porque su plan o su prueba está por vencer); y ajustes (tarjeta, WhatsApp, precios, días de prueba).
 
 Cuando termina la prueba o el plan, la app del negocio se inhabilita sola: sus clientes ven "no está recibiendo reservas" y el dueño solo ve la pantalla de pago. No se borra nada.
@@ -61,15 +61,17 @@ npm run build                # comprueba que todo compila
 
 ## Cómo cobrar (flujo manual)
 
-1. El dueño va a **Plan**, elige plan y meses, ve tu tarjeta y el importe.
-2. Pulsa **Enviar comprobante**: se abre WhatsApp con un mensaje ya escrito (plan, meses, negocio, código, importe) y adjunta la captura.
+Hay un solo plan con todo incluido: **1.500 CUP al mes** (lo cambias en `/admin` → Ajustes).
+
+1. El dueño va a **Más → Mensualidad**, elige cuántos meses, ve tu tarjeta y el importe.
+2. Pulsa **Enviar comprobante**: se abre WhatsApp con un mensaje ya escrito (meses, negocio, código, importe) y adjunta la captura.
 3. Compruebas que el dinero llegó a tu tarjeta.
-4. En `/admin` buscas el negocio por su código, pulsas **Activar plan**, eliges plan y meses y confirmas. Si aún le quedaban meses, se suman al final.
+4. En `/admin` → **Dueños** buscas el negocio por su código, pulsas **Registrar pago**, eliges los meses y confirmas. Si aún le quedaban meses, se suman al final.
 
 ## Seguridad
 
 - Cada tabla tiene reglas RLS: cada dueño solo ve sus datos; los visitantes no leen ninguna tabla directamente.
-- Todo lo delicado pasa por funciones en el servidor: reservar, cambiar, cancelar, crear negocio y activar planes. El servidor recalcula siempre precios y duración.
+- Todo lo delicado pasa por funciones en el servidor: reservar, cambiar, cancelar, crear negocio y activar mensualidades. El servidor recalcula siempre precios y duración.
 - La base de datos impide dos citas que se solapen en el mismo negocio.
 - Límites antiabuso: 2 citas pendientes por teléfono y 3 reservas al día por teléfono en cada negocio.
 - El dueño no puede cambiarse el plan, la fecha de pago ni el código: lo bloquea un disparador en la base.

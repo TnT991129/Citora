@@ -3,13 +3,13 @@ import { Link } from 'react-router-dom'
 import { CitoraLogo } from '../components/ui'
 import { setBrandColor } from '../lib/brand'
 import { money } from '../lib/format'
-import { DEFAULT_PRICES, MODULES, PLAN_ADDS, PLAN_NAMES, PLAN_ORDER } from '../lib/plans'
+import { DEFAULT_PRICE, INCLUDED, MODULES } from '../lib/plans'
 import { supabase } from '../lib/supabase'
 import { BUSINESS_TYPES } from '../lib/templates'
 import type { Prices } from '../lib/types'
 
 export default function Landing() {
-  const [prices, setPrices] = useState<Prices>({ ...DEFAULT_PRICES, trial_days: 3 })
+  const [prices, setPrices] = useState<Prices>({ basico: DEFAULT_PRICE, plus: DEFAULT_PRICE, ultra: DEFAULT_PRICE, trial_days: 3 })
 
   useEffect(() => {
     setBrandColor(null)
@@ -48,7 +48,7 @@ export default function Landing() {
                 Crear mi app gratis
               </Link>
               <a href="#planes" className="rounded-2xl border border-slate-300 px-6 py-4 text-center text-base font-semibold text-slate-800 hover:bg-slate-50">
-                Ver planes
+                Ver precio
               </a>
             </div>
           </div>
@@ -89,41 +89,34 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Planes */}
+      {/* Precio: un solo plan con todo incluido */}
       <section id="planes" className="mx-auto max-w-5xl scroll-mt-16 px-4 py-14">
-        <h2 className="text-center text-3xl font-extrabold tracking-tight">Planes</h2>
-        <p className="mt-2 text-center text-slate-600">Prueba todo gratis durante {trial} días. Después eliges tu plan.</p>
-        <div className="mt-8 grid gap-4 md:grid-cols-3">
-          {PLAN_ORDER.map((p, i) => (
-            <div key={p} className={`card flex flex-col ${p === 'ultra' ? 'ring-2 ring-citora-600' : ''}`}>
-              <div className="flex items-center justify-between">
-                <h3 className="text-xl font-extrabold">{PLAN_NAMES[p]}</h3>
-                {p === 'ultra' && <span className="chip bg-citora-600 text-white">Todo incluido</span>}
-              </div>
-              <p className="mt-2">
-                <span className="text-3xl font-extrabold">{money(prices[p], 'CUP')}</span>
-                <span className="text-slate-500"> /mes</span>
-              </p>
-              <p className="mt-3 text-sm font-semibold text-slate-500">
-                {i === 0 ? 'Incluye:' : `Todo lo del plan ${PLAN_NAMES[PLAN_ORDER[i - 1]]}, más:`}
-              </p>
-              <ul className="mt-2 space-y-1.5 text-sm">
-                {PLAN_ADDS[p].map((m) => (
-                  <li key={m} className="flex items-start gap-2">
-                    <span className="mt-0.5 text-citora-600">✓</span>
-                    <span>
-                      {MODULES[m].name}
-                      {!MODULES[m].ready && <span className="ml-1 text-xs text-slate-400">(próximamente)</span>}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+        <h2 className="text-center text-3xl font-extrabold tracking-tight">Un solo precio, todo incluido</h2>
+        <p className="mt-2 text-center text-slate-600">Prueba todo gratis durante {trial} días. Si te gusta, sigues por una mensualidad.</p>
+        <div className="card mx-auto mt-8 max-w-md ring-2 ring-citora-600">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-extrabold">Plan Citora</h3>
+            <span className="chip bg-citora-600 text-white">Todo incluido</span>
+          </div>
+          <p className="mt-2">
+            <span className="text-4xl font-extrabold">{money(prices.basico, 'CUP')}</span>
+            <span className="text-slate-500"> /mes</span>
+          </p>
+          <ul className="mt-4 grid gap-1.5 text-sm sm:grid-cols-2">
+            {INCLUDED.map((m) => (
+              <li key={m} className="flex items-start gap-2">
+                <span className="mt-0.5 text-citora-600">✓</span>
+                <span>{MODULES[m].name}</span>
+              </li>
+            ))}
+            <li className="flex items-start gap-2"><span className="mt-0.5 text-citora-600">✓</span><span>App instalable en el móvil</span></li>
+            <li className="flex items-start gap-2"><span className="mt-0.5 text-citora-600">✓</span><span>Tu enlace, tus colores y tu logo</span></li>
+          </ul>
+          <Link to="/crear" className="mt-6 block rounded-2xl bg-citora-600 py-3.5 text-center font-bold text-white hover:bg-citora-700">
+            Probar {trial} días gratis
+          </Link>
         </div>
-        <p className="mt-4 text-center text-sm text-slate-500">
-          Todos los planes incluyen tu propio enlace, tus colores y tu logo. Pago por transferencia.
-        </p>
+        <p className="mt-4 text-center text-sm text-slate-500">Sin permanencia. Pago por transferencia.</p>
       </section>
 
       <section className="px-4 pb-16">

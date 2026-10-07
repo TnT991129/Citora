@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { InstallButton } from '../../components/InstallButton'
-import { hasModule, PLAN_MODULES, PLAN_NAMES, PLAN_ORDER, type ModuleKey } from '../../lib/plans'
+import { hasModule, type ModuleKey } from '../../lib/plans'
 import { publicUrl } from '../../lib/url'
 import { usePanel } from './context'
 
@@ -15,7 +15,7 @@ const ITEMS: { to: string; label: string; desc: string; emoji: string; module?: 
   { to: 'respaldo', label: 'Respaldo', desc: 'Descarga tus datos en Excel', emoji: '💾', module: 'respaldo' },
   { to: 'horario', label: 'Horario', desc: 'Turnos, días cerrados y reglas', emoji: '🕒' },
   { to: 'ajustes', label: 'Ajustes', desc: 'Logo, color, enlace y políticas', emoji: '⚙️' },
-  { to: 'plan', label: 'Plan', desc: 'Tu plan y cómo pagar', emoji: '💳' },
+  { to: 'plan', label: 'Mensualidad', desc: 'Hasta cuándo está pagado y cómo pagar', emoji: '💳' },
 ]
 
 export default function More() {
@@ -34,7 +34,7 @@ export default function More() {
                   <span className="block font-semibold">{it.label}</span>
                   <span className="block truncate text-sm text-slate-500">{it.desc}</span>
                 </span>
-                {locked && <span className="chip bg-slate-100 text-xs text-slate-600">🔒 {PLAN_NAMES[PLAN_ORDER.find((p) => PLAN_MODULES[p].includes(it.module!))!]}</span>}
+                {locked && <span className="chip bg-slate-100 text-xs text-slate-600">🔒</span>}
               </Link>
             </li>
           )

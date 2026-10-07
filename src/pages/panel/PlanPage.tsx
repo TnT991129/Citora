@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Alert, Button, CopyButton, LinkButton, PageLoader, StatusBadge, WhatsAppIcon } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { daysLeft, fullDateFromIso, money } from '../../lib/format'
-import { MODULES, PLAN_ADDS, PLAN_NAMES, PLAN_ORDER } from '../../lib/plans'
+import { INCLUDED, MODULES, PLAN_LABEL } from '../../lib/plans'
 import { supabase } from '../../lib/supabase'
 import type { PlanKey } from '../../lib/types'
 import { waLink } from '../../lib/whatsapp'
@@ -30,7 +30,6 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
   const { business, status } = usePanel()
   const [info, setInfo] = useState<PaymentInfo | null>(null)
   const [history, setHistory] = useState<PaymentRow[]>([])
-  const [plan, setPlan] = useState<PlanKey>(status.plan || 'plus')
   const [months, setMonths] = useState(1)
   const [error, setError] = useState<string | null>(null)
 
@@ -42,9 +41,10 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
   if (error) return <Alert>{error}</Alert>
   if (!info) return <PageLoader />
 
-  const amount = info[plan] * months
+  const price = info.basico
+  const amount = price * months
   const message = [
-    `Hola, acabo de pagar el plan *${PLAN_NAMES[plan]}* de Citora (${months} ${months === 1 ? 'mes' : 'meses'}).`,
+    `Hola, acabo de pagar la mensualidad de Citora (${months} ${months === 1 ? 'mes' : 'meses'}).`,
     `Negocio: *${business.name}*`,
     `Código: *${business.code}*`,
     `Importe: *${money(amount, 'CUP')}*`,
@@ -55,7 +55,7 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-extrabold">{blocked ? 'Activa tu app' : 'Tu plan'}</h1>
-        {blocked && <p className="mt-1 text-slate-600">Tu prueba o tu plan terminó. Elige un plan y paga para que tus clientes vuelvan a reservar. No se ha borrado nada.</p>}
+        {blocked && <p className="mt-1 text-slate-600">Tu prueba o tu mensualidad terminó. Paga la mensualidad para que tus clientes vuelvan a reservar. No se ha borrado nada.</p>}
       </div>
 
       <section className="card flex flex-wrap items-center justify-between gap-3">
@@ -63,43 +63,26 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
           <p className="text-sm text-slate-500">Estado</p>
           <p className="text-lg font-bold">
             {status.status === 'prueba' && <>Prueba gratis (todo incluido) · {daysLeft(status.trial_ends_at)} días</>}
-            {status.status === 'activo' && <>Plan {PLAN_NAMES[status.plan!]} · hasta el {fullDateFromIso(status.paid_until!, business.timezone)}</>}
+            {status.status === 'activo' && <>{PLAN_LABEL} · pagado hasta el {fullDateFromIso(status.paid_until!, business.timezone)}</>}
             {status.status === 'vencido' && <>Inhabilitada</>}
           </p>
         </div>
         <StatusBadge status={status.status} />
       </section>
 
-      <section>
-        <h2 className="mb-2 font-bold">1. Elige tu plan</h2>
-        <div className="grid gap-3 md:grid-cols-3">
-          {PLAN_ORDER.map((p, i) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => setPlan(p)}
-              className={`card text-left transition ${plan === p ? 'ring-2 ring-brand' : 'hover:ring-1 hover:ring-slate-300'}`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-lg font-extrabold">{PLAN_NAMES[p]}</span>
-                <span className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${plan === p ? 'border-brand bg-brand' : 'border-slate-300'}`}>
-                  {plan === p && <span className="h-2 w-2 rounded-full bg-white" />}
-                </span>
-              </div>
-              <p className="mt-1"><span className="text-xl font-extrabold">{money(info[p], 'CUP')}</span><span className="text-sm text-slate-500"> /mes</span></p>
-              <p className="mt-2 text-xs font-semibold text-slate-500">{i === 0 ? 'Incluye:' : `Todo lo de ${PLAN_NAMES[PLAN_ORDER[i - 1]]}, más:`}</p>
-              <ul className="mt-1 space-y-0.5 text-sm">
-                {PLAN_ADDS[p].map((m) => (
-                  <li key={m}>✓ {MODULES[m].name}{!MODULES[m].ready && <span className="text-xs text-slate-400"> (pronto)</span>}</li>
-                ))}
-              </ul>
-            </button>
-          ))}
+      <section className="card">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-lg font-extrabold">{PLAN_LABEL}</h2>
+          <p><span className="text-2xl font-extrabold">{money(price, 'CUP')}</span><span className="text-sm text-slate-500"> /mes</span></p>
         </div>
+        <p className="mt-1 text-sm text-slate-500">Todo incluido:</p>
+        <ul className="mt-1 grid gap-0.5 text-sm sm:grid-cols-2">
+          {INCLUDED.map((m) => <li key={m}>✓ {MODULES[m].name}</li>)}
+        </ul>
       </section>
 
       <section className="card space-y-3">
-        <h2 className="font-bold">2. ¿Cuántos meses?</h2>
+        <h2 className="font-bold">1. ¿Cuántos meses?</h2>
         <div className="flex gap-2">
           {[1, 2, 3, 6].map((m) => (
             <button key={m} onClick={() => setMonths(m)} className={`flex-1 rounded-xl py-2.5 font-semibold ${months === m ? 'bg-brand text-white' : 'bg-white ring-1 ring-slate-300'}`}>
@@ -111,7 +94,7 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
       </section>
 
       <section className="card space-y-3">
-        <h2 className="font-bold">3. Transfiere a esta tarjeta</h2>
+        <h2 className="font-bold">2. Transfiere a esta tarjeta</h2>
         {info.card_number ? (
           <div className="rounded-xl bg-slate-50 p-3">
             <p className="font-mono text-lg font-bold tracking-wider">{info.card_number}</p>
@@ -128,8 +111,8 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
       </section>
 
       <section className="card space-y-3">
-        <h2 className="font-bold">4. Envía la captura por WhatsApp</h2>
-        <p className="text-sm text-slate-500">Se abre WhatsApp con el mensaje escrito. Solo adjunta la captura. Activamos tu plan en cuanto confirmemos el pago.</p>
+        <h2 className="font-bold">3. Envía la captura por WhatsApp</h2>
+        <p className="text-sm text-slate-500">Se abre WhatsApp con el mensaje escrito. Solo adjunta la captura. Activamos tu mes en cuanto confirmemos el pago.</p>
         {info.admin_whatsapp ? (
           <LinkButton href={waLink(info.admin_whatsapp, message)} variant="whatsapp" size="lg" block newTab>
             <WhatsAppIcon /> Enviar comprobante
@@ -145,7 +128,7 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
           <ul className="mt-2 divide-y divide-slate-100 text-sm">
             {history.map((h) => (
               <li key={h.id} className="flex justify-between py-2">
-                <span>{fullDateFromIso(h.created_at, business.timezone)} · {PLAN_NAMES[h.plan]} · {h.months} {h.months === 1 ? 'mes' : 'meses'}</span>
+                <span>{fullDateFromIso(h.created_at, business.timezone)} · {h.months} {h.months === 1 ? 'mes' : 'meses'}</span>
                 {h.amount != null && <span className="font-semibold">{money(h.amount, 'CUP')}</span>}
               </li>
             ))}

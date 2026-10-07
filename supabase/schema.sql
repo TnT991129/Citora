@@ -24,13 +24,19 @@ create table if not exists public.platform_settings (
   card_number text not null default '',
   card_holder text not null default '',
   admin_whatsapp text not null default '',
-  price_basico int not null default 1500,
-  price_plus int not null default 2000,
-  price_ultra int not null default 2500,
+  price_basico int not null default 1500,  -- precio mensual (hay un solo plan)
+  price_plus int not null default 1500,    -- sin uso: se mantiene igual al precio mensual
+  price_ultra int not null default 1500,   -- sin uso: se mantiene igual al precio mensual
   trial_days int not null default 3 check (trial_days between 0 and 60),
   updated_at timestamptz not null default now()
 );
 insert into public.platform_settings (id) values (1) on conflict (id) do nothing;
+
+-- Un solo plan de 1.500 CUP/mes. Al pasar de tres planes a uno se unifica el precio una vez
+-- (después el panel de administrador guarda siempre los tres iguales).
+update public.platform_settings
+   set price_basico = 1500, price_plus = 1500, price_ultra = 1500
+ where id = 1 and (price_plus <> price_basico or price_ultra <> price_basico);
 
 -- Negocios (cada dueño tiene un negocio en la Fase 1)
 create table if not exists public.businesses (
@@ -301,15 +307,11 @@ returns text language sql stable set search_path = public as $$
   end;
 $$;
 
--- Qué módulos incluye cada plan (igual que src/lib/plans.ts)
+-- Hay un solo plan con todo incluido: cualquier negocio activo (pagando o en prueba) tiene todo.
+-- (p_module se mantiene por si en el futuro vuelve a haber varios planes.)
 create or replace function public.plan_has(p_plan text, p_module text)
 returns boolean language sql immutable as $$
-  select case p_plan
-    when 'ultra' then true
-    when 'plus' then p_module in ('reservas', 'agenda', 'whatsapp', 'clientes', 'galeria', 'opiniones')
-    when 'basico' then p_module in ('reservas', 'agenda', 'whatsapp')
-    else false
-  end;
+  select p_plan is not null;
 $$;
 
 -- Una cita "hecha": marcada como completada, o ya pasada sin que el dueño la marcara

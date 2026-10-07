@@ -20,24 +20,16 @@ export const MODULES = {
 
 export type ModuleKey = keyof typeof MODULES
 
-const BASICO: ModuleKey[] = ['reservas', 'agenda', 'whatsapp']
-const PLUS: ModuleKey[] = [...BASICO, 'clientes', 'galeria', 'opiniones']
-const ULTRA: ModuleKey[] = Object.keys(MODULES) as ModuleKey[]
+// Hay un solo plan, con todo incluido. En la base de datos se guarda como 'ultra';
+// los pagos antiguos pueden tener 'basico' o 'plus' y se muestran igual.
+export const SINGLE_PLAN: PlanKey = 'ultra'
+export const PLAN_LABEL = 'Plan Citora'
+export const DEFAULT_PRICE = 1500
 
-export const PLAN_MODULES: Record<PlanKey, ModuleKey[]> = { basico: BASICO, plus: PLUS, ultra: ULTRA }
+/** Lo que incluye el plan (lo que ya está construido) */
+export const INCLUDED: ModuleKey[] = (Object.keys(MODULES) as ModuleKey[]).filter((m) => MODULES[m].ready)
 
-// Lo que cada plan añade sobre el anterior (para mostrar en las tarjetas)
-export const PLAN_ADDS: Record<PlanKey, ModuleKey[]> = {
-  basico: BASICO,
-  plus: PLUS.filter((m) => !BASICO.includes(m)),
-  ultra: ULTRA.filter((m) => !PLUS.includes(m)),
-}
-
-export const PLAN_NAMES: Record<PlanKey, string> = { basico: 'Básico', plus: 'Plus', ultra: 'Ultra' }
-export const PLAN_ORDER: PlanKey[] = ['basico', 'plus', 'ultra']
-export const DEFAULT_PRICES = { basico: 1500, plus: 2000, ultra: 2500 }
-
-export function hasModule(plan: PlanKey | null | undefined, module: ModuleKey): boolean {
-  if (!plan) return false
-  return PLAN_MODULES[plan].includes(module)
+/** Con un plan activo (pagado o en prueba) se tiene todo */
+export function hasModule(plan: PlanKey | null | undefined, _module: ModuleKey): boolean {
+  return Boolean(plan)
 }

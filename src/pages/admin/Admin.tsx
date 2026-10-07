@@ -6,7 +6,7 @@ import { CITORA_COLOR, setBrandColor } from '../../lib/brand'
 import { setAppManifest } from '../../lib/pwa'
 import { errorMessage } from '../../lib/errors'
 import { daysLeft, fullDateFromIso, money } from '../../lib/format'
-import { PLAN_NAMES, PLAN_ORDER } from '../../lib/plans'
+import { PLAN_LABEL, SINGLE_PLAN } from '../../lib/plans'
 import { supabase } from '../../lib/supabase'
 import { businessType } from '../../lib/templates'
 import type { BusinessStatus, PlanKey } from '../../lib/types'
@@ -149,7 +149,7 @@ function Owners() {
   const count = (f: Filter) => (f === 'todos' ? list.length : list.filter((o) => o.status === f).length)
   const monthly = list
     .filter((o) => o.status === 'activo' && o.plan)
-    .reduce((s, o) => s + prices[o.plan!], 0)
+    .reduce((s) => s + prices.basico, 0)
   const thisMonth = new Date().toISOString().slice(0, 7)
   const newThisMonth = list.filter((o) => o.signed_up_at.slice(0, 7) === thisMonth).length
 
@@ -210,9 +210,9 @@ function Owners() {
 
             {o.id && (
               <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-sm">
-                {o.status === 'activo' && <>💳 Plan <b>{PLAN_NAMES[o.plan!]}</b> · próximo pago el <b>{fullDateFromIso(o.paid_until!, TZ)}</b> ({daysLeft(o.paid_until!)} días) · {money(prices[o.plan!], 'CUP')}/mes</>}
+                {o.status === 'activo' && <>💳 Pagando · próximo pago el <b>{fullDateFromIso(o.paid_until!, TZ)}</b> ({daysLeft(o.paid_until!)} días) · {money(prices.basico, 'CUP')}/mes</>}
                 {o.status === 'prueba' && <>🎁 Prueba gratis · termina el <b>{fullDateFromIso(o.trial_ends_at!, TZ)}</b> ({daysLeft(o.trial_ends_at!)} días)</>}
-                {o.status === 'vencido' && <>⛔ Sin pagar{o.paid_until ? <> desde el {fullDateFromIso(o.paid_until, TZ)}</> : <> desde que terminó la prueba</>}{o.plan ? ` · último plan: ${PLAN_NAMES[o.plan]}` : ''}</>}
+                {o.status === 'vencido' && <>⛔ Sin pagar{o.paid_until ? <> desde el {fullDateFromIso(o.paid_until, TZ)}</> : <> desde que terminó la prueba</>}</>}
               </p>
             )}
 
@@ -256,21 +256,20 @@ function ActivateModal({ business, prices, onClose, onDone }: {
   onClose: () => void
   onDone: () => void
 }) {
-  const [plan, setPlan] = useState<PlanKey>(business.plan || 'plus')
   const [months, setMonths] = useState(1)
-  const [amount, setAmount] = useState<number>(prices[business.plan || 'plus'])
+  const [amount, setAmount] = useState<number>(prices.basico)
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => setAmount(prices[plan] * months), [plan, months, prices])
+  useEffect(() => setAmount(prices.basico * months), [months, prices])
 
   const activate = async () => {
     setBusy(true)
     setError(null)
     const { data, error } = await supabase.rpc('admin_activate_plan', {
       p_business: business.id,
-      p_plan: plan,
+      p_plan: SINGLE_PLAN,
       p_months: months,
       p_amount: amount,
       p_note: note,
@@ -290,13 +289,6 @@ function ActivateModal({ business, prices, onClose, onDone }: {
     >
       <div className="space-y-4">
         <p className="text-sm text-slate-600">Código <b className="font-mono">{business.code}</b>. Comprueba que el pago llegó a tu tarjeta antes de activar.</p>
-        <div className="grid grid-cols-3 gap-2">
-          {PLAN_ORDER.map((p) => (
-            <button key={p} onClick={() => setPlan(p)} className={`rounded-xl py-2.5 font-semibold ${plan === p ? 'bg-citora-600 text-white' : 'bg-white ring-1 ring-slate-300'}`}>
-              {PLAN_NAMES[p]}
-            </button>
-          ))}
-        </div>
         <Field label="Meses">
           <select className="input" value={months} onChange={(e) => setMonths(Number(e.target.value))}>
             {[1, 2, 3, 4, 5, 6, 12].map((m) => <option key={m} value={m}>{m}</option>)}
@@ -351,12 +343,19 @@ function SettingsForm() {
         </Field>
       </section>
       <section className="card space-y-4">
-        <h2 className="font-bold">Precios (CUP/mes)</h2>
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="Básico"><input className="input" type="number" value={s.price_basico} onChange={(e) => setS({ ...s, price_basico: Number(e.target.value) })} /></Field>
-          <Field label="Plus"><input className="input" type="number" value={s.price_plus} onChange={(e) => setS({ ...s, price_plus: Number(e.target.value) })} /></Field>
-          <Field label="Ultra"><input className="input" type="number" value={s.price_ultra} onChange={(e) => setS({ ...s, price_ultra: Number(e.target.value) })} /></Field>
-        </div>
+        <h2 className="font-bold">Precio</h2>
+        <Field label={`${PLAN_LABEL}: precio mensual (CUP)`} hint="Un solo plan con todo incluido. Lo ven los dueños al pagar y en la página principal.">
+          <input
+            className="input"
+            type="number"
+            min={0}
+            value={s.price_basico}
+            onChange={(e) => {
+              const v = Number(e.target.value)
+              setS({ ...s, price_basico: v, price_plus: v, price_ultra: v })
+            }}
+          />
+        </Field>
         <Field label="Días de prueba gratis" hint="Para los negocios nuevos.">
           <input className="input" type="number" min={0} max={60} value={s.trial_days} onChange={(e) => setS({ ...s, trial_days: Number(e.target.value) })} />
         </Field>

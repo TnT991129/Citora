@@ -448,7 +448,7 @@ export default function Create() {
             <p className="text-sm text-slate-700">
               <b>{businessType(draft.type).emoji} {draft.name}</b> · {draft.services.filter((s) => s.name.trim()).length} servicios · desde {money(Math.min(...draft.services.filter((s) => s.name.trim()).map((s) => s.price)))}
             </p>
-            <p className="mt-1 text-sm text-slate-600">Tendrás 3 días gratis con todo incluido. Después eliges tu plan.</p>
+            <p className="mt-1 text-sm text-slate-600">Tendrás 3 días gratis con todo incluido. Después, una sola mensualidad de 1.500 CUP.</p>
           </div>
           <p className="text-sm text-slate-500">
             ¿Ya tienes cuenta? <Link to="/entrar" className="font-semibold text-brand">Entra</Link> y tu app se creará con estos datos.
