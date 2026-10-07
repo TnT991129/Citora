@@ -3,11 +3,8 @@ import type { Business, MyStatus, Service } from '../../lib/types'
 
 export interface PanelCtx {
   business: Business
-  /** Todos los negocios de la cuenta (para cambiar de uno a otro) */
-  businesses: Business[]
   status: MyStatus
   services: Service[]
-  switchBusiness: (id: string) => Promise<void>
   reloadBusiness: () => Promise<void>
   reloadServices: () => Promise<void>
 }

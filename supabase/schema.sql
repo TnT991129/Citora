@@ -1,5 +1,5 @@
 -- =====================================================================
--- CITORA · Base de datos
+-- CITORA · Base de datos (Fases 1, 2 y 3)
 -- Ejecutar completo en Supabase > SQL Editor > New query > Run.
 -- Se puede volver a ejecutar sin romper nada (usa "if not exists" y
 -- "create or replace" siempre que se puede).
@@ -32,10 +32,10 @@ create table if not exists public.platform_settings (
 );
 insert into public.platform_settings (id) values (1) on conflict (id) do nothing;
 
--- Negocios (una cuenta puede tener varios; ver owner_prefs)
+-- Negocios (cada dueño tiene un negocio en la Fase 1)
 create table if not exists public.businesses (
   id uuid primary key default gen_random_uuid(),
-  owner_id uuid not null references auth.users(id) on delete cascade,
+  owner_id uuid not null unique references auth.users(id) on delete cascade,
   slug text not null unique,
   code text not null unique,
   name text not null check (char_length(name) between 2 and 60),
@@ -57,16 +57,17 @@ create table if not exists public.businesses (
   created_at timestamptz not null default now()
 );
 
--- Antes cada cuenta tenía un solo negocio: se quita esa restricción
-alter table public.businesses drop constraint if exists businesses_owner_id_key;
-create index if not exists businesses_owner_idx on public.businesses (owner_id, created_at);
-
--- Negocio que el dueño tiene abierto en su panel
-create table if not exists public.owner_prefs (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  active_business_id uuid references public.businesses(id) on delete set null,
-  updated_at timestamptz not null default now()
-);
+-- Una cuenta = un negocio. Si se quitó esta regla en una versión anterior, se vuelve a poner
+-- y se borra lo que usaba aquella versión (varios negocios por cuenta).
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'businesses_owner_id_key') then
+    alter table public.businesses add constraint businesses_owner_id_key unique (owner_id);
+  end if;
+end;
+$$;
+drop function if exists public.set_active_business(uuid);
+drop table if exists public.owner_prefs;
 
 -- Servicios del negocio
 create table if not exists public.services (
@@ -288,20 +289,16 @@ returns boolean language sql stable as $$
   select p_status = 'completada' or (p_status in ('pendiente', 'confirmada') and p_ends < now());
 $$;
 
--- Negocio abierto en el panel: el elegido por el dueño o, si no eligió, el primero que creó
 create or replace function public.my_business_id()
 returns uuid language sql stable security definer set search_path = public as $$
-  select coalesce(
-    (select b.id from owner_prefs p join businesses b on b.id = p.active_business_id
-      where p.user_id = auth.uid() and b.owner_id = auth.uid()),
-    (select id from businesses where owner_id = auth.uid() order by created_at, id limit 1));
+  select id from businesses where owner_id = auth.uid();
 $$;
 
 create or replace function public.my_business_active()
 returns boolean language sql stable security definer set search_path = public as $$
   select coalesce(
     (select business_effective_plan(plan, trial_ends_at, paid_until) is not null
-       from businesses where id = my_business_id()),
+       from businesses where owner_id = auth.uid()),
     false);
 $$;
 
@@ -309,7 +306,7 @@ create or replace function public.my_plan_has(p_module text)
 returns boolean language sql stable security definer set search_path = public as $$
   select coalesce(
     (select plan_has(business_effective_plan(plan, trial_ends_at, paid_until), p_module)
-       from businesses where id = my_business_id()),
+       from businesses where owner_id = auth.uid()),
     false);
 $$;
 
@@ -439,11 +436,6 @@ create policy appt_services_owner_select on public.appointment_services for sele
 drop policy if exists payments_select on public.payments;
 create policy payments_select on public.payments for select to authenticated
   using (is_platform_admin() or business_id = my_business_id());
-
-alter table public.owner_prefs enable row level security;
-drop policy if exists owner_prefs_self on public.owner_prefs;
-create policy owner_prefs_self on public.owner_prefs for select to authenticated
-  using (user_id = auth.uid());
 
 alter table public.reviews enable row level security;
 alter table public.gallery_photos enable row level security;
@@ -1040,7 +1032,7 @@ declare
   i int := 0;
 begin
   if v_uid is null then raise exception 'SIN_SESION'; end if;
-  if (select count(*) from businesses where owner_id = v_uid) >= 5 then raise exception 'LIMITE_NEGOCIOS'; end if;
+  if exists (select 1 from businesses where owner_id = v_uid) then raise exception 'YA_TIENE_NEGOCIO'; end if;
   if not check_slug_available(p_slug) then raise exception 'ENLACE_NO_DISPONIBLE'; end if;
 
   select trial_days into v_trial from platform_settings where id = 1;
@@ -1080,24 +1072,7 @@ begin
     on conflict (business_id, weekday) do update set is_open = excluded.is_open, slots = excluded.slots;
   end loop;
 
-  -- El negocio recién creado queda abierto en el panel
-  insert into owner_prefs (user_id, active_business_id) values (v_uid, v_id)
-  on conflict (user_id) do update set active_business_id = excluded.active_business_id, updated_at = now();
-
   return jsonb_build_object('id', v_id, 'slug', lower(p_slug), 'code', v_code);
-end;
-$$;
-
--- Cambia el negocio abierto en el panel
-create or replace function public.set_active_business(p_business uuid)
-returns void language plpgsql volatile security definer set search_path = public as $$
-begin
-  if auth.uid() is null then raise exception 'SIN_SESION'; end if;
-  if not exists (select 1 from businesses where id = p_business and owner_id = auth.uid()) then
-    raise exception 'NO_AUTORIZADO';
-  end if;
-  insert into owner_prefs (user_id, active_business_id) values (auth.uid(), p_business)
-  on conflict (user_id) do update set active_business_id = excluded.active_business_id, updated_at = now();
 end;
 $$;
 
@@ -1110,9 +1085,8 @@ returns jsonb language sql stable security definer set search_path = public as $
     'plan', plan,
     'trial_ends_at', trial_ends_at,
     'paid_until', paid_until,
-    'code', code,
-    'id', id)
-  from businesses where id = my_business_id();
+    'code', code)
+  from businesses where owner_id = auth.uid();
 $$;
 
 -- Datos para pagar (tarjeta y WhatsApp del administrador)
@@ -1138,7 +1112,7 @@ declare
   v_start timestamptz;
   v_id uuid;
 begin
-  select * into b from businesses where id = my_business_id();
+  select * into b from businesses where owner_id = auth.uid();
   if not found then raise exception 'SIN_NEGOCIO'; end if;
   if business_effective_plan(b.plan, b.trial_ends_at, b.paid_until) is null then
     raise exception 'NEGOCIO_INACTIVO';
@@ -1178,7 +1152,7 @@ declare
   v_dur int;
   v_start timestamptz;
 begin
-  select * into b from businesses where id = my_business_id();
+  select * into b from businesses where owner_id = auth.uid();
   if not found then raise exception 'SIN_NEGOCIO'; end if;
   if business_effective_plan(b.plan, b.trial_ends_at, b.paid_until) is null then
     raise exception 'NEGOCIO_INACTIVO';
@@ -1202,7 +1176,7 @@ returns businesses language plpgsql stable security definer set search_path = pu
 declare
   b businesses;
 begin
-  select * into b from businesses where id = my_business_id();
+  select * into b from businesses where owner_id = auth.uid();
   if not found then raise exception 'SIN_NEGOCIO'; end if;
   if business_effective_plan(b.plan, b.trial_ends_at, b.paid_until) is null then
     raise exception 'NEGOCIO_INACTIVO';
@@ -1470,7 +1444,6 @@ grant execute on function public.check_slug_available(text) to anon, authenticat
 
 grant execute on function public.create_business(text, text, text, text, text, text, jsonb, jsonb) to authenticated;
 grant execute on function public.get_my_business_status() to authenticated;
-grant execute on function public.set_active_business(uuid) to authenticated;
 grant execute on function public.get_payment_info() to authenticated;
 grant execute on function public.owner_create_appointment(uuid[], date, text, text, text, text) to authenticated;
 grant execute on function public.owner_reschedule_appointment(uuid, date, text) to authenticated;

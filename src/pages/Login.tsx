@@ -14,17 +14,21 @@ export default function Login() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
+  const [justSignedIn, setJustSignedIn] = useState(false)
 
   useEffect(() => {
     setBrandColor(null)
     document.title = 'Entrar · Citora'
   }, [])
 
-  // Con sesión: el administrador va a su panel, el dueño al suyo
-  useEffect(() => {
-    if (!session) return
+  const goToPanel = () =>
     supabase.rpc('is_platform_admin').then(({ data }) => navigate(data ? '/admin' : '/panel', { replace: true }))
-  }, [session, navigate])
+
+  // Al entrar: el administrador va a su panel, el dueño al suyo
+  useEffect(() => {
+    if (session && justSignedIn) goToPanel()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, justSignedIn])
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -33,6 +37,7 @@ export default function Login() {
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
     setBusy(false)
     if (error) setError(errorMessage(error))
+    else setJustSignedIn(true)
   }
 
   const forgot = async () => {
@@ -50,6 +55,14 @@ export default function Login() {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center px-4 py-10">
       <Link to="/"><CitoraLogo className="text-2xl" /></Link>
+      {session && !justSignedIn ? (
+        <div className="card mt-6 w-full max-w-sm space-y-3 text-center">
+          <h1 className="text-xl font-bold">Ya tienes la sesión abierta</h1>
+          <p className="text-slate-600">Estás conectado como <b>{session.user.email}</b>.</p>
+          <Button block onClick={goToPanel}>Ir a mi panel</Button>
+          <Button block variant="secondary" onClick={() => supabase.auth.signOut()}>Entrar con otra cuenta</Button>
+        </div>
+      ) : (
       <form onSubmit={submit} className="card mt-6 w-full max-w-sm space-y-4">
         <h1 className="text-xl font-bold">Entrar a tu panel</h1>
         <Field label="Correo electrónico">
@@ -65,6 +78,7 @@ export default function Login() {
           Olvidé mi contraseña
         </button>
       </form>
+      )}
       <p className="mt-6 text-sm text-slate-600">
         ¿No tienes app todavía? <Link to="/crear" className="font-semibold text-brand">Créala gratis</Link>
       </p>

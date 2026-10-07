@@ -31,6 +31,7 @@ select create_business('Barbería Leo', 'Barberia-Leo', 'barberia', '+53 5 555 1
 ) as created \gset
 \echo :created
 insert into ctx values ('biz1', (:'created'::jsonb)->>'id');
+select expect_error($$select create_business('Otra', 'otra-mas', 'x', '1', '', '#000000', '[]', '[]')$$, 'YA_TIENE_NEGOCIO');
 select get_my_business_status()->>'status' as st \gset
 \echo status dueño1: :st
 do $$ begin assert (select count(*) from services) = 2, 'deben ser 2 servicios (uno vacío ignorado)'; end $$;
@@ -329,28 +330,7 @@ do $$ begin
   assert (select count(*) from waitlist) = 0, 'dueño 2 no ve la lista de espera ajena';
   assert (select count(*) from discounts) = 0, 'ni los cupones ajenos';
 end $$;
-
--- ===== Varios negocios en una cuenta =====
-select create_business('Spa Mar Centro', 'spa-mar-centro', 'spa', '55551111', '', '#db2777', '[{"name":"Facial","price":800,"duration_min":45}]', '[]');
-do $$ begin
-  assert (select count(*) from businesses) = 2, 'el dueño 2 ve sus dos negocios';
-  assert get_my_business_status()->>'id' = (select id::text from businesses where slug = 'spa-mar-centro'), 'el nuevo queda abierto';
-  assert (select count(*) from services) = 1 and (select name from services) = 'Facial', 'solo ve los servicios del negocio abierto';
-  assert get_my_business_status()->>'status' = 'prueba', 'el nuevo empieza su prueba';
-end $$;
-select set_active_business((select id from businesses where slug = 'spa-mar'));
-do $$ begin
-  assert my_business_id() = (select id from businesses where slug = 'spa-mar'), 'cambia de negocio';
-  assert (select name from services) = 'Masaje';
-end $$;
-select expect_error($$select set_active_business('$$ || (select v from ctx where k='biz1') || $$')$$, 'NO_AUTORIZADO');
-select create_business('Spa 3', 'spa-tres', 'spa', '55551111', '', '#db2777', '[]', '[]');
-select create_business('Spa 4', 'spa-cuatro', 'spa', '55551111', '', '#db2777', '[]', '[]');
-select create_business('Spa 5', 'spa-cinco', 'spa', '55551111', '', '#db2777', '[]', '[]');
-select expect_error($$select create_business('Spa 6', 'spa-seis', 'spa', '55551111', '', '#db2777', '[]', '[]')$$, 'LIMITE_NEGOCIOS');
 reset role;
--- Se borran para no alterar las comprobaciones siguientes
-delete from businesses where slug in ('spa-mar-centro', 'spa-tres', 'spa-cuatro', 'spa-cinco');
 set role authenticated;
 set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 select admin_deactivate_business((select v from ctx where k='biz1')::uuid);

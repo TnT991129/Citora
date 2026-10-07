@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { TimeChips } from '../components/TimeChips'
 import { Alert, Button, BusinessAvatar, CitoraLogo, CopyButton, Field, LinkButton, WhatsAppIcon } from '../components/ui'
 import { useSession } from '../lib/auth'
@@ -16,6 +16,7 @@ const STEPS = ['Tipo', 'Negocio', 'Servicios', 'Horario', 'Cuenta']
 
 export default function Create() {
   const session = useSession()
+  const navigate = useNavigate()
   const [draft, setDraft] = useState<Draft>(() => loadDraft() || newDraft())
   const [step, setStep] = useState(0)
   const [slugState, setSlugState] = useState<'idle' | 'checking' | 'ok' | 'taken'>('idle')
@@ -39,12 +40,29 @@ export default function Create() {
     if (!done) saveDraft(draft)
   }, [draft, done])
 
-  // Con sesión iniciada y negocios ya creados, este será uno más de la misma cuenta
-  const [owned, setOwned] = useState(0)
+  // Si la sesión abierta ya tiene un negocio (o es el administrador), se pregunta qué hacer:
+  // cada cuenta tiene un solo negocio, así que para crear otra app hay que usar otro correo
+  const [existing, setExisting] = useState<{ name: string; admin: boolean } | null>(null)
   useEffect(() => {
-    if (!session) return
-    supabase.from('businesses').select('id', { count: 'exact', head: true }).then(({ count }) => setOwned(count || 0))
-  }, [session])
+    if (!session || done) {
+      setExisting(null)
+      return
+    }
+    ;(async () => {
+      const [{ data: biz }, { data: isAdmin }] = await Promise.all([
+        supabase.from('businesses').select('name').eq('owner_id', session.user.id).maybeSingle(),
+        supabase.rpc('is_platform_admin'),
+      ])
+      if (biz || isAdmin) setExisting({ name: (biz as { name: string } | null)?.name || '', admin: Boolean(isAdmin) })
+    })()
+  }, [session, done])
+
+  const signOutForNew = async () => {
+    await supabase.auth.signOut()
+    setExisting(null)
+    setStep(0)
+    setDraft(newDraft())
+  }
 
   // Comprueba si el enlace está libre
   useEffect(() => {
@@ -138,6 +156,25 @@ export default function Create() {
 
   if (done) return <Success slug={done.slug} name={draft.name} />
 
+  if (existing && session) {
+    return (
+      <Shell>
+        <div className="card space-y-4 text-center">
+          <h1 className="text-2xl font-bold">Ya tienes la sesión abierta</h1>
+          <p className="text-slate-600">
+            Estás conectado como <b>{session.user.email}</b>
+            {existing.name ? <>, que ya tiene la app <b>{existing.name}</b></> : existing.admin ? <> (administrador)</> : null}.
+            Cada cuenta tiene una sola app: para crear otra, usa otro correo.
+          </p>
+          <Button block size="lg" onClick={signOutForNew}>Cerrar sesión y crear otra cuenta</Button>
+          <Button block variant="secondary" onClick={() => navigate(existing.admin && !existing.name ? '/admin' : '/panel')}>
+            {existing.admin && !existing.name ? 'Ir al panel de administrador' : 'Ir a mi panel'}
+          </Button>
+        </div>
+      </Shell>
+    )
+  }
+
   if (needsConfirm) {
     return (
       <Shell>
@@ -165,17 +202,6 @@ export default function Create() {
           <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${((step + 1) / totalSteps) * 100}%` }} />
         </div>
       </div>
-
-      {session && owned > 0 && step === 0 && (
-        <div className="mb-5">
-          <Alert kind={owned >= 5 ? 'warning' : 'info'}>
-            {owned >= 5
-              ? 'Ya tienes 5 negocios, el máximo por cuenta.'
-              : `Vas a crear otro negocio con tu cuenta (ya tienes ${owned}). Tendrá su propia web, su propio panel y su propia prueba gratis.`}{' '}
-            <Link to="/panel" className="font-semibold underline">Volver a mi panel</Link>
-          </Alert>
-        </div>
-      )}
 
       {step === 0 && (
         <section>
