@@ -11,6 +11,7 @@ import { businessType } from '../../lib/templates'
 import type { BusinessStatus, PlanKey } from '../../lib/types'
 import { publicUrl } from '../../lib/url'
 import { waLink } from '../../lib/whatsapp'
+import AdminStats from './AdminStats'
 
 interface AdminBusiness {
   id: string
@@ -41,7 +42,7 @@ interface Settings {
 export default function Admin() {
   const session = useSession()
   const [isAdmin, setIsAdmin] = useState<boolean | undefined>(undefined)
-  const [tab, setTab] = useState<'negocios' | 'ajustes'>('negocios')
+  const [tab, setTab] = useState<'negocios' | 'estadisticas' | 'ajustes'>('negocios')
 
   useEffect(() => {
     setBrandColor(null)
@@ -66,16 +67,16 @@ export default function Admin() {
             <span className="chip bg-slate-900 text-white">Admin</span>
           </div>
           <div className="flex items-center gap-1">
-            {(['negocios', 'ajustes'] as const).map((t) => (
+            {(['negocios', 'estadisticas', 'ajustes'] as const).map((t) => (
               <button key={t} onClick={() => setTab(t)} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${tab === t ? 'bg-citora-100 text-citora-700' : 'text-slate-600 hover:bg-slate-100'}`}>
-                {t === 'negocios' ? 'Negocios' : 'Ajustes'}
+                {t === 'negocios' ? 'Negocios' : t === 'estadisticas' ? 'Estadísticas' : 'Ajustes'}
               </button>
             ))}
             <button onClick={() => supabase.auth.signOut()} className="ml-1 rounded-lg px-2 py-1.5 text-sm text-slate-500 hover:bg-slate-100">Salir</button>
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-5">{tab === 'negocios' ? <Businesses /> : <SettingsForm />}</main>
+      <main className="mx-auto max-w-5xl px-4 py-5">{tab === 'negocios' ? <Businesses /> : tab === 'estadisticas' ? <AdminStats /> : <SettingsForm />}</main>
     </div>
   )
 }

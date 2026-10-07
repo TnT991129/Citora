@@ -10,7 +10,7 @@ import { supabase } from '../../lib/supabase'
 import type { PublicBooking, PublicBusiness } from '../../lib/types'
 import { bookingUrl } from '../../lib/url'
 import { waLink } from '../../lib/whatsapp'
-import { Centered, PoweredBy, PublicHeader } from './shared'
+import { Centered, PoweredBy, PublicHeader, Stars } from './shared'
 
 export default function BookingPage() {
   const { slug, token } = useParams()
@@ -122,6 +122,19 @@ export default function BookingPage() {
             </p>
           )}
         </section>
+
+        {booking.customer && booking.customer.visits > 0 && (
+          <p className="rounded-2xl bg-white px-4 py-3 text-center text-sm text-slate-600 ring-1 ring-slate-200">
+            {booking.customer.visits === 1
+              ? <>Ya has venido <b>1 vez</b> a {b.name}.</>
+              : <>Llevas <b>{booking.customer.visits} visitas</b> a {b.name}. ¡Gracias por volver!</>}
+            {' '}<Link to={`/${b.slug}/mis-citas`} className="font-semibold text-brand">Mis citas</Link>
+          </p>
+        )}
+
+        {(booking.can_review || booking.review) && (
+          <ReviewBox booking={booking} onSaved={loadBooking} />
+        )}
 
         {error && <Alert>{error}</Alert>}
 
@@ -244,5 +257,59 @@ function Reschedule({ booking, minutes, onClose, onDone }: {
         </div>
       )}
     </Modal>
+  )
+}
+
+function ReviewBox({ booking, onSaved }: { booking: PublicBooking; onSaved: () => void }) {
+  const [editing, setEditing] = useState(!booking.review)
+  const [rating, setRating] = useState(booking.review?.rating || 0)
+  const [comment, setComment] = useState(booking.review?.comment || '')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const save = async () => {
+    if (!rating) return setError('Elige de 1 a 5 estrellas.')
+    setBusy(true)
+    setError(null)
+    const { error } = await supabase.rpc('submit_review', { p_token: booking.token, p_rating: rating, p_comment: comment })
+    setBusy(false)
+    if (error) return setError(errorMessage(error))
+    setEditing(false)
+    onSaved()
+  }
+
+  if (!editing && booking.review) {
+    return (
+      <section className="card">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-bold">Tu opinión</h2>
+          <Stars value={booking.review.rating} size={18} />
+        </div>
+        {booking.review.comment && <p className="mt-2 text-slate-700">{booking.review.comment}</p>}
+        {booking.review.reply && (
+          <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600"><b>Respuesta del negocio:</b> {booking.review.reply}</p>
+        )}
+        {booking.can_review && (
+          <button onClick={() => setEditing(true)} className="mt-2 text-sm font-semibold text-brand">Cambiar mi opinión</button>
+        )}
+      </section>
+    )
+  }
+
+  return (
+    <section className="card">
+      <h2 className="font-bold">¿Qué tal tu visita?</h2>
+      <p className="text-sm text-slate-500">Tu opinión ayuda a {booking.business.name} y a otros clientes.</p>
+      <div className="mt-3 flex justify-center"><Stars value={rating} onChange={setRating} size={34} /></div>
+      <textarea
+        className="input mt-3 min-h-[80px]"
+        maxLength={500}
+        placeholder="Cuéntanos qué te pareció (opcional)"
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+      />
+      {error && <div className="mt-3"><Alert>{error}</Alert></div>}
+      <Button block className="mt-3" onClick={save} loading={busy} disabled={!rating}>Enviar opinión</Button>
+    </section>
   )
 }

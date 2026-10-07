@@ -185,6 +185,106 @@ do $$ begin
   assert get_public_business('barberia-leo')->>'plan' = 'plus';
   assert (get_public_prices()->>'plus')::int = 2100;
 end $$;
+
+-- ===== Fase 2: opiniones, historial del cliente, ficha de clientes, galería, estadísticas =====
+reset role;
+-- Dos citas ya pasadas de Juan (una de hace más de 60 días)
+insert into appointments (business_id, token, starts_at, ends_at, customer_name, customer_phone, total, status) values
+  ((select v from ctx where k='biz1')::uuid, 'pasada1', now() - interval '3 days', now() - interval '3 days' + interval '30 minutes', 'Juan Pérez', '5351112222', 500, 'confirmada'),
+  ((select v from ctx where k='biz1')::uuid, 'vieja1', now() - interval '90 days', now() - interval '90 days' + interval '30 minutes', 'Juan Pérez', '5351112222', 500, 'completada');
+set role anon;
+do $$ declare j jsonb := get_booking('pasada1'); begin
+  assert (j->>'can_review')::boolean, 'una cita pasada se puede valorar';
+  assert jsonb_typeof(j->'review') = 'null', 'aún sin opinión';
+  assert (j->'customer'->>'visits')::int = 2, 'visitas de Juan: ' || (j->'customer');
+  assert (j->'customer'->>'bookings')::int = 3, 'reservas de Juan sin contar canceladas';
+  assert not (get_booking('vieja1')->>'can_review')::boolean, 'más de 60 días: no se valora';
+  assert not (get_booking((select v from ctx where k='t1'))->>'can_review')::boolean, 'cancelada: no se valora';
+end $$;
+select expect_error($$select submit_review('pasada1', 6)$$, 'VALORACION_INVALIDA');
+select expect_error($$select submit_review('vieja1', 5)$$, 'OPINION_FUERA_DE_PLAZO');
+select expect_error($$select submit_review('$$ || (select v from ctx where k='t1') || $$', 5)$$, 'OPINION_NO_PERMITIDA');
+select expect_error($$select submit_review('no-existe', 5)$$, 'CITA_NO_EXISTE');
+select submit_review('pasada1', 4, '  Muy buen corte  ');
+select submit_review('pasada1', 5, 'Excelente');
+do $$ declare j jsonb := get_public_business('barberia-leo'); begin
+  assert (j->'rating'->>'count')::int = 1, 'una sola opinión por cita';
+  assert (j->'rating'->>'avg')::numeric = 5;
+  assert j->'reviews'->0->>'name' = 'Juan', 'solo el nombre de pila';
+  assert j->'reviews'->0->>'comment' = 'Excelente';
+  assert get_booking('pasada1')->'review'->>'rating' = '5';
+end $$;
+select expect_error('select * from reviews', 'permission denied');
+
+-- El dueño solo puede ocultar y responder
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+update reviews set rating = 1, comment = 'falso', hidden = true, reply = ' Gracias, Juan ';
+do $$ begin
+  assert (select rating from reviews) = 5, 'el dueño no cambia la nota';
+  assert (select comment from reviews) = 'Excelente', 'ni el comentario';
+  assert (select reply from reviews) = 'Gracias, Juan';
+  assert (select hidden from reviews);
+end $$;
+do $$ declare c jsonb := owner_customers(); j jsonb; begin
+  assert jsonb_array_length(c) = 2, 'dos clientes: ' || c;
+  select x into j from jsonb_array_elements(c) x where x->>'phone' = '5351112222';
+  assert j->>'name' = 'Juan Pérez';
+  assert (j->>'visits')::int = 2 and (j->>'bookings')::int = 3 and (j->>'cancelled')::int = 1, 'ficha: ' || j;
+  assert (j->>'spent')::numeric = 1000;
+  assert j->>'next_at' is not null, 'tiene una cita próxima';
+end $$;
+insert into customer_notes (business_id, phone, note, tags) values (my_business_id(), '5351112222', 'Prefiere degradado', '{vip}');
+do $$ declare j jsonb; begin
+  select x into j from jsonb_array_elements(owner_customers()) x where x->>'phone' = '5351112222';
+  assert j->>'note' = 'Prefiere degradado' and j->'tags'->>0 = 'vip';
+end $$;
+insert into gallery_photos (business_id, url, caption) values (my_business_id(), 'https://x.supabase.co/storage/v1/object/public/logos/a.jpg', 'Degradado');
+select expect_error($$insert into gallery_photos (business_id, url) values (my_business_id(), 'javascript:alert(1)')$$, 'check');
+select expect_error($$select owner_stats(current_date - 30, current_date)$$, 'NO_DISPONIBLE');
+select expect_error('select admin_stats()', 'NO_AUTORIZADO');
+
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+do $$ begin
+  assert (select count(*) from reviews) = 0, 'dueño 2 no ve opiniones ajenas';
+  assert (select count(*) from customer_notes) = 0;
+  assert (select count(*) from gallery_photos) = 0;
+end $$;
+select expect_error($$insert into gallery_photos (business_id, url) values ('$$ || (select v from ctx where k='biz1') || $$', 'https://x.com/a.jpg')$$, 'row-level security');
+
+reset role;
+set role anon;
+do $$ declare j jsonb := get_public_business('barberia-leo'); begin
+  assert (j->'rating'->>'count')::int = 0, 'la opinión oculta no cuenta';
+  assert jsonb_array_length(j->'reviews') = 0;
+  assert jsonb_array_length(j->'gallery') = 1;
+end $$;
+
+-- Estadísticas del administrador; con Ultra el dueño ve las suyas
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+do $$ declare s jsonb := admin_stats(); begin
+  assert (s->'totals'->>'businesses')::int = 2;
+  assert (s->'by_plan'->>'plus')::int = 1;
+  assert (s->'by_plan'->>'prueba')::int = 1;
+  assert jsonb_array_length(s->'months') = 12;
+  assert (s->'totals'->>'converted')::int = 1, 'conversión: ' || (s->'totals');
+  assert jsonb_array_length(s->'recent_payments') = 2;
+end $$;
+select admin_activate_plan((select v from ctx where k='biz1')::uuid, 'ultra', 1);
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+do $$ declare s jsonb := owner_stats(current_date - 100, current_date + 10); begin
+  assert (s->'summary'->>'done')::int = 2, 'resumen: ' || (s->'summary');
+  assert (s->'summary'->>'revenue')::numeric = 1000;
+  assert (s->'summary'->>'cancelled')::int = 1;
+  assert (s->'summary'->>'bookings')::int = 4;
+  assert jsonb_array_length(s->'by_day') = 111;
+  assert jsonb_array_length(s->'by_weekday') = 7;
+  assert s->'top_services'->0->>'name' = 'Corte', 'servicio más pedido';
+end $$;
+select expect_error($$select owner_stats(current_date, current_date - 1)$$, 'RANGO_INVALIDO');
 reset role;
 set role authenticated;
 set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';

@@ -114,6 +114,71 @@ export interface PublicBusiness {
   services?: PublicService[]
   schedule?: { weekday: number; is_open: boolean }[]
   closed_days?: string[]
+  rating?: { avg: number | null; count: number } | null
+  reviews?: PublicReview[]
+  gallery?: GalleryPhoto[]
+}
+
+export interface PublicReview {
+  name: string
+  rating: number
+  comment: string | null
+  reply: string | null
+  created_at: string
+}
+
+export interface GalleryPhoto {
+  id: string
+  url: string
+  caption: string | null
+  position?: number
+}
+
+export interface Review {
+  id: string
+  business_id: string
+  appointment_id: string
+  customer_name: string
+  rating: number
+  comment: string | null
+  reply: string | null
+  hidden: boolean
+  created_at: string
+}
+
+export interface CustomerSummary {
+  phone: string
+  name: string
+  bookings: number
+  visits: number
+  no_shows: number
+  cancelled: number
+  spent: number
+  first_at: string
+  last_visit: string | null
+  next_at: string | null
+  note: string | null
+  tags: string[]
+}
+
+export interface OwnerStats {
+  summary: {
+    bookings: number
+    done: number
+    upcoming: number
+    cancelled: number
+    no_shows: number
+    revenue: number
+    expected: number
+    web: number
+    manual: number
+    customers: number
+    new_customers: number
+  }
+  by_day: { day: string; bookings: number; revenue: number }[]
+  top_services: { name: string; count: number; revenue: number }[]
+  by_weekday: number[]
+  by_hour: { hour: number; count: number }[]
 }
 
 export interface PublicBooking {
@@ -128,6 +193,9 @@ export interface PublicBooking {
   reschedule_count: number
   can_change: boolean
   services: AppointmentService[]
+  can_review: boolean
+  review: { rating: number; comment: string | null; reply: string | null } | null
+  customer: { visits: number; bookings: number; since: string | null } | null
   business: {
     name: string
     slug: string

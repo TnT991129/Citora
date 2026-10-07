@@ -5,9 +5,9 @@ import { dateKey, duration, money, timeOf, WEEKDAYS, dayTitle } from '../../lib/
 import { savedBookings, type SavedBooking } from '../../lib/storage'
 import { waLink } from '../../lib/whatsapp'
 import { supabase } from '../../lib/supabase'
-import type { PublicBooking } from '../../lib/types'
+import type { GalleryPhoto, PublicBooking, PublicReview } from '../../lib/types'
 import NotFound from '../NotFound'
-import { Centered, Closed, PoweredBy, usePublicBusiness } from './shared'
+import { Centered, Closed, PoweredBy, Stars, usePublicBusiness } from './shared'
 
 export default function BusinessHome() {
   const { slug } = useParams()
@@ -33,6 +33,12 @@ export default function BusinessHome() {
           <h1 className="mt-4 text-3xl font-extrabold">{business.name}</h1>
           {business.description && <p className="mt-2 text-white/90">{business.description}</p>}
           {business.address && <p className="mt-2 text-sm text-white/80">📍 {business.address}</p>}
+          {business.rating && business.rating.count > 0 && (
+            <a href="#opiniones" className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-sm font-semibold">
+              <span className="text-amber-300">★</span> {Number(business.rating.avg).toFixed(1)}
+              <span className="font-normal text-white/80">· {business.rating.count} {business.rating.count === 1 ? 'opinión' : 'opiniones'}</span>
+            </a>
+          )}
         </div>
       </div>
 
@@ -72,6 +78,10 @@ export default function BusinessHome() {
             </p>
           )}
         </section>
+
+        {(business.gallery || []).length > 0 && <Gallery photos={business.gallery!} />}
+
+        {(business.reviews || []).length > 0 && <Reviews reviews={business.reviews!} tz={tz} />}
 
         {business.policies && (
           <section className="card">
@@ -124,10 +134,22 @@ function MyBookings({ slug, tz }: { slug: string; tz: string }) {
   }, [slug])
 
   const visible = items.filter((i) => i.data === undefined || (i.data && i.data.status !== 'cancelada'))
-  if (visible.length === 0) return null
+  const hasHistory = savedBookings(slug).length > 0
+  if (visible.length === 0) {
+    if (!hasHistory) return null
+    return (
+      <Link to={`/${slug}/mis-citas`} className="card flex items-center justify-between font-semibold">
+        <span>📋 Mis citas</span>
+        <span className="text-brand">Ver historial →</span>
+      </Link>
+    )
+  }
   return (
     <section className="card">
-      <h2 className="text-lg font-bold">Tus próximas citas</h2>
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 className="text-lg font-bold">Tus próximas citas</h2>
+        <Link to={`/${slug}/mis-citas`} className="text-sm font-semibold text-brand">Ver todas</Link>
+      </div>
       <ul className="mt-2 divide-y divide-slate-100">
         {visible.map((b) => {
           const start = b.data?.starts_at || b.starts_at
@@ -144,6 +166,86 @@ function MyBookings({ slug, tz }: { slug: string; tz: string }) {
           )
         })}
       </ul>
+    </section>
+  )
+}
+
+function Gallery({ photos }: { photos: GalleryPhoto[] }) {
+  const [open, setOpen] = useState<number | null>(null)
+  const current = open === null ? null : photos[open]
+
+  useEffect(() => {
+    if (open === null) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(null)
+      if (e.key === 'ArrowRight') setOpen((i) => (i === null ? i : (i + 1) % photos.length))
+      if (e.key === 'ArrowLeft') setOpen((i) => (i === null ? i : (i - 1 + photos.length) % photos.length))
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, photos.length])
+
+  return (
+    <section className="card">
+      <h2 className="text-lg font-bold">Nuestros trabajos</h2>
+      <div className="mt-3 grid grid-cols-3 gap-1.5">
+        {photos.map((p, i) => (
+          <button key={p.id} onClick={() => setOpen(i)} className="aspect-square overflow-hidden rounded-xl bg-slate-100">
+            <img src={p.url} alt={p.caption || 'Trabajo'} loading="lazy" className="h-full w-full object-cover transition hover:scale-105" />
+          </button>
+        ))}
+      </div>
+      {current && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/90" onClick={() => setOpen(null)} role="dialog" aria-modal>
+          <div className="flex justify-end p-3">
+            <button className="rounded-full p-2 text-white/80 hover:bg-white/10" aria-label="Cerrar">
+              <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          </div>
+          <div className="flex flex-1 items-center justify-center px-3" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={current.url}
+              alt={current.caption || 'Trabajo'}
+              className="max-h-[75dvh] max-w-full rounded-xl object-contain"
+              onClick={() => setOpen(((open ?? 0) + 1) % photos.length)}
+            />
+          </div>
+          <p className="p-4 pb-8 text-center text-white/90">
+            {current.caption}
+            <span className="ml-2 text-sm text-white/50">{(open ?? 0) + 1}/{photos.length}</span>
+          </p>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function Reviews({ reviews, tz }: { reviews: PublicReview[]; tz: string }) {
+  const [all, setAll] = useState(false)
+  const shown = all ? reviews : reviews.slice(0, 3)
+  return (
+    <section className="card" id="opiniones">
+      <h2 className="text-lg font-bold">Opiniones</h2>
+      <ul className="mt-2 divide-y divide-slate-100">
+        {shown.map((r, i) => (
+          <li key={i} className="py-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-semibold">{r.name}</span>
+              <Stars value={r.rating} size={16} />
+            </div>
+            {r.comment && <p className="mt-1 text-slate-700">{r.comment}</p>}
+            <p className="mt-1 text-xs text-slate-400">{dayTitle(dateKey(r.created_at, tz))}</p>
+            {r.reply && (
+              <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                <b>Respuesta del negocio:</b> {r.reply}
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
+      {reviews.length > 3 && !all && (
+        <button onClick={() => setAll(true)} className="mt-1 text-sm font-semibold text-brand">Ver las {reviews.length} opiniones</button>
+      )}
     </section>
   )
 }

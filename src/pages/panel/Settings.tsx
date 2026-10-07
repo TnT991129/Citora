@@ -3,6 +3,7 @@ import { Alert, BusinessAvatar, Button, Field, flash } from '../../components/ui
 import { COLOR_PRESETS, setBrandColor } from '../../lib/brand'
 import { errorMessage } from '../../lib/errors'
 import { slugify } from '../../lib/format'
+import { resizeImage } from '../../lib/image'
 import { supabase } from '../../lib/supabase'
 import { BUSINESS_TYPES } from '../../lib/templates'
 import { publicUrl } from '../../lib/url'
@@ -165,28 +166,4 @@ export default function Settings() {
       </section>
     </div>
   )
-}
-
-/** Reduce una imagen a un cuadrado de "size" px en formato WebP */
-async function resizeImage(file: File, size: number): Promise<Blob> {
-  const url = URL.createObjectURL(file)
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const i = new Image()
-      i.onload = () => resolve(i)
-      i.onerror = () => reject(new Error('No se pudo leer la imagen'))
-      i.src = url
-    })
-    const side = Math.min(img.width, img.height)
-    const canvas = document.createElement('canvas')
-    canvas.width = size
-    canvas.height = size
-    const ctx = canvas.getContext('2d')!
-    ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size)
-    return await new Promise<Blob>((resolve, reject) =>
-      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('No se pudo procesar la imagen'))), 'image/webp', 0.85),
-    )
-  } finally {
-    URL.revokeObjectURL(url)
-  }
 }

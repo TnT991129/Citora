@@ -1,12 +1,12 @@
-# Citora · Fase 1
+# Citora · Fases 1 y 2
 
 Plataforma para que cualquier negocio con citas cree su propia app de reservas.
 
 - **Portada de Citora** (`/`): presentación, planes y botón "Crear mi app".
 - **Creador** (`/crear`): el dueño elige tipo de negocio, nombre, enlace, color, servicios y horario, y crea su cuenta. Empieza su prueba gratis de 3 días con todo incluido.
-- **Web de reservas de cada negocio** (`/barberia-leo`): servicios, reservar en 4 pasos, página privada de la cita (cambiar fecha una vez, cancelar, avisar por WhatsApp), "tus próximas citas" guardadas en el móvil.
-- **Panel del dueño** (`/panel`): Hoy, Agenda (día y semana), detalle de cita con mensajes de WhatsApp, citas manuales, Servicios, Horario (turnos por día, días cerrados y reglas), Ajustes (logo, color, enlace, políticas) y Plan (cómo pagar).
-- **Tu panel de administrador** (`/admin`): lista de negocios, activar plan tras confirmar el pago, dar días de prueba, inhabilitar, y ajustes (tarjeta, WhatsApp, precios, días de prueba).
+- **Web de reservas de cada negocio** (`/barberia-leo`): servicios, galería de trabajos, opiniones con estrellas, reservar en 4 pasos, página privada de la cita (cambiar fecha una vez, cancelar, avisar por WhatsApp, dejar su opinión después de ir), y **Mis citas** (`/barberia-leo/mis-citas`) con el historial y el número de visitas del cliente.
+- **Panel del dueño** (`/panel`): Hoy, Agenda (día y semana), detalle de cita con mensajes de WhatsApp, citas manuales, Servicios, Horario (turnos por día, días cerrados y reglas), Ajustes (logo, color, enlace, políticas) y Plan (cómo pagar). Con Plus: **Clientes** (ficha con historial, gasto, etiquetas y notas privadas), **Opiniones** (ocultar o responder) y **Galería**. Con Ultra: **Estadísticas** (ingresos, asistencia, clientes nuevos, servicios, días y horas más pedidos).
+- **Tu panel de administrador** (`/admin`): lista de negocios, activar plan tras confirmar el pago, dar días de prueba, inhabilitar; **Estadísticas** (cobros, altas y citas por mes, conversión de prueba a pago, negocios por plan y tipo, los más activos, últimos pagos y a quién escribir porque su plan o su prueba está por vencer); y ajustes (tarjeta, WhatsApp, precios, días de prueba).
 
 Cuando termina la prueba o el plan, la app del negocio se inhabilita sola: sus clientes ven "no está recibiendo reservas" y el dueño solo ve la pantalla de pago. No se borra nada.
 
@@ -93,8 +93,11 @@ src/lib/plans.ts           Planes y módulos (qué incluye cada plan)
 src/lib/templates.ts       Tipos de negocio y servicios sugeridos
 ```
 
+## Actualizar desde la Fase 1
+
+Vuelve a ejecutar **todo** `supabase/schema.sql` en **SQL Editor** (es seguro: no borra datos). Crea las tablas `reviews`, `gallery_photos` y `customer_notes` y las funciones nuevas. Las fotos de la galería se guardan en el mismo almacén `logos`, en la carpeta de cada negocio.
+
 ## Pendiente para las siguientes fases
 
-- **Fase 2 (Plus):** ficha de clientes, galería de trabajos, opiniones.
-- **Fase 3 (Ultra):** complementos, lista de espera, cobros y estadísticas, descuentos, varios empleados, sucursales, recordatorios por email, respaldo.
+- **Fase 3 (Ultra):** complementos, lista de espera, descuentos, varios empleados, sucursales, recordatorios por email, respaldo.
 - **Fase 4:** app instalable en el móvil (PWA) con el icono de cada negocio, avisos de vencimiento por WhatsApp, modo oscuro.

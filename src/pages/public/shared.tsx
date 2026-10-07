@@ -75,6 +75,28 @@ export function Closed({ business }: { business: PublicBusiness }) {
   )
 }
 
+/** Estrellas de 1 a 5. Si se pasa onChange, se pueden pulsar. */
+export function Stars({ value, onChange, size = 20 }: { value: number; onChange?: (n: number) => void; size?: number }) {
+  return (
+    <span className="inline-flex items-center gap-0.5" role={onChange ? 'radiogroup' : 'img'} aria-label={`${value} de 5 estrellas`}>
+      {[1, 2, 3, 4, 5].map((n) => {
+        const star = (
+          <svg viewBox="0 0 24 24" width={size} height={size} className={n <= Math.round(value) ? 'text-amber-400' : 'text-slate-300'} fill="currentColor" aria-hidden>
+            <path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z" />
+          </svg>
+        )
+        return onChange ? (
+          <button key={n} type="button" role="radio" aria-checked={n === value} aria-label={`${n} estrellas`} onClick={() => onChange(n)} className="p-1 active:scale-90">
+            {star}
+          </button>
+        ) : (
+          <span key={n}>{star}</span>
+        )
+      })}
+    </span>
+  )
+}
+
 export function Centered({ children }: { children: ReactNode }) {
   return <div className="mx-auto flex min-h-[70dvh] max-w-md flex-col items-center justify-center gap-3 p-6 text-center">{children}</div>
 }

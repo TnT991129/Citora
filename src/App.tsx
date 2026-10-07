@@ -13,6 +13,7 @@ const Admin = lazy(() => import('./pages/admin/Admin'))
 const BusinessHome = lazy(() => import('./pages/public/BusinessHome'))
 const BookingFlow = lazy(() => import('./pages/public/BookingFlow'))
 const BookingPage = lazy(() => import('./pages/public/BookingPage'))
+const MyAppointments = lazy(() => import('./pages/public/MyAppointments'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 
 export default function App() {
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="/:slug" element={<BusinessHome />} />
         <Route path="/:slug/reservar" element={<BookingFlow />} />
         <Route path="/:slug/cita/:token" element={<BookingPage />} />
+        <Route path="/:slug/mis-citas" element={<MyAppointments />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>

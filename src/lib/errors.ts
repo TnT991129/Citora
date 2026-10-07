@@ -21,6 +21,11 @@ const MESSAGES: Record<string, string> = {
   PLAN_INVALIDO: 'Plan no válido.',
   MESES_INVALIDOS: 'Número de meses no válido.',
   DIAS_INVALIDOS: 'Número de días no válido.',
+  NO_DISPONIBLE: 'Tu plan actual no incluye esta función.',
+  OPINION_NO_PERMITIDA: 'Podrás dejar tu opinión cuando hayas ido a tu cita.',
+  OPINION_FUERA_DE_PLAZO: 'Ya pasó el plazo para opinar sobre esta cita.',
+  VALORACION_INVALIDA: 'Elige de 1 a 5 estrellas.',
+  RANGO_INVALIDO: 'Rango de fechas no válido.',
 }
 
 export function errorMessage(err: unknown): string {

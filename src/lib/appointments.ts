@@ -43,7 +43,11 @@ export function buildMessage(kind: MessageKind, a: Appointment, b: Business): st
     case 'retraso':
       return `Hola ${first}, voy con unos minutos de retraso para tu cita de las ${time}. Disculpa las molestias.`
     case 'gracias':
-      return `¡Gracias por venir a ${b.name}, ${first}! Espero que te haya encantado. Cuando quieras repetir, reserva aquí: ${publicUrl(b.slug)}`
+      return `¡Gracias por venir a ${b.name}, ${first}! Espero que te haya encantado.
+
+Si tienes un minuto, cuéntanos qué tal te fue: ${link}
+
+Cuando quieras repetir, reserva aquí: ${publicUrl(b.slug)}`
     case 'cancelacion':
       return `Hola ${first}, lamentablemente tengo que cancelar tu cita del ${day} a las ${time}. Puedes reservar otro día aquí: ${publicUrl(b.slug)}`
   }

@@ -1,5 +1,5 @@
 -- =====================================================================
--- CITORA · Base de datos (Fase 1)
+-- CITORA · Base de datos (Fases 1 y 2)
 -- Ejecutar completo en Supabase > SQL Editor > New query > Run.
 -- Se puede volver a ejecutar sin romper nada (usa "if not exists" y
 -- "create or replace" siempre que se puede).
@@ -140,6 +140,42 @@ create table if not exists public.payments (
 );
 create index if not exists payments_business_idx on public.payments (business_id, created_at desc);
 
+-- Opiniones de los clientes (una por cita). El dueño puede ocultarlas o responder.
+create table if not exists public.reviews (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  appointment_id uuid not null unique references public.appointments(id) on delete cascade,
+  customer_name text not null,
+  rating smallint not null check (rating between 1 and 5),
+  comment text check (char_length(comment) <= 500),
+  reply text check (char_length(reply) <= 500),
+  hidden boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists reviews_business_idx on public.reviews (business_id, created_at desc);
+
+-- Galería de trabajos (fotos en el almacén "logos", carpeta del negocio)
+create table if not exists public.gallery_photos (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  url text not null check (url ~ '^https?://'),
+  caption text check (char_length(caption) <= 120),
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists gallery_business_idx on public.gallery_photos (business_id, position);
+
+-- Notas privadas del dueño sobre cada cliente (el cliente se identifica por su teléfono)
+create table if not exists public.customer_notes (
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  phone text not null,
+  note text check (char_length(note) <= 1000),
+  tags text[] not null default '{}',
+  updated_at timestamptz not null default now(),
+  primary key (business_id, phone)
+);
+
 -- ---------------------------------------------------------------------
 -- 2. FUNCIONES DE APOYO
 -- ---------------------------------------------------------------------
@@ -168,6 +204,23 @@ returns text language sql stable set search_path = public as $$
   end;
 $$;
 
+-- Qué módulos incluye cada plan (igual que src/lib/plans.ts)
+create or replace function public.plan_has(p_plan text, p_module text)
+returns boolean language sql immutable as $$
+  select case p_plan
+    when 'ultra' then true
+    when 'plus' then p_module in ('reservas', 'agenda', 'whatsapp', 'clientes', 'galeria', 'opiniones')
+    when 'basico' then p_module in ('reservas', 'agenda', 'whatsapp')
+    else false
+  end;
+$$;
+
+-- Una cita "hecha": marcada como completada, o ya pasada sin que el dueño la marcara
+create or replace function public._appt_done(p_status text, p_ends timestamptz)
+returns boolean language sql stable as $$
+  select p_status = 'completada' or (p_status in ('pendiente', 'confirmada') and p_ends < now());
+$$;
+
 create or replace function public.my_business_id()
 returns uuid language sql stable security definer set search_path = public as $$
   select id from businesses where owner_id = auth.uid();
@@ -177,6 +230,14 @@ create or replace function public.my_business_active()
 returns boolean language sql stable security definer set search_path = public as $$
   select coalesce(
     (select business_effective_plan(plan, trial_ends_at, paid_until) is not null
+       from businesses where owner_id = auth.uid()),
+    false);
+$$;
+
+create or replace function public.my_plan_has(p_module text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce(
+    (select plan_has(business_effective_plan(plan, trial_ends_at, paid_until), p_module)
        from businesses where owner_id = auth.uid()),
     false);
 $$;
@@ -308,6 +369,62 @@ drop policy if exists payments_select on public.payments;
 create policy payments_select on public.payments for select to authenticated
   using (is_platform_admin() or business_id = my_business_id());
 
+alter table public.reviews enable row level security;
+alter table public.gallery_photos enable row level security;
+alter table public.customer_notes enable row level security;
+
+-- reviews: el dueño las lee y solo puede ocultarlas o responder (ver reviews_guard)
+drop policy if exists reviews_owner_select on public.reviews;
+create policy reviews_owner_select on public.reviews for select to authenticated
+  using (business_id = my_business_id() and my_business_active());
+drop policy if exists reviews_owner_update on public.reviews;
+create policy reviews_owner_update on public.reviews for update to authenticated
+  using (business_id = my_business_id() and my_plan_has('opiniones'))
+  with check (business_id = my_business_id());
+
+-- gallery_photos: el dueño gestiona las suyas (máximo 30, solo con plan que incluya galería)
+drop policy if exists gallery_owner_select on public.gallery_photos;
+create policy gallery_owner_select on public.gallery_photos for select to authenticated
+  using (business_id = my_business_id());
+drop policy if exists gallery_owner_insert on public.gallery_photos;
+create policy gallery_owner_insert on public.gallery_photos for insert to authenticated
+  with check (business_id = my_business_id() and my_plan_has('galeria')
+              and (select count(*) from gallery_photos g where g.business_id = my_business_id()) < 30);
+drop policy if exists gallery_owner_update on public.gallery_photos;
+create policy gallery_owner_update on public.gallery_photos for update to authenticated
+  using (business_id = my_business_id() and my_plan_has('galeria'))
+  with check (business_id = my_business_id());
+drop policy if exists gallery_owner_delete on public.gallery_photos;
+create policy gallery_owner_delete on public.gallery_photos for delete to authenticated
+  using (business_id = my_business_id());
+
+-- customer_notes: el dueño gestiona las suyas
+drop policy if exists notes_owner_all on public.customer_notes;
+create policy notes_owner_all on public.customer_notes for all to authenticated
+  using (business_id = my_business_id() and my_plan_has('clientes'))
+  with check (business_id = my_business_id() and my_plan_has('clientes'));
+
+-- El dueño solo puede tocar "hidden" y "reply" de una opinión
+create or replace function public.reviews_guard()
+returns trigger language plpgsql as $$
+begin
+  if tg_op = 'UPDATE' and current_user in ('authenticated', 'anon') then
+    new.business_id := old.business_id;
+    new.appointment_id := old.appointment_id;
+    new.customer_name := old.customer_name;
+    new.rating := old.rating;
+    new.comment := old.comment;
+    new.created_at := old.created_at;
+    new.updated_at := old.updated_at;
+  end if;
+  new.reply := nullif(btrim(coalesce(new.reply, '')), '');
+  return new;
+end;
+$$;
+drop trigger if exists reviews_guard on public.reviews;
+create trigger reviews_guard before update on public.reviews
+  for each row execute function public.reviews_guard();
+
 -- Evita que alguien cambie el token o el negocio de una cita
 create or replace function public.appointments_guard()
 returns trigger language plpgsql as $$
@@ -386,7 +503,23 @@ begin
     'closed_days', coalesce((
       select jsonb_agg(c.day order by c.day)
       from closed_days c
-      where c.business_id = b.id and c.day >= (now() at time zone b.timezone)::date), '[]'::jsonb)
+      where c.business_id = b.id and c.day >= (now() at time zone b.timezone)::date), '[]'::jsonb),
+    'rating', case when plan_has(v_plan, 'opiniones') then (
+      select jsonb_build_object('avg', round(avg(r.rating)::numeric, 1), 'count', count(*))
+      from reviews r where r.business_id = b.id and not r.hidden) end,
+    'reviews', case when plan_has(v_plan, 'opiniones') then coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'name', split_part(r.customer_name, ' ', 1), 'rating', r.rating, 'comment', r.comment,
+        'reply', r.reply, 'created_at', r.created_at) order by r.created_at desc)
+      from (select * from reviews
+            where business_id = b.id and not hidden
+            order by (comment is not null) desc, created_at desc limit 12) r), '[]'::jsonb)
+      else '[]'::jsonb end,
+    'gallery', case when plan_has(v_plan, 'galeria') then coalesce((
+      select jsonb_agg(jsonb_build_object('id', g.id, 'url', g.url, 'caption', g.caption)
+                       order by g.position, g.created_at)
+      from gallery_photos g where g.business_id = b.id), '[]'::jsonb)
+      else '[]'::jsonb end
   );
 end;
 $$;
@@ -569,6 +702,18 @@ returns jsonb language sql stable security definer set search_path = public as $
     'services', coalesce((select jsonb_agg(jsonb_build_object('name', s.name, 'price', s.price,
                  'duration_min', s.duration_min)) from appointment_services s
                  where s.appointment_id = a.id), '[]'::jsonb),
+    'can_review', plan_has(business_effective_plan(b.plan, b.trial_ends_at, b.paid_until), 'opiniones')
+       and _appt_done(a.status, a.ends_at)
+       and a.starts_at > now() - interval '60 days',
+    'review', (select jsonb_build_object('rating', r.rating, 'comment', r.comment, 'reply', r.reply)
+               from reviews r where r.appointment_id = a.id),
+    -- Solo cifras: el teléfono no está verificado, así que no se muestran otras citas
+    'customer', (select jsonb_build_object(
+                   'visits', count(*) filter (where _appt_done(x.status, x.ends_at)),
+                   'bookings', count(*) filter (where x.status <> 'cancelada'),
+                   'since', min(x.starts_at) filter (where x.status <> 'cancelada'))
+                 from appointments x
+                 where x.business_id = a.business_id and x.customer_phone = a.customer_phone),
     'business', jsonb_build_object(
       'name', b.name, 'slug', b.slug, 'whatsapp', b.whatsapp, 'address', b.address,
       'logo_url', b.logo_url, 'color_primary', b.color_primary, 'timezone', b.timezone,
@@ -626,6 +771,30 @@ begin
   exception when exclusion_violation then
     raise exception 'TURNO_OCUPADO';
   end;
+end;
+$$;
+
+-- El cliente deja (o cambia) su opinión desde el enlace de su cita
+create or replace function public.submit_review(p_token text, p_rating int, p_comment text default null)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  a appointments;
+  b businesses;
+begin
+  select * into a from appointments where token = p_token;
+  if not found then raise exception 'CITA_NO_EXISTE'; end if;
+  select * into b from businesses where id = a.business_id;
+  if not plan_has(business_effective_plan(b.plan, b.trial_ends_at, b.paid_until), 'opiniones') then
+    raise exception 'NO_DISPONIBLE';
+  end if;
+  if not _appt_done(a.status, a.ends_at) then raise exception 'OPINION_NO_PERMITIDA'; end if;
+  if a.starts_at <= now() - interval '60 days' then raise exception 'OPINION_FUERA_DE_PLAZO'; end if;
+  if p_rating is null or p_rating not between 1 and 5 then raise exception 'VALORACION_INVALIDA'; end if;
+
+  insert into reviews (business_id, appointment_id, customer_name, rating, comment)
+  values (a.business_id, a.id, a.customer_name, p_rating, nullif(left(btrim(coalesce(p_comment, '')), 500), ''))
+  on conflict (appointment_id) do update
+    set rating = excluded.rating, comment = excluded.comment, updated_at = now();
 end;
 $$;
 
@@ -787,6 +956,127 @@ begin
 end;
 $$;
 
+-- Negocio del dueño con sesión, comprobando que su plan incluye el módulo
+create or replace function public._owner_business(p_module text)
+returns businesses language plpgsql stable security definer set search_path = public as $$
+declare
+  b businesses;
+begin
+  select * into b from businesses where owner_id = auth.uid();
+  if not found then raise exception 'SIN_NEGOCIO'; end if;
+  if business_effective_plan(b.plan, b.trial_ends_at, b.paid_until) is null then
+    raise exception 'NEGOCIO_INACTIVO';
+  end if;
+  if not plan_has(business_effective_plan(b.plan, b.trial_ends_at, b.paid_until), p_module) then
+    raise exception 'NO_DISPONIBLE';
+  end if;
+  return b;
+end;
+$$;
+
+-- Ficha de clientes: un resumen por teléfono
+create or replace function public.owner_customers()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  b businesses := _owner_business('clientes');
+begin
+  return coalesce((
+    select jsonb_agg(c.j order by c.last_at desc nulls last)
+    from (
+      select greatest(max(a.starts_at) filter (where a.status <> 'cancelada'), max(a.created_at)) as last_at,
+        jsonb_build_object(
+          'phone', a.customer_phone,
+          'name', (array_agg(a.customer_name order by a.created_at desc))[1],
+          'bookings', count(*) filter (where a.status <> 'cancelada'),
+          'visits', count(*) filter (where _appt_done(a.status, a.ends_at)),
+          'no_shows', count(*) filter (where a.status = 'no_asistio'),
+          'cancelled', count(*) filter (where a.status = 'cancelada'),
+          'spent', coalesce(sum(a.total) filter (where _appt_done(a.status, a.ends_at)), 0),
+          'first_at', min(a.starts_at),
+          'last_visit', max(a.starts_at) filter (where _appt_done(a.status, a.ends_at)),
+          'next_at', min(a.starts_at) filter (where a.status in ('pendiente', 'confirmada') and a.starts_at > now()),
+          'note', n.note,
+          'tags', coalesce(to_jsonb(n.tags), '[]'::jsonb)
+        ) as j
+      from appointments a
+      left join customer_notes n on n.business_id = a.business_id and n.phone = a.customer_phone
+      where a.business_id = b.id and a.customer_phone <> ''
+      group by a.customer_phone, n.note, n.tags
+    ) c), '[]'::jsonb);
+end;
+$$;
+
+-- Estadísticas del negocio entre dos días (incluidos), en su zona horaria
+create or replace function public.owner_stats(p_from date, p_to date)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  b businesses := _owner_business('finanzas');
+  v_from timestamptz;
+  v_to timestamptz;
+begin
+  if p_from is null or p_to is null or p_to < p_from or p_to - p_from > 400 then
+    raise exception 'RANGO_INVALIDO';
+  end if;
+  v_from := p_from::timestamp at time zone b.timezone;
+  v_to := (p_to + 1)::timestamp at time zone b.timezone;
+
+  return jsonb_build_object(
+    'summary', (
+      select jsonb_build_object(
+        'bookings', count(*) filter (where a.status <> 'cancelada'),
+        'done', count(*) filter (where _appt_done(a.status, a.ends_at)),
+        'upcoming', count(*) filter (where a.status in ('pendiente', 'confirmada') and a.ends_at >= now()),
+        'cancelled', count(*) filter (where a.status = 'cancelada'),
+        'no_shows', count(*) filter (where a.status = 'no_asistio'),
+        'revenue', coalesce(sum(a.total) filter (where _appt_done(a.status, a.ends_at)), 0),
+        'expected', coalesce(sum(a.total) filter (where a.status in ('pendiente', 'confirmada') and a.ends_at >= now()), 0),
+        'web', count(*) filter (where a.source = 'web' and a.status <> 'cancelada'),
+        'manual', count(*) filter (where a.source = 'manual' and a.status <> 'cancelada'),
+        'customers', count(distinct a.customer_phone) filter (where a.status <> 'cancelada'),
+        'new_customers', count(distinct a.customer_phone) filter (
+          where a.status <> 'cancelada' and not exists (
+            select 1 from appointments p
+            where p.business_id = b.id and p.customer_phone = a.customer_phone
+              and p.status <> 'cancelada' and p.starts_at < v_from))
+      )
+      from appointments a
+      where a.business_id = b.id and a.starts_at >= v_from and a.starts_at < v_to),
+    'by_day', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'day', d.day, 'bookings', coalesce(x.n, 0), 'revenue', coalesce(x.r, 0)) order by d.day), '[]'::jsonb)
+      from (select g::date as day from generate_series(p_from::timestamp, p_to::timestamp, interval '1 day') g) d
+      left join (
+        select (a.starts_at at time zone b.timezone)::date as day, count(*) as n,
+               sum(a.total) filter (where _appt_done(a.status, a.ends_at)) as r
+        from appointments a
+        where a.business_id = b.id and a.starts_at >= v_from and a.starts_at < v_to and a.status <> 'cancelada'
+        group by 1) x on x.day = d.day),
+    'top_services', (
+      select coalesce(jsonb_agg(jsonb_build_object('name', q.name, 'count', q.n, 'revenue', q.r) order by q.n desc, q.r desc), '[]'::jsonb)
+      from (
+        select s.name, count(*) as n, coalesce(sum(s.price), 0) as r
+        from appointment_services s join appointments a on a.id = s.appointment_id
+        where a.business_id = b.id and a.starts_at >= v_from and a.starts_at < v_to and a.status <> 'cancelada'
+        group by s.name order by count(*) desc, sum(s.price) desc limit 8) q),
+    'by_weekday', (
+      select jsonb_agg(coalesce(x.n, 0) order by w)
+      from generate_series(0, 6) w
+      left join (
+        select extract(dow from a.starts_at at time zone b.timezone)::int as wd, count(*) as n
+        from appointments a
+        where a.business_id = b.id and a.starts_at >= v_from and a.starts_at < v_to and a.status <> 'cancelada'
+        group by 1) x on x.wd = w),
+    'by_hour', (
+      select coalesce(jsonb_agg(jsonb_build_object('hour', x.h, 'count', x.n) order by x.h), '[]'::jsonb)
+      from (
+        select extract(hour from a.starts_at at time zone b.timezone)::int as h, count(*) as n
+        from appointments a
+        where a.business_id = b.id and a.starts_at >= v_from and a.starts_at < v_to and a.status <> 'cancelada'
+        group by 1) x)
+  );
+end;
+$$;
+
 -- ---------------------------------------------------------------------
 -- 7. FUNCIONES DEL ADMINISTRADOR
 -- ---------------------------------------------------------------------
@@ -854,6 +1144,73 @@ begin
 end;
 $$;
 
+-- Estadísticas de la plataforma
+create or replace function public.admin_stats()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_tz text := 'America/Havana';
+  v_first timestamp := date_trunc('month', now() at time zone v_tz) - interval '11 months';
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  return jsonb_build_object(
+    'months', (
+      select jsonb_agg(jsonb_build_object(
+        'month', to_char(m, 'YYYY-MM'),
+        'signups', (select count(*) from businesses b
+                    where b.created_at >= m at time zone v_tz and b.created_at < (m + interval '1 month') at time zone v_tz),
+        'revenue', (select coalesce(sum(p.amount), 0) from payments p
+                    where p.created_at >= m at time zone v_tz and p.created_at < (m + interval '1 month') at time zone v_tz),
+        'payments', (select count(*) from payments p
+                     where p.created_at >= m at time zone v_tz and p.created_at < (m + interval '1 month') at time zone v_tz),
+        'appointments', (select count(*) from appointments a
+                         where a.created_at >= m at time zone v_tz and a.created_at < (m + interval '1 month') at time zone v_tz)
+      ) order by m)
+      from generate_series(v_first, date_trunc('month', now() at time zone v_tz), interval '1 month') m),
+    'totals', (select jsonb_build_object(
+        'businesses', (select count(*) from businesses),
+        'revenue', (select coalesce(sum(amount), 0) from payments),
+        'appointments', (select count(*) from appointments),
+        'appointments_30d', (select count(*) from appointments where created_at > now() - interval '30 days'),
+        'active_30d', (select count(distinct business_id) from appointments where created_at > now() - interval '30 days'),
+        'ended_trials', (select count(*) from businesses where trial_ends_at < now()),
+        'converted', (select count(*) from businesses b
+                      where b.trial_ends_at < now() and exists (select 1 from payments p where p.business_id = b.id)))),
+    'by_plan', (select jsonb_build_object(
+        'basico', count(*) filter (where business_status(plan, trial_ends_at, paid_until) = 'activo' and plan = 'basico'),
+        'plus', count(*) filter (where business_status(plan, trial_ends_at, paid_until) = 'activo' and plan = 'plus'),
+        'ultra', count(*) filter (where business_status(plan, trial_ends_at, paid_until) = 'activo' and plan = 'ultra'),
+        'prueba', count(*) filter (where business_status(plan, trial_ends_at, paid_until) = 'prueba'),
+        'vencido', count(*) filter (where business_status(plan, trial_ends_at, paid_until) = 'vencido'))
+      from businesses),
+    'by_type', (select coalesce(jsonb_agg(jsonb_build_object('type', t.business_type, 'count', t.n) order by t.n desc), '[]'::jsonb)
+      from (select business_type, count(*) as n from businesses group by 1) t),
+    'top_businesses', (select coalesce(jsonb_agg(jsonb_build_object(
+        'name', t.name, 'slug', t.slug, 'code', t.code, 'count', t.n) order by t.n desc), '[]'::jsonb)
+      from (select b.name, b.slug, b.code, count(*) as n
+            from appointments a join businesses b on b.id = a.business_id
+            where a.created_at > now() - interval '30 days'
+            group by b.id order by count(*) desc limit 10) t),
+    -- A quién escribir: planes que vencen en 7 días y pruebas que terminan en 2
+    'expiring', (select coalesce(jsonb_agg(jsonb_build_object(
+        'id', b.id, 'name', b.name, 'code', b.code, 'whatsapp', b.whatsapp,
+        'kind', business_status(b.plan, b.trial_ends_at, b.paid_until),
+        'ends_at', case when business_status(b.plan, b.trial_ends_at, b.paid_until) = 'activo'
+                        then b.paid_until else b.trial_ends_at end)
+        order by case when business_status(b.plan, b.trial_ends_at, b.paid_until) = 'activo'
+                      then b.paid_until else b.trial_ends_at end), '[]'::jsonb)
+      from businesses b
+      where (business_status(b.plan, b.trial_ends_at, b.paid_until) = 'activo' and b.paid_until < now() + interval '7 days')
+         or (business_status(b.plan, b.trial_ends_at, b.paid_until) = 'prueba' and b.trial_ends_at < now() + interval '2 days')),
+    'recent_payments', (select coalesce(jsonb_agg(jsonb_build_object(
+        'name', t.name, 'code', t.code, 'plan', t.plan, 'months', t.months, 'amount', t.amount,
+        'note', t.note, 'created_at', t.created_at) order by t.created_at desc), '[]'::jsonb)
+      from (select b.name, b.code, p.plan, p.months, p.amount, p.note, p.created_at
+            from payments p join businesses b on b.id = p.business_id
+            order by p.created_at desc limit 15) t)
+  );
+end;
+$$;
+
 -- ---------------------------------------------------------------------
 -- 8. PERMISOS DE EJECUCIÓN
 -- ---------------------------------------------------------------------
@@ -879,6 +1236,14 @@ grant execute on function public.admin_list_businesses() to authenticated;
 grant execute on function public.admin_activate_plan(uuid, text, int, numeric, text) to authenticated;
 grant execute on function public.admin_deactivate_business(uuid) to authenticated;
 grant execute on function public.admin_extend_trial(uuid, int) to authenticated;
+grant execute on function public.admin_stats() to authenticated;
+grant execute on function public.submit_review(text, int, text) to anon, authenticated;
+grant execute on function public.owner_customers() to authenticated;
+grant execute on function public.owner_stats(date, date) to authenticated;
+grant execute on function public.my_plan_has(text) to authenticated;
+grant execute on function public.plan_has(text, text) to anon, authenticated;
+grant execute on function public._appt_done(text, timestamptz) to anon, authenticated;
+grant execute on function public.reviews_guard() to authenticated;
 
 -- Funciones usadas dentro de las reglas RLS y disparadores
 grant execute on function public.my_business_id() to authenticated;
@@ -895,6 +1260,7 @@ grant execute on function public.schedule_days_normalize() to authenticated;
 -- Funciones internas: nadie las llama desde fuera
 revoke execute on function public._is_range_free(uuid, timestamptz, timestamptz, uuid) from anon, authenticated;
 revoke execute on function public._check_slot(uuid, date, text, int, uuid) from anon, authenticated;
+revoke execute on function public._owner_business(text) from anon, authenticated;
 
 -- Las tablas: sin acceso directo para visitantes anónimos
 revoke all on all tables in schema public from anon;
