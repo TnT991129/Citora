@@ -176,6 +176,28 @@ create table if not exists public.customer_notes (
   primary key (business_id, phone)
 );
 
+-- Si alguna de estas tablas ya existía con otra forma, se completan las columnas que falten
+alter table public.reviews add column if not exists business_id uuid references public.businesses(id) on delete cascade;
+alter table public.reviews add column if not exists appointment_id uuid references public.appointments(id) on delete cascade;
+alter table public.reviews add column if not exists customer_name text not null default '';
+alter table public.reviews add column if not exists rating smallint not null default 5 check (rating between 1 and 5);
+alter table public.reviews add column if not exists comment text check (char_length(comment) <= 500);
+alter table public.reviews add column if not exists reply text check (char_length(reply) <= 500);
+alter table public.reviews add column if not exists hidden boolean not null default false;
+alter table public.reviews add column if not exists created_at timestamptz not null default now();
+alter table public.reviews add column if not exists updated_at timestamptz not null default now();
+create unique index if not exists reviews_appointment_key on public.reviews (appointment_id);
+
+alter table public.gallery_photos add column if not exists business_id uuid references public.businesses(id) on delete cascade;
+alter table public.gallery_photos add column if not exists url text;
+alter table public.gallery_photos add column if not exists caption text check (char_length(caption) <= 120);
+alter table public.gallery_photos add column if not exists position int not null default 0;
+alter table public.gallery_photos add column if not exists created_at timestamptz not null default now();
+
+alter table public.customer_notes add column if not exists note text check (char_length(note) <= 1000);
+alter table public.customer_notes add column if not exists tags text[] not null default '{}';
+alter table public.customer_notes add column if not exists updated_at timestamptz not null default now();
+
 -- ---------------------------------------------------------------------
 -- 2. FUNCIONES DE APOYO
 -- ---------------------------------------------------------------------
