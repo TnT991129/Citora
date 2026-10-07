@@ -335,6 +335,34 @@ do $$ begin
   assert (select count(*) from waitlist) = 0, 'dueño 2 no ve la lista de espera ajena';
   assert (select count(*) from discounts) = 0, 'ni los cupones ajenos';
 end $$;
+
+-- ===== Varios profesionales (el dueño 2 está en prueba = Ultra) =====
+insert into schedule_days (business_id, weekday, is_open, slots)
+  select my_business_id(), d, true, '{10:00,11:00}' from generate_series(0, 6) d;
+insert into staff (business_id, name, position) values (my_business_id(), 'Ana', 0), (my_business_id(), 'Bea', 1);
+select expect_error($$insert into staff (business_id, name) values ('$$ || (select v from ctx where k='biz1') || $$', 'Intrusa')$$, 'row-level security');
+reset role;
+set role anon;
+insert into ctx select 'masaje', get_public_business('spa-mar')->'services'->0->>'id';
+insert into ctx select 'ana', x->>'id' from jsonb_array_elements(get_public_business('spa-mar')->'staff') x where x->>'name' = 'Ana';
+do $$ begin assert jsonb_array_length(get_public_business('spa-mar')->'staff') = 2, 'dos profesionales públicos'; end $$;
+-- Dos clientes a la misma hora: cada uno con un profesional
+insert into ctx select 's1', create_booking('spa-mar', array[(select v from ctx where k='masaje')::uuid], (select v from ctx where k='day')::date, '10:00', 'Cliente Uno', '5350000001');
+insert into ctx select 's2', create_booking('spa-mar', array[(select v from ctx where k='masaje')::uuid], (select v from ctx where k='day')::date, '10:00', 'Cliente Dos', '5350000002');
+do $$ begin
+  assert get_booking((select v from ctx where k='s1'))->>'staff_name' is not null;
+  assert get_booking((select v from ctx where k='s1'))->>'staff_name' <> get_booking((select v from ctx where k='s2'))->>'staff_name', 'uno con cada profesional';
+  assert not (select available from get_available_slots('spa-mar', (select v from ctx where k='day')::date, 60) where slot = '10:00'), '10:00 ya sin nadie libre';
+end $$;
+select expect_error($$select create_booking('spa-mar', array['$$ || (select v from ctx where k='masaje') || $$'::uuid], '$$ || (select v from ctx where k='day') || $$', '10:00', 'Cliente Tres', '5350000003')$$, 'TURNO_OCUPADO');
+-- El cliente elige profesional
+insert into ctx select 's3', create_booking('spa-mar', array[(select v from ctx where k='masaje')::uuid], (select v from ctx where k='day')::date, '11:00', 'Cliente Tres', '5350000003', null, null, (select v from ctx where k='ana')::uuid);
+do $$ declare d date := (select v from ctx where k='day')::date; ana uuid := (select v from ctx where k='ana')::uuid; begin
+  assert get_booking((select v from ctx where k='s3'))->>'staff_name' = 'Ana', 'eligió a Ana';
+  assert not (select available from get_available_slots('spa-mar', d, 60, ana) where slot = '11:00'), 'Ana ocupada a las 11';
+  assert (select available from get_available_slots('spa-mar', d, 60) where slot = '11:00'), 'pero Bea sigue libre a las 11';
+end $$;
+select expect_error($$select create_booking('spa-mar', array['$$ || (select v from ctx where k='masaje') || $$'::uuid], '$$ || (select v from ctx where k='day') || $$', '11:00', 'Cliente Cuatro', '5350000004', null, null, '$$ || (select v from ctx where k='ana') || $$')$$, 'TURNO_OCUPADO');
 reset role;
 set role authenticated;
 set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';

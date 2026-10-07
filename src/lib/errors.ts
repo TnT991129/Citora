@@ -29,6 +29,7 @@ const MESSAGES: Record<string, string> = {
   CUPON_INVALIDO: 'Ese código de descuento no existe o ya no está activo.',
   CUPON_VENCIDO: 'Ese código de descuento ya venció.',
   CUPON_AGOTADO: 'Ese código de descuento ya se usó todas las veces permitidas.',
+  PROFESIONAL_INVALIDO: 'Ese profesional no es de tu negocio.',
   LIMITE_ESPERA: 'Ya estás en la lista de espera de varios días. Espera a que el negocio te escriba.',
 }
 

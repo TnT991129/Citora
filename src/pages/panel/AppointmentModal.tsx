@@ -14,7 +14,7 @@ export function AppointmentModal({ appointment, onClose, onChanged }: {
   onClose: () => void
   onChanged: () => void
 }) {
-  const { business, status } = usePanel()
+  const { business, status, staff } = usePanel()
   const a = appointment
   const tz = business.timezone
   const [busy, setBusy] = useState<string | null>(null)
@@ -67,6 +67,9 @@ export function AppointmentModal({ appointment, onClose, onChanged }: {
           <div>
             <p className="text-lg font-bold">{dayTitle(dateKey(a.starts_at, tz))}</p>
             <p className="font-semibold text-brand">{timeOf(a.starts_at, tz)} – {timeOf(a.ends_at, tz)} · {duration(minutes)}</p>
+            {a.staff_id && staff.find((s) => s.id === a.staff_id) && (
+              <p className="text-sm text-slate-600">Con <b>{staff.find((s) => s.id === a.staff_id)!.name}</b></p>
+            )}
           </div>
           <StatusBadge status={a.status} />
         </div>

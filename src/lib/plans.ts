@@ -12,7 +12,7 @@ export const MODULES = {
   espera: { name: 'Lista de espera', ready: true },
   finanzas: { name: 'Cobros y estadísticas', ready: true },
   descuentos: { name: 'Cupones de descuento', ready: true },
-  empleados: { name: 'Varios empleados', ready: false },
+  empleados: { name: 'Varios profesionales', ready: true },
   sucursales: { name: 'Sucursales', ready: false },
   recordatorios: { name: 'Recordatorios por WhatsApp', ready: true },
   respaldo: { name: 'Respaldo de datos (Excel)', ready: true },

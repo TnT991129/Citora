@@ -5,7 +5,8 @@ import { StatusBadge } from '../../components/ui'
 import { usePanel } from './context'
 
 export function AppointmentRow({ a, onClick }: { a: Appointment; onClick: () => void }) {
-  const { business } = usePanel()
+  const { business, staff } = usePanel()
+  const who = a.staff_id ? staff.find((s) => s.id === a.staff_id)?.name : null
   const faded = a.status === 'cancelada' || a.status === 'no_asistio'
   return (
     <button onClick={onClick} className={`flex w-full items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-sm ring-1 ring-slate-200 transition hover:ring-brand ${faded ? 'opacity-60' : ''}`}>
@@ -15,7 +16,7 @@ export function AppointmentRow({ a, onClick }: { a: Appointment; onClick: () => 
       </div>
       <div className="min-w-0 flex-1 border-l border-slate-100 pl-3">
         <p className={`truncate font-semibold ${a.status === 'cancelada' ? 'line-through' : ''}`}>{a.customer_name}</p>
-        <p className="truncate text-sm text-slate-500">{servicesText(a)}</p>
+        <p className="truncate text-sm text-slate-500">{servicesText(a)}{who && <span className="font-medium text-slate-600"> · con {who}</span>}</p>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">
         <StatusBadge status={a.status} />

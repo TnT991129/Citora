@@ -27,6 +27,7 @@ export default function BookingFlow() {
   const [phone, setPhone] = useState(saved.phone)
   const [note, setNote] = useState('')
   const [accepted, setAccepted] = useState(false)
+  const [staffId, setStaffId] = useState<string | null>(null)
   const [coupon, setCoupon] = useState<{ code: string; discount: number; total: number } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -44,6 +45,7 @@ export default function BookingFlow() {
   if (!business.accepting) return <Closed business={business} />
 
   const currency = business.currency!
+  const team = hasModule(business.plan, 'empleados') ? business.staff || [] : []
   const openDays = new Set((business.schedule || []).filter((d) => d.is_open).map((d) => d.weekday))
   const closed = new Set(business.closed_days || [])
   const isOpen = (key: string) => openDays.has(weekdayOf(key)) && !closed.has(key)
@@ -78,6 +80,7 @@ export default function BookingFlow() {
       p_phone: phone.trim(),
       p_note: note.trim() || null,
       p_code: coupon?.code || null,
+      p_staff: staffId,
     })
     setBusy(false)
     if (error) {
@@ -134,6 +137,26 @@ export default function BookingFlow() {
 
         {step === 1 && (
           <div className="mt-4 space-y-5">
+            {team.length > 0 && (
+              <div>
+                <h2 className="mb-2 font-semibold">¿Con quién?</h2>
+                <div className="flex flex-wrap gap-2">
+                  {[{ id: null, name: 'Cualquiera' }, ...team].map((s) => (
+                    <button
+                      key={s.id || 'any'}
+                      type="button"
+                      onClick={() => {
+                        setStaffId(s.id)
+                        setTime(null)
+                      }}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold ${staffId === s.id ? 'bg-brand text-white shadow' : 'bg-white text-slate-700 ring-1 ring-slate-200'}`}
+                    >
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="card">
               <Calendar
                 today={business.today!}
@@ -155,6 +178,7 @@ export default function BookingFlow() {
                   duration={minutes}
                   value={time}
                   onChange={setTime}
+                  staff={staffId}
                   whenFull={hasModule(business.plan, 'espera') ? <WaitlistForm slug={business.slug} date={date} name={name} phone={phone} /> : null}
                 />
               </div>
@@ -181,6 +205,7 @@ export default function BookingFlow() {
             <div className="card space-y-3">
               <Row label="Día" value={<span>{dayTitle(date!)}</span>} />
               <Row label="Hora" value={time!} />
+              {team.length > 0 && <Row label="Con" value={team.find((s) => s.id === staffId)?.name || 'Cualquiera disponible'} />}
               <Row label="Nombre" value={name} />
               <Row label="Teléfono" value={phone} />
               <div className="border-t border-slate-100 pt-3">

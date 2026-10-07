@@ -1,10 +1,13 @@
 import { createContext, useContext } from 'react'
-import type { Business, MyStatus, Service } from '../../lib/types'
+import type { Business, MyStatus, Service, Staff } from '../../lib/types'
 
 export interface PanelCtx {
   business: Business
   status: MyStatus
   services: Service[]
+  /** Profesionales del negocio (vacío si no usa varios profesionales) */
+  staff: Staff[]
+  reloadStaff: () => Promise<void>
   reloadBusiness: () => Promise<void>
   reloadServices: () => Promise<void>
   /** Inicio del panel de este negocio, ej. "/barberia-leo/panel-admin" */

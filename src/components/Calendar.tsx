@@ -97,12 +97,14 @@ interface SlotPickerProps {
   duration: number
   value: string | null
   onChange: (slot: string) => void
+  /** Solo los huecos de este profesional (sin él: cualquiera libre) */
+  staff?: string | null
   /** Se muestra debajo del aviso cuando el día está lleno (ej. lista de espera) */
   whenFull?: ReactNode
 }
 
 /** Turnos de un día, con los ocupados bloqueados */
-export function SlotPicker({ slug, date, duration, value, onChange, whenFull }: SlotPickerProps) {
+export function SlotPicker({ slug, date, duration, value, onChange, staff, whenFull }: SlotPickerProps) {
   const [slots, setSlots] = useState<{ slot: string; available: boolean }[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -111,7 +113,7 @@ export function SlotPicker({ slug, date, duration, value, onChange, whenFull }: 
     setSlots(null)
     setError(null)
     supabase
-      .rpc('get_available_slots', { p_slug: slug, p_date: date, p_duration: duration })
+      .rpc('get_available_slots', { p_slug: slug, p_date: date, p_duration: duration, p_staff: staff || null })
       .then(({ data, error }) => {
         if (!alive) return
         if (error) setError(errorMessage(error))
@@ -120,7 +122,7 @@ export function SlotPicker({ slug, date, duration, value, onChange, whenFull }: 
     return () => {
       alive = false
     }
-  }, [slug, date, duration])
+  }, [slug, date, duration, staff])
 
   if (error) return <Alert>{error}</Alert>
   if (!slots) return <div className="flex justify-center py-6 text-slate-400"><Spinner /></div>

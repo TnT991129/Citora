@@ -8,7 +8,7 @@ import { createBusinessFromDraft, loadDraft } from '../../lib/draft'
 import { errorMessage } from '../../lib/errors'
 import { daysLeft, hoursLeft } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
-import type { Business, MyStatus, Service } from '../../lib/types'
+import type { Business, MyStatus, Service, Staff } from '../../lib/types'
 import { panelPath } from '../../lib/url'
 import Agenda from './Agenda'
 import { PanelContext } from './context'
@@ -24,6 +24,7 @@ import Schedule from './Schedule'
 import Services from './Services'
 import Settings from './Settings'
 import Stats from './Stats'
+import Team from './Team'
 import Waitlist from './Waitlist'
 import Today from './Today'
 
@@ -36,6 +37,7 @@ export default function Panel() {
   const [business, setBusiness] = useState<Business | null | undefined>(undefined)
   const [status, setStatus] = useState<MyStatus | null>(null)
   const [services, setServices] = useState<Service[]>([])
+  const [staff, setStaff] = useState<Staff[]>([])
   const [error, setError] = useState<string | null>(null)
 
   const reloadBusiness = useCallback(async () => {
@@ -59,6 +61,11 @@ export default function Panel() {
   const reloadServices = useCallback(async () => {
     const { data } = await supabase.from('services').select('*').order('position').order('created_at')
     setServices((data as Service[]) || [])
+  }, [])
+
+  const reloadStaff = useCallback(async () => {
+    const { data } = await supabase.from('staff').select('*').order('position').order('created_at')
+    setStaff((data as Staff[]) || [])
   }, [])
 
   useEffect(() => {
@@ -86,9 +93,9 @@ export default function Panel() {
           }
         }
       }
-      await Promise.all([reloadBusiness(), reloadServices()])
+      await Promise.all([reloadBusiness(), reloadServices(), reloadStaff()])
     })()
-  }, [session, navigate, reloadBusiness, reloadServices])
+  }, [session, navigate, reloadBusiness, reloadServices, reloadStaff])
 
   const slugChanged = useCallback((newSlug: string) => {
     setBusiness((b) => (b ? { ...b, slug: newSlug } : b))
@@ -148,7 +155,7 @@ export default function Panel() {
   const link = (sub = '') => panelPath(business.slug, sub)
 
   return (
-    <PanelContext.Provider value={{ business, status, services, reloadBusiness, reloadServices, base, link, slugChanged }}>
+    <PanelContext.Provider value={{ business, status, services, staff, reloadStaff, reloadBusiness, reloadServices, base, link, slugChanged }}>
       <div className="min-h-dvh pb-24 md:pb-8">
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
           <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-2.5">
@@ -176,6 +183,7 @@ export default function Panel() {
               <Route index element={<Today />} />
               <Route path="agenda" element={<Agenda />} />
               <Route path="servicios" element={<Services />} />
+              <Route path="equipo" element={<Team />} />
               <Route path="horario" element={<Schedule />} />
               <Route path="ajustes" element={<Settings />} />
               <Route path="clientes" element={<Customers />} />
@@ -212,7 +220,7 @@ const NAV = [
 ] as const
 
 // Secciones a las que se llega desde "Más": la pestaña "Más" queda marcada en ellas
-const MORE_SUBS = ['mas', 'estadisticas', 'opiniones', 'galeria', 'recordatorios', 'espera', 'cupones', 'respaldo', 'horario', 'ajustes', 'plan']
+const MORE_SUBS = ['mas', 'equipo', 'estadisticas', 'opiniones', 'galeria', 'recordatorios', 'espera', 'cupones', 'respaldo', 'horario', 'ajustes', 'plan']
 
 function useIsActive(to: string, base: string): boolean {
   const { pathname } = useLocation()

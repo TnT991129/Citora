@@ -101,6 +101,7 @@ export default function BookingPage() {
               <p className="text-sm text-slate-500">Tu cita</p>
               <p className="mt-1 text-2xl font-extrabold">{dayTitle(key)}</p>
               <p className="text-xl font-bold text-brand">{time}</p>
+              {booking.staff_name && <p className="text-sm text-slate-600">Con <b>{booking.staff_name}</b></p>}
             </div>
             <StatusBadge status={booking.status} />
           </div>
@@ -260,7 +261,7 @@ function Reschedule({ booking, minutes, onClose, onDone }: {
               setTime(null)
             }}
           />
-          {date && <SlotPicker slug={biz.slug} date={date} duration={minutes} value={time} onChange={setTime} />}
+          {date && <SlotPicker slug={biz.slug} date={date} duration={minutes} value={time} onChange={setTime} staff={booking.staff_id} />}
           {error && <Alert>{error}</Alert>}
         </div>
       )}

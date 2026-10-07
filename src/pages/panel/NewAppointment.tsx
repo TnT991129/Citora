@@ -7,13 +7,15 @@ import { usePanel } from './context'
 
 /** Cita añadida por el dueño (por ejemplo, alguien que llamó). Puede ser a cualquier hora. */
 export function NewAppointment({ defaultDate, onClose, onCreated }: { defaultDate: string; onClose: () => void; onCreated: () => void }) {
-  const { business, services } = usePanel()
+  const { business, services, staff } = usePanel()
+  const team = staff.filter((s) => s.active)
   const [selected, setSelected] = useState<string[]>([])
   const [date, setDate] = useState(defaultDate)
   const [time, setTime] = useState('10:00')
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [note, setNote] = useState('')
+  const [staffId, setStaffId] = useState<string>('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -23,6 +25,7 @@ export function NewAppointment({ defaultDate, onClose, onCreated }: { defaultDat
 
   const save = async () => {
     if (name.trim().length < 2) return setError('Escribe el nombre del cliente.')
+    if (team.length > 0 && !staffId) return setError('Elige con quién es la cita.')
     setBusy(true)
     setError(null)
     const { error } = await supabase.rpc('owner_create_appointment', {
@@ -32,6 +35,7 @@ export function NewAppointment({ defaultDate, onClose, onCreated }: { defaultDat
       p_name: name.trim(),
       p_phone: phone,
       p_note: note.trim() || null,
+      p_staff: staffId || null,
     })
     setBusy(false)
     if (error) setError(errorMessage(error))
@@ -65,6 +69,23 @@ export function NewAppointment({ defaultDate, onClose, onCreated }: { defaultDat
           </div>
           <p className="mt-1 text-xs text-slate-500">Duración: {duration(minutes)}</p>
         </div>
+        {team.length > 0 && (
+          <div>
+            <span className="label">Con quién</span>
+            <div className="flex flex-wrap gap-2">
+              {team.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setStaffId(s.id)}
+                  className={`rounded-full px-3 py-1.5 text-sm font-semibold ${staffId === s.id ? 'bg-brand text-white' : 'bg-white text-slate-700 ring-1 ring-slate-300'}`}
+                >
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <Field label="Día"><input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
           <Field label="Hora"><input type="time" className="input" value={time} step={300} onChange={(e) => setTime(e.target.value)} /></Field>

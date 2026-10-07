@@ -1,5 +1,5 @@
 -- =====================================================================
--- CITORA · Base de datos (Fases 1, 2 y 3)
+-- CITORA · Base de datos
 -- Ejecutar completo en Supabase > SQL Editor > New query > Run.
 -- Se puede volver a ejecutar sin romper nada (usa "if not exists" y
 -- "create or replace" siempre que se puede).
@@ -244,6 +244,35 @@ alter table public.appointments add column if not exists discount_code text;
 alter table public.appointments add column if not exists discount numeric(10, 2) not null default 0;
 alter table public.appointments add column if not exists reminded_at timestamptz;
 
+-- Profesionales del negocio (empleados). Cada uno tiene su propia agenda.
+create table if not exists public.staff (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  name text not null check (char_length(btrim(name)) between 2 and 60),
+  active boolean not null default true,
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists staff_business_idx on public.staff (business_id, position);
+
+-- Con quién es cada cita (null = negocio sin profesionales)
+alter table public.appointments add column if not exists staff_id uuid references public.staff(id) on delete set null;
+create index if not exists appointments_staff_idx on public.appointments (staff_id, starts_at);
+
+-- Dos citas activas no se solapan con el mismo profesional (las citas sin profesional comparten una agenda)
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'appointments_no_overlap_staff') then
+    alter table public.appointments drop constraint if exists appointments_no_overlap;
+    alter table public.appointments add constraint appointments_no_overlap_staff exclude using gist (
+      business_id with =,
+      (coalesce(staff_id, '00000000-0000-0000-0000-000000000000'::uuid)) with =,
+      tstzrange(starts_at, ends_at) with &&
+    ) where (status <> 'cancelada');
+  end if;
+end;
+$$;
+
 -- ---------------------------------------------------------------------
 -- 2. FUNCIONES DE APOYO
 -- ---------------------------------------------------------------------
@@ -474,6 +503,23 @@ create policy notes_owner_all on public.customer_notes for all to authenticated
 
 alter table public.waitlist enable row level security;
 alter table public.discounts enable row level security;
+alter table public.staff enable row level security;
+
+-- staff: el dueño ve los suyos y los gestiona si su plan incluye varios empleados
+drop policy if exists staff_owner_select on public.staff;
+create policy staff_owner_select on public.staff for select to authenticated
+  using (business_id = my_business_id());
+drop policy if exists staff_owner_insert on public.staff;
+create policy staff_owner_insert on public.staff for insert to authenticated
+  with check (business_id = my_business_id() and my_plan_has('empleados')
+              and (select count(*) from staff x where x.business_id = my_business_id()) < 20);
+drop policy if exists staff_owner_update on public.staff;
+create policy staff_owner_update on public.staff for update to authenticated
+  using (business_id = my_business_id() and my_plan_has('empleados'))
+  with check (business_id = my_business_id());
+drop policy if exists staff_owner_delete on public.staff;
+create policy staff_owner_delete on public.staff for delete to authenticated
+  using (business_id = my_business_id());
 
 -- waitlist: el dueño ve y gestiona la suya (los clientes se apuntan con join_waitlist)
 drop policy if exists waitlist_owner_select on public.waitlist;
@@ -634,6 +680,10 @@ begin
             where business_id = b.id and not hidden
             order by (comment is not null) desc, created_at desc limit 12) r), '[]'::jsonb)
       else '[]'::jsonb end,
+    'staff', case when plan_has(v_plan, 'empleados') then coalesce((
+      select jsonb_agg(jsonb_build_object('id', st.id, 'name', st.name) order by st.position, st.created_at)
+      from staff st where st.business_id = b.id and st.active), '[]'::jsonb)
+      else '[]'::jsonb end,
     'gallery', case when plan_has(v_plan, 'galeria') then coalesce((
       select jsonb_agg(jsonb_build_object('id', g.id, 'url', g.url, 'caption', g.caption)
                        order by g.position, g.created_at)
@@ -655,8 +705,59 @@ returns boolean language sql stable security definer set search_path = public as
   );
 $$;
 
+-- ¿Está libre la agenda de un profesional (null = la agenda común) en un intervalo?
+create or replace function public._lane_free(p_business uuid, p_staff uuid, p_start timestamptz, p_end timestamptz, p_exclude uuid default null)
+returns boolean language sql stable security definer set search_path = public as $$
+  select not exists (
+    select 1 from appointments a
+    where a.business_id = p_business
+      and a.status <> 'cancelada'
+      and a.staff_id is not distinct from p_staff
+      and tstzrange(a.starts_at, a.ends_at) && tstzrange(p_start, p_end)
+      and (p_exclude is null or a.id <> p_exclude)
+  );
+$$;
+
+-- Busca quién puede atender un hueco. Sin profesionales: la agenda común.
+-- Con p_staff: solo ese profesional. Sin p_staff: el que esté libre y tenga menos citas ese día.
+create or replace function public._free_staff(p_business uuid, p_start timestamptz, p_end timestamptz,
+                                              p_staff uuid default null, p_exclude uuid default null)
+returns table (ok boolean, staff_id uuid)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  s record;
+begin
+  if not exists (select 1 from staff x where x.business_id = p_business and x.active) then
+    ok := _lane_free(p_business, null, p_start, p_end, p_exclude);
+    staff_id := null;
+    return next;
+    return;
+  end if;
+  for s in
+    select st.id from staff st
+    where st.business_id = p_business and st.active and (p_staff is null or st.id = p_staff)
+    order by (select count(*) from appointments a
+              where a.staff_id = st.id and a.status <> 'cancelada'
+                and a.starts_at >= date_trunc('day', p_start) and a.starts_at < date_trunc('day', p_start) + interval '1 day'),
+             st.position, st.created_at
+  loop
+    if _lane_free(p_business, s.id, p_start, p_end, p_exclude) then
+      ok := true;
+      staff_id := s.id;
+      return next;
+      return;
+    end if;
+  end loop;
+  ok := false;
+  staff_id := null;
+  return next;
+end;
+$$;
+
 -- Comprueba un turno concreto. Devuelve 'ok', 'invalido' u 'ocupado'.
-create or replace function public._check_slot(p_business uuid, p_date date, p_time text, p_duration int, p_exclude uuid default null)
+drop function if exists public._check_slot(uuid, date, text, int, uuid);
+create or replace function public._check_slot(p_business uuid, p_date date, p_time text, p_duration int,
+                                              p_exclude uuid default null, p_staff uuid default null)
 returns text language plpgsql stable security definer set search_path = public as $$
 declare
   b businesses;
@@ -682,15 +783,17 @@ begin
   end if;
   v_start := (p_date + v_time) at time zone b.timezone;
   if v_start < now() + make_interval(hours => b.min_notice_hours) then return 'invalido'; end if;
-  if not _is_range_free(b.id, v_start, v_start + make_interval(mins => greatest(p_duration, 5)), p_exclude) then
+  if not (select f.ok from _free_staff(b.id, v_start, v_start + make_interval(mins => greatest(p_duration, 5)),
+                                      p_staff, p_exclude) f) then
     return 'ocupado';
   end if;
   return 'ok';
 end;
 $$;
 
--- Turnos de un día con su disponibilidad
-create or replace function public.get_available_slots(p_slug text, p_date date, p_duration int)
+-- Turnos de un día con su disponibilidad (con p_staff: solo la agenda de ese profesional)
+drop function if exists public.get_available_slots(text, date, int);
+create or replace function public.get_available_slots(p_slug text, p_date date, p_duration int, p_staff uuid default null)
 returns table (slot text, available boolean)
 language plpgsql stable security definer set search_path = public as $$
 declare
@@ -715,7 +818,8 @@ begin
     v_start := (p_date + t) at time zone b.timezone;
     slot := to_char(t, 'HH24:MI');
     available := v_start >= now() + make_interval(hours => b.min_notice_hours)
-      and _is_range_free(b.id, v_start, v_start + make_interval(mins => greatest(coalesce(p_duration, 60), 5)));
+      and (select f.ok from _free_staff(b.id, v_start, v_start + make_interval(mins => greatest(coalesce(p_duration, 60), 5)),
+                                        p_staff) f);
     return next;
   end loop;
 end;
@@ -779,12 +883,14 @@ $$;
 
 -- Reserva desde la web pública
 drop function if exists public.create_booking(text, uuid[], date, text, text, text, text);
+drop function if exists public.create_booking(text, uuid[], date, text, text, text, text, text);
 create or replace function public.create_booking(
   p_slug text, p_service_ids uuid[], p_date date, p_time text,
-  p_name text, p_phone text, p_note text default null, p_code text default null)
+  p_name text, p_phone text, p_note text default null, p_code text default null, p_staff uuid default null)
 returns text language plpgsql volatile security definer set search_path = public as $$
 declare
   b businesses;
+  v_staff uuid;
   v_disc numeric := 0;
   v_code text;
   v_phone text;
@@ -831,7 +937,7 @@ begin
     raise exception 'LIMITE_CITAS';
   end if;
 
-  v_check := _check_slot(b.id, p_date, p_time, v_dur);
+  v_check := _check_slot(b.id, p_date, p_time, v_dur, null, p_staff);
   if v_check = 'invalido' then raise exception 'TURNO_INVALIDO'; end if;
   if v_check = 'ocupado' then raise exception 'TURNO_OCUPADO'; end if;
 
@@ -843,12 +949,13 @@ begin
 
   v_start := (p_date + p_time::time) at time zone b.timezone;
   v_token := replace(gen_random_uuid()::text, '-', '');
+  select f.staff_id into v_staff from _free_staff(b.id, v_start, v_start + make_interval(mins => v_dur), p_staff) f;
   begin
     insert into appointments (business_id, token, starts_at, ends_at, customer_name, customer_phone,
-                              customer_note, total, status, source, discount_code, discount)
+                              customer_note, total, status, source, discount_code, discount, staff_id)
     values (b.id, v_token, v_start, v_start + make_interval(mins => v_dur), v_name, v_phone,
             nullif(left(btrim(coalesce(p_note, '')), 500), ''), v_total - v_disc, 'pendiente', 'web',
-            v_code, v_disc)
+            v_code, v_disc, v_staff)
     returning id into v_id;
   exception when exclusion_violation then
     raise exception 'TURNO_OCUPADO';
@@ -876,6 +983,8 @@ returns jsonb language sql stable security definer set search_path = public as $
     'total', a.total,
     'discount', a.discount,
     'discount_code', a.discount_code,
+    'staff_id', (select st.id from staff st where st.id = a.staff_id and st.active),
+    'staff_name', (select st.name from staff st where st.id = a.staff_id),
     'status', a.status,
     'reschedule_count', a.reschedule_count,
     'can_change', a.status in ('pendiente', 'confirmada')
@@ -924,6 +1033,7 @@ returns void language plpgsql volatile security definer set search_path = public
 declare
   a appointments;
   b businesses;
+  v_pref uuid;
   v_dur int;
   v_check text;
   v_start timestamptz;
@@ -939,7 +1049,9 @@ begin
   if a.reschedule_count >= 1 then raise exception 'LIMITE_CAMBIOS'; end if;
 
   v_dur := greatest(5, (extract(epoch from (a.ends_at - a.starts_at)) / 60)::int);
-  v_check := _check_slot(b.id, p_date, p_time, v_dur, a.id);
+  -- Mismo profesional; si ya no está activo, cualquiera que esté libre
+  v_pref := (select st.id from staff st where st.id = a.staff_id and st.active);
+  v_check := _check_slot(b.id, p_date, p_time, v_dur, a.id, v_pref);
   if v_check = 'invalido' then raise exception 'TURNO_INVALIDO'; end if;
   if v_check = 'ocupado' then raise exception 'TURNO_OCUPADO'; end if;
 
@@ -947,7 +1059,9 @@ begin
   begin
     update appointments
        set starts_at = v_start, ends_at = v_start + make_interval(mins => v_dur),
-           reschedule_count = reschedule_count + 1, status = 'pendiente'
+           reschedule_count = reschedule_count + 1, status = 'pendiente',
+           staff_id = (select f.staff_id from _free_staff(b.id, v_start, v_start + make_interval(mins => v_dur),
+                                                          v_pref, a.id) f)
      where id = a.id;
   exception when exclusion_violation then
     raise exception 'TURNO_OCUPADO';
@@ -1102,8 +1216,10 @@ end;
 $$;
 
 -- Cita creada por el dueño desde su agenda (puede ser a cualquier hora)
+drop function if exists public.owner_create_appointment(uuid[], date, text, text, text, text);
 create or replace function public.owner_create_appointment(
-  p_service_ids uuid[], p_date date, p_time text, p_name text, p_phone text, p_note text default null)
+  p_service_ids uuid[], p_date date, p_time text, p_name text, p_phone text, p_note text default null,
+  p_staff uuid default null)
 returns uuid language plpgsql volatile security definer set search_path = public as $$
 declare
   b businesses;
@@ -1118,6 +1234,9 @@ begin
     raise exception 'NEGOCIO_INACTIVO';
   end if;
   if char_length(btrim(coalesce(p_name, ''))) < 2 then raise exception 'NOMBRE_INVALIDO'; end if;
+  if p_staff is not null and not exists (select 1 from staff where id = p_staff and business_id = b.id) then
+    raise exception 'PROFESIONAL_INVALIDO';
+  end if;
 
   select coalesce(sum(duration_min), 0), coalesce(sum(price), 0) into v_dur, v_total
     from services where business_id = b.id and id = any (coalesce(p_service_ids, '{}'));
@@ -1126,10 +1245,10 @@ begin
   v_start := (p_date + p_time::time) at time zone b.timezone;
   begin
     insert into appointments (business_id, token, starts_at, ends_at, customer_name, customer_phone,
-                              customer_note, total, status, source)
+                              customer_note, total, status, source, staff_id)
     values (b.id, replace(gen_random_uuid()::text, '-', ''), v_start,
             v_start + make_interval(mins => v_dur), btrim(p_name), _clean_phone(p_phone),
-            nullif(btrim(coalesce(p_note, '')), ''), v_total, 'confirmada', 'manual')
+            nullif(btrim(coalesce(p_note, '')), ''), v_total, 'confirmada', 'manual', p_staff)
     returning id into v_id;
   exception when exclusion_violation then
     raise exception 'TURNO_OCUPADO';
@@ -1453,8 +1572,8 @@ revoke execute on all functions in schema public from public;
 
 grant execute on function public.get_public_prices() to anon, authenticated;
 grant execute on function public.get_public_business(text) to anon, authenticated;
-grant execute on function public.get_available_slots(text, date, int) to anon, authenticated;
-grant execute on function public.create_booking(text, uuid[], date, text, text, text, text, text) to anon, authenticated;
+grant execute on function public.get_available_slots(text, date, int, uuid) to anon, authenticated;
+grant execute on function public.create_booking(text, uuid[], date, text, text, text, text, text, uuid) to anon, authenticated;
 grant execute on function public.check_discount(text, text, uuid[]) to anon, authenticated;
 grant execute on function public.join_waitlist(text, date, text, text, text) to anon, authenticated;
 grant execute on function public.get_booking(text) to anon, authenticated;
@@ -1465,7 +1584,7 @@ grant execute on function public.check_slug_available(text) to anon, authenticat
 grant execute on function public.create_business(text, text, text, text, text, text, jsonb, jsonb) to authenticated;
 grant execute on function public.get_my_business_status() to authenticated;
 grant execute on function public.get_payment_info() to authenticated;
-grant execute on function public.owner_create_appointment(uuid[], date, text, text, text, text) to authenticated;
+grant execute on function public.owner_create_appointment(uuid[], date, text, text, text, text, uuid) to authenticated;
 grant execute on function public.owner_reschedule_appointment(uuid, date, text) to authenticated;
 grant execute on function public.is_platform_admin() to authenticated;
 grant execute on function public.admin_list_businesses() to authenticated;
@@ -1497,7 +1616,9 @@ grant execute on function public.schedule_days_normalize() to authenticated;
 
 -- Funciones internas: nadie las llama desde fuera
 revoke execute on function public._is_range_free(uuid, timestamptz, timestamptz, uuid) from anon, authenticated;
-revoke execute on function public._check_slot(uuid, date, text, int, uuid) from anon, authenticated;
+revoke execute on function public._check_slot(uuid, date, text, int, uuid, uuid) from anon, authenticated;
+revoke execute on function public._lane_free(uuid, uuid, timestamptz, timestamptz, uuid) from anon, authenticated;
+revoke execute on function public._free_staff(uuid, timestamptz, timestamptz, uuid, uuid) from anon, authenticated;
 revoke execute on function public._owner_business(text) from anon, authenticated;
 revoke execute on function public._discount_for(uuid, text, numeric, boolean) from anon, authenticated;
 

@@ -75,7 +75,17 @@ export interface Appointment {
   discount_code: string | null
   discount: number
   reminded_at: string | null
+  staff_id: string | null
   appointment_services?: AppointmentService[]
+}
+
+export interface Staff {
+  id: string
+  business_id: string
+  name: string
+  active: boolean
+  position: number
+  created_at: string
 }
 
 export interface Discount {
@@ -142,6 +152,7 @@ export interface PublicBusiness {
   schedule?: { weekday: number; is_open: boolean }[]
   closed_days?: string[]
   rating?: { avg: number | null; count: number } | null
+  staff?: { id: string; name: string }[]
   reviews?: PublicReview[]
   gallery?: GalleryPhoto[]
 }
@@ -218,6 +229,8 @@ export interface PublicBooking {
   total: number
   discount?: number
   discount_code?: string | null
+  staff_id?: string | null
+  staff_name?: string | null
   status: AppointmentStatus
   reschedule_count: number
   can_change: boolean
