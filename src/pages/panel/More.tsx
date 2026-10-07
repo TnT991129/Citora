@@ -18,7 +18,7 @@ const ITEMS: { to: string; label: string; desc: string; emoji: string; module?: 
 ]
 
 export default function More() {
-  const { business, status } = usePanel()
+  const { business, businesses, status } = usePanel()
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-extrabold">Más</h1>
@@ -44,6 +44,10 @@ export default function More() {
         <span className="text-brand">→</span>
       </a>
       <InstallButton appName="tu panel" label="Instalar el panel en este móvil" block />
+      <Link to="/crear" className="card flex items-center justify-between font-semibold">
+        <span>➕ Crear otro negocio</span>
+        <span className="text-sm font-normal text-slate-500">{businesses.length} de 5</span>
+      </Link>
     </div>
   )
 }

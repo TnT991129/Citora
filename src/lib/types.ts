@@ -109,6 +109,7 @@ export interface MyStatus {
   trial_ends_at: string
   paid_until: string | null
   code: string
+  id: string
 }
 
 export interface PublicService {

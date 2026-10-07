@@ -30,23 +30,27 @@ export default function Panel() {
   const session = useSession()
   const navigate = useNavigate()
   const [business, setBusiness] = useState<Business | null | undefined>(undefined)
+  const [businesses, setBusinesses] = useState<Business[]>([])
   const [status, setStatus] = useState<MyStatus | null>(null)
   const [services, setServices] = useState<Service[]>([])
   const [error, setError] = useState<string | null>(null)
 
   const reloadBusiness = useCallback(async () => {
-    const [{ data: b, error: e1 }, { data: st, error: e2 }] = await Promise.all([
-      supabase.from('businesses').select('*').maybeSingle(),
+    const [{ data: list, error: e1 }, { data: st, error: e2 }] = await Promise.all([
+      supabase.from('businesses').select('*').order('created_at'),
       supabase.rpc('get_my_business_status'),
     ])
     if (e1 || e2) {
       setError(errorMessage(e1 || e2))
       return
     }
-    setBusiness(b as Business | null)
+    const all = (list as Business[]) || []
+    const current = st ? all.find((x) => x.id === (st as MyStatus).id) || null : null
+    setBusinesses(all)
+    setBusiness(current)
     setStatus(st as MyStatus | null)
-    if (b) {
-      const biz = b as Business
+    if (current) {
+      const biz = current
       setBrandColor(biz.color_primary)
       setAppManifest({ name: `${biz.name} · Panel`, shortName: biz.name, path: 'panel', color: biz.color_primary, logo: biz.logo_url })
     }
@@ -61,11 +65,21 @@ export default function Panel() {
     document.title = 'Mi panel · Citora'
   }, [])
 
+  const switchBusiness = useCallback(async (id: string) => {
+    const { error } = await supabase.rpc('set_active_business', { p_business: id })
+    if (error) {
+      setError(errorMessage(error))
+      return
+    }
+    await Promise.all([reloadBusiness(), reloadServices()])
+    navigate('/panel')
+  }, [reloadBusiness, reloadServices, navigate])
+
   useEffect(() => {
     if (!session) return
     ;(async () => {
-      const { data: b } = await supabase.from('businesses').select('id').maybeSingle()
-      if (!b) {
+      const { data: owned } = await supabase.from('businesses').select('id').limit(1)
+      if (!owned || owned.length === 0) {
         // Venía del asistente y tuvo que confirmar el correo: se crea ahora
         const draft = loadDraft()
         if (draft && draft.name && draft.slug) {
@@ -110,15 +124,11 @@ export default function Panel() {
   const blocked = status.status === 'vencido'
 
   return (
-    <PanelContext.Provider value={{ business, status, services, reloadBusiness, reloadServices }}>
+    <PanelContext.Provider value={{ business, businesses, status, services, reloadBusiness, reloadServices, switchBusiness }}>
       <div className="min-h-dvh pb-24 md:pb-8">
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
           <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-2.5">
-            <BusinessAvatar name={business.name} logo={business.logo_url} size={36} />
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-bold leading-tight">{business.name}</p>
-              <p className="truncate text-xs text-slate-500">Código {business.code}</p>
-            </div>
+            <BusinessSwitcher business={business} businesses={businesses} onSwitch={switchBusiness} />
             <nav className="hidden gap-1 md:flex">
               {!blocked && NAV.map((n) => <TopLink key={n.to} {...n} />)}
               {blocked && <TopLink to="/panel/plan" label="Plan" />}
@@ -128,7 +138,8 @@ export default function Panel() {
 
         <StatusBanner status={status} />
 
-        <main className="mx-auto max-w-4xl px-4 py-5">
+        {/* key: al cambiar de negocio, cada página vuelve a cargar sus datos */}
+        <main key={business.id} className="mx-auto max-w-4xl px-4 py-5">
           {blocked ? (
             <Routes>
               <Route path="*" element={<PlanPage blocked />} />
@@ -202,6 +213,66 @@ function BottomLink({ to, label, icon }: { to: string; label: string; icon: stri
       <Icon name={icon} />
       {label}
     </Link>
+  )
+}
+
+/** Nombre del negocio; si la cuenta tiene varios, permite cambiar de uno a otro */
+function BusinessSwitcher({ business, businesses, onSwitch }: {
+  business: Business
+  businesses: Business[]
+  onSwitch: (id: string) => Promise<void>
+}) {
+  const [open, setOpen] = useState(false)
+  const many = businesses.length > 1
+  const head = (
+    <>
+      <BusinessAvatar name={business.name} logo={business.logo_url} size={36} />
+      <span className="min-w-0 flex-1 text-left">
+        <span className="flex items-center gap-1 truncate font-bold leading-tight">
+          <span className="truncate">{business.name}</span>
+          {many && (
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-500" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          )}
+        </span>
+        <span className="block truncate text-xs text-slate-500">Código {business.code}</span>
+      </span>
+    </>
+  )
+  if (!many) return <div className="flex min-w-0 flex-1 items-center gap-3">{head}</div>
+
+  return (
+    <div className="relative min-w-0 flex-1">
+      <button onClick={() => setOpen((o) => !o)} className="flex w-full min-w-0 items-center gap-3 rounded-xl p-1 -m-1 hover:bg-slate-100" aria-expanded={open} aria-label="Cambiar de negocio">
+        {head}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-2xl bg-white p-2 shadow-xl ring-1 ring-slate-200">
+            <p className="px-2 py-1 text-xs font-semibold text-slate-500">Tus negocios</p>
+            {businesses.map((b) => (
+              <button
+                key={b.id}
+                onClick={async () => {
+                  setOpen(false)
+                  if (b.id !== business.id) await onSwitch(b.id)
+                }}
+                className={`flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left hover:bg-slate-50 ${b.id === business.id ? 'bg-slate-50' : ''}`}
+              >
+                <BusinessAvatar name={b.name} logo={b.logo_url} size={30} />
+                <span className="min-w-0 flex-1 truncate font-medium">{b.name}</span>
+                {b.id === business.id && <span className="text-brand">✓</span>}
+              </button>
+            ))}
+            <Link to="/crear" onClick={() => setOpen(false)} className="mt-1 flex items-center gap-2 rounded-xl px-2 py-2 text-sm font-semibold text-brand hover:bg-slate-50">
+              + Crear otro negocio
+            </Link>
+          </div>
+        </>
+      )}
+    </div>
   )
 }
 

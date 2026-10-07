@@ -14,6 +14,7 @@ const MESSAGES: Record<string, string> = {
   LIMITE_CAMBIOS: 'Esta cita ya se cambió una vez. Para otro cambio, escribe al negocio por WhatsApp.',
   SIN_SESION: 'Tu sesión expiró. Vuelve a entrar.',
   YA_TIENE_NEGOCIO: 'Esta cuenta ya tiene un negocio creado.',
+  LIMITE_NEGOCIOS: 'Has llegado al máximo de 5 negocios por cuenta.',
   ENLACE_NO_DISPONIBLE: 'Ese enlace ya está en uso o no es válido. Prueba otro.',
   ENLACE_INVALIDO: 'El enlace solo puede tener letras minúsculas, números y guiones (3 a 40 caracteres).',
   SIN_NEGOCIO: 'Todavía no has creado tu negocio.',
