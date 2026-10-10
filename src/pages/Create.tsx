@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { TimeChips } from '../components/TimeChips'
 import { Alert, Button, BusinessAvatar, CitoraLogo, CopyButton, Field, LinkButton, WhatsAppIcon } from '../components/ui'
 import { useSession } from '../lib/auth'
-import { COLOR_PRESETS, setBrandColor } from '../lib/brand'
+import { setBrandColor } from '../lib/brand'
+import { ColorPicker } from '../components/ColorPicker'
 import { createBusinessFromDraft, draftSlots, loadDraft, newDraft, saveDraft, type Draft } from '../lib/draft'
 import { errorMessage } from '../lib/errors'
 import { cleanPhone, duration, money, slugify, WEEKDAYS_SHORT } from '../lib/format'
@@ -275,18 +276,8 @@ export default function Create() {
           </Field>
           <div>
             <span className="label">Color de tu app</span>
-            <div className="flex flex-wrap gap-2">
-              {COLOR_PRESETS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => update({ color: c })}
-                  className={`h-10 w-10 rounded-full transition ${draft.color === c ? 'ring-4 ring-offset-2' : ''}`}
-                  style={{ background: c, ['--tw-ring-color' as string]: c }}
-                  aria-label={`Color ${c}`}
-                />
-              ))}
-            </div>
+            <ColorPicker value={draft.color} onChange={(c) => update({ color: c })} />
+            <p className="mt-2 text-xs text-slate-500">Después podrás añadir degradados, foto de portada y más desde tu panel.</p>
           </div>
           <div className="card flex items-center gap-3">
             <BusinessAvatar name={draft.name || 'Tu negocio'} size={48} />

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { BusinessAvatar } from '../../components/ui'
-import { applyAppearance, socialUrl } from '../../lib/appearance'
+import { applyAppearance, gradientCss, socialUrl } from '../../lib/appearance'
 import { setBrandColor } from '../../lib/brand'
 import { setAppManifest } from '../../lib/pwa'
 import { errorMessage } from '../../lib/errors'
@@ -65,7 +65,9 @@ export function BusinessHero({ business, rating, preview }: {
   preview?: boolean
 }) {
   const a = business.appearance || {}
-  const withImage = Boolean(business.cover_url) && a.cover_style !== 'color'
+  const gradient = gradientCss(a)
+  const withImage = Boolean(business.cover_url) && (a.cover_style === 'image' || !a.cover_style)
+  const withGradient = !withImage && a.cover_style === 'gradient' && Boolean(gradient)
   const socials = [
     a.instagram && { key: 'instagram', href: socialUrl.instagram(a.instagram), label: 'Instagram' },
     a.facebook && { key: 'facebook', href: socialUrl.facebook(a.facebook), label: 'Facebook' },
@@ -76,7 +78,7 @@ export function BusinessHero({ business, rating, preview }: {
   return (
     <div
       className={`relative overflow-hidden text-white ${preview ? 'pb-8 pt-6' : 'pb-16 pt-10'} ${withImage ? 'bg-slate-900 bg-cover bg-center' : 'bg-brand'}`}
-      style={withImage ? { backgroundImage: `url("${business.cover_url}")` } : undefined}
+      style={withImage ? { backgroundImage: `url("${business.cover_url}")` } : withGradient ? { backgroundImage: gradient! } : undefined}
     >
       {/* Oscurece la foto para que el texto se lea bien */}
       {withImage && <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/45 to-black/70" />}

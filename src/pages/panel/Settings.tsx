@@ -1,6 +1,6 @@
+import { Link } from 'react-router-dom'
 import { useRef, useState } from 'react'
 import { Alert, BusinessAvatar, Button, Field, flash } from '../../components/ui'
-import { COLOR_PRESETS, setBrandColor } from '../../lib/brand'
 import { errorMessage } from '../../lib/errors'
 import { slugify } from '../../lib/format'
 import { resizeImage } from '../../lib/image'
@@ -10,7 +10,7 @@ import { panelUrl, publicUrl } from '../../lib/url'
 import { usePanel } from './context'
 
 export default function Settings() {
-  const { business, reloadBusiness, slugChanged } = usePanel()
+  const { business, reloadBusiness, slugChanged, link } = usePanel()
   const [form, setForm] = useState({
     name: business.name,
     slug: business.slug,
@@ -18,7 +18,6 @@ export default function Settings() {
     whatsapp: business.whatsapp,
     address: business.address || '',
     description: business.description || '',
-    color_primary: business.color_primary,
     policies: business.policies || '',
   })
   const [busy, setBusy] = useState(false)
@@ -46,7 +45,6 @@ export default function Settings() {
       whatsapp: form.whatsapp.replace(/\D/g, ''),
       address: form.address.trim() || null,
       description: form.description.trim() || null,
-      color_primary: form.color_primary,
       policies: form.policies.trim() || null,
     }).eq('id', business.id)
     setBusy(false)
@@ -131,24 +129,9 @@ export default function Settings() {
         <Field label="Descripción corta" hint="Aparece debajo del nombre en tu web.">
           <input className="input" value={form.description} maxLength={140} onChange={(e) => set({ description: e.target.value })} placeholder="Ej. Uñas con amor en el centro de Matanzas" />
         </Field>
-        <div>
-          <span className="label">Color</span>
-          <div className="flex flex-wrap gap-2">
-            {COLOR_PRESETS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => {
-                  set({ color_primary: c })
-                  setBrandColor(c)
-                }}
-                className={`h-9 w-9 rounded-full ${form.color_primary === c ? 'ring-4 ring-offset-2' : ''}`}
-                style={{ background: c, ['--tw-ring-color' as string]: c }}
-                aria-label={`Color ${c}`}
-              />
-            ))}
-          </div>
-        </div>
+        <p className="text-sm text-slate-500">
+          El color, los degradados, la portada y la letra están en <Link to={link('apariencia')} className="font-semibold text-brand">Apariencia</Link>.
+        </p>
       </section>
 
       <section className="card space-y-3">

@@ -175,7 +175,7 @@ export default function BookingPage() {
         )}
 
         {!active && (
-          <Link to={clientPath(b.slug, 'reservar')} className="flex w-full items-center justify-center rounded-btn bg-brand py-4 text-lg font-bold text-white">
+          <Link to={clientPath(b.slug, 'reservar')} className="flex w-full items-center justify-center rounded-btn bg-brand bg-btn-grad py-4 text-lg font-bold text-white">
             Reservar otra cita
           </Link>
         )}

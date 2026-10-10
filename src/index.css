@@ -23,6 +23,8 @@ body { min-height: 100dvh; }
 
 @layer utilities {
   .rounded-btn { border-radius: var(--btn-radius); }
+  /* Degradado opcional sobre los botones de color del negocio */
+  .bg-btn-grad { background-image: var(--btn-gradient, none); }
 }
 
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }

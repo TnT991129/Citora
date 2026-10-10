@@ -3,7 +3,7 @@ import { useEffect, type ButtonHTMLAttributes, type ReactNode } from 'react'
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'whatsapp'
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-brand text-white hover:brightness-110 shadow-sm',
+  primary: 'bg-brand bg-btn-grad text-white hover:brightness-110 shadow-sm',
   secondary: 'bg-white text-slate-800 border border-slate-300 hover:bg-slate-50',
   ghost: 'text-slate-700 hover:bg-slate-100',
   danger: 'bg-white text-red-600 border border-red-200 hover:bg-red-50',

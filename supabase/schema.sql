@@ -381,7 +381,15 @@ begin
   v := p ->> 'buttons';
   if v in ('rounded', 'square', 'pill') then r := r || jsonb_build_object('buttons', v); end if;
   v := p ->> 'cover_style';
-  if v in ('color', 'image') then r := r || jsonb_build_object('cover_style', v); end if;
+  if v in ('color', 'image', 'gradient') then r := r || jsonb_build_object('cover_style', v); end if;
+  v := p ->> 'page_bg';
+  if v in ('gray', 'white', 'tinted') then r := r || jsonb_build_object('page_bg', v); end if;
+
+  -- Degradado: segundo color y dirección
+  v := p ->> 'color2';
+  if v ~ '^#[0-9a-fA-F]{6}$' then r := r || jsonb_build_object('color2', lower(v)); end if;
+  v := p ->> 'gradient_angle';
+  if v in ('45', '90', '135', '180') then r := r || jsonb_build_object('gradient_angle', v::int); end if;
 
   -- Textos libres (se muestran como texto, nunca como HTML)
   foreach k in array array['announcement', 'book_label', 'thanks_message', 'tagline'] loop
@@ -393,7 +401,7 @@ begin
   end loop;
 
   -- Qué se muestra en la web (por defecto, todo)
-  foreach k in array array['show_prices', 'show_durations', 'show_gallery', 'show_reviews', 'show_hours'] loop
+  foreach k in array array['show_prices', 'show_durations', 'show_gallery', 'show_reviews', 'show_hours', 'gradient_buttons'] loop
     if jsonb_typeof(p -> k) = 'boolean' then r := r || jsonb_build_object(k, (p ->> k)::boolean); end if;
   end loop;
 

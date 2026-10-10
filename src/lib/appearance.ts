@@ -6,7 +6,13 @@ export type ButtonShape = 'rounded' | 'square' | 'pill'
 export interface Appearance {
   font?: FontKey
   buttons?: ButtonShape
-  cover_style?: 'color' | 'image'
+  cover_style?: 'color' | 'image' | 'gradient'
+  /** Segundo color del degradado (el primero es el color del negocio) */
+  color2?: string
+  gradient_angle?: 45 | 90 | 135 | 180
+  /** También los botones principales con degradado */
+  gradient_buttons?: boolean
+  page_bg?: 'gray' | 'white' | 'tinted'
   tagline?: string
   announcement?: string
   book_label?: string
@@ -36,6 +42,32 @@ export const BUTTON_SHAPES: Record<ButtonShape, { name: string; radius: string }
   pill: { name: 'Píldora', radius: '9999px' },
 }
 
+export const GRADIENT_ANGLES: { value: 45 | 90 | 135 | 180; label: string }[] = [
+  { value: 90, label: '→' },
+  { value: 135, label: '↘' },
+  { value: 180, label: '↓' },
+  { value: 45, label: '↗' },
+]
+
+export const PAGE_BACKGROUNDS: Record<'gray' | 'white' | 'tinted', string> = {
+  gray: 'Gris claro',
+  white: 'Blanco',
+  tinted: 'Con tu color',
+}
+
+/** Degradado del negocio en CSS (usa la variable --brand-rgb como primer color), o null si no tiene */
+export function gradientCss(a: Appearance | null | undefined): string | null {
+  if (!a?.color2) return null
+  return `linear-gradient(${a.gradient_angle || 135}deg, rgb(var(--brand-rgb)) 0%, ${a.color2} 100%)`
+}
+
+/** Color de fondo de la página según la elección del negocio ('' = el gris de siempre) */
+export function pageBackground(a: Appearance | null | undefined): string {
+  if (a?.page_bg === 'white') return '#ffffff'
+  if (a?.page_bg === 'tinted') return 'rgb(var(--brand-rgb) / 0.07)'
+  return ''
+}
+
 /** Por defecto todo se muestra */
 export function shows(a: Appearance | null | undefined, key: 'show_prices' | 'show_durations' | 'show_gallery' | 'show_reviews' | 'show_hours'): boolean {
   return a?.[key] !== false
@@ -61,6 +93,8 @@ export function applyAppearance(a: Appearance | null | undefined): void {
   loadFont(font)
   root.setProperty('--app-font', FONTS[font].family)
   root.setProperty('--btn-radius', BUTTON_SHAPES[a?.buttons && BUTTON_SHAPES[a.buttons] ? a.buttons : 'rounded'].radius)
+  root.setProperty('--btn-gradient', (a?.gradient_buttons && gradientCss(a)) || 'none')
+  document.body.style.background = pageBackground(a)
 }
 
 export const socialUrl = {

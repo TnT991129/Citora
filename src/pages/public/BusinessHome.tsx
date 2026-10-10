@@ -101,7 +101,7 @@ export default function BusinessHome() {
           <div className="mx-auto max-w-xl">
             <Link
               to={clientPath(business.slug, 'reservar')}
-              className="flex w-full items-center justify-center rounded-btn bg-brand py-4 text-lg font-bold text-white shadow-lg shadow-brand/30 active:scale-[0.98]"
+              className="flex w-full items-center justify-center rounded-btn bg-brand bg-btn-grad py-4 text-lg font-bold text-white shadow-lg shadow-brand/30 active:scale-[0.98]"
             >
               {look.book_label || 'Reservar cita'}
             </Link>

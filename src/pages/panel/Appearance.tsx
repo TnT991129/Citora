@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { ColorPicker } from '../../components/ColorPicker'
 import { Alert, Button, Field, Toggle, flash } from '../../components/ui'
-import { BUTTON_SHAPES, FONTS, loadFont, shows, type Appearance as Look, type ButtonShape, type FontKey } from '../../lib/appearance'
+import { GRADIENT_PRESETS } from '../../lib/brand'
+import { BUTTON_SHAPES, FONTS, GRADIENT_ANGLES, PAGE_BACKGROUNDS, gradientCss, loadFont, pageBackground, shows, type Appearance as Look, type ButtonShape, type FontKey } from '../../lib/appearance'
 import { errorMessage } from '../../lib/errors'
 import { shrinkImage } from '../../lib/image'
 import { supabase } from '../../lib/supabase'
@@ -13,6 +15,7 @@ import { usePanel } from './context'
 export default function Appearance() {
   const { business, reloadBusiness, link } = usePanel()
   const [look, setLook] = useState<Look>(business.appearance || {})
+  const [color, setColor] = useState(business.color_primary)
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -24,6 +27,7 @@ export default function Appearance() {
 
   // Tras guardar, el servidor devuelve la versión limpia: el formulario se pone igual
   useEffect(() => setLook(business.appearance || {}), [business.appearance])
+  useEffect(() => setColor(business.color_primary), [business.color_primary])
 
   // Descarga todas las letras para que se vean en los botones de elección
   useEffect(() => {
@@ -33,7 +37,7 @@ export default function Appearance() {
   const save = async () => {
     setBusy(true)
     setError(null)
-    const { error } = await supabase.from('businesses').update({ appearance: look }).eq('id', business.id)
+    const { error } = await supabase.from('businesses').update({ appearance: look, color_primary: color }).eq('id', business.id)
     setBusy(false)
     if (error) return setError(errorMessage(error))
     flash('Apariencia guardada')
@@ -66,8 +70,21 @@ export default function Appearance() {
     reloadBusiness()
   }
 
-  const previewStyle = { fontFamily: FONTS[font].family, '--btn-radius': BUTTON_SHAPES[buttons].radius } as CSSProperties
-  const changed = JSON.stringify(look) !== JSON.stringify(business.appearance || {})
+  const previewStyle = {
+    fontFamily: FONTS[font].family,
+    '--btn-radius': BUTTON_SHAPES[buttons].radius,
+    '--brand-rgb': hexToRgb(color),
+    '--btn-gradient': (look.gradient_buttons && gradientCss(look)) || 'none',
+    background: pageBackground(look) || '#f8fafc',
+  } as CSSProperties
+  const changed = color !== business.color_primary || JSON.stringify(look) !== JSON.stringify(business.appearance || {})
+  const coverValue = business.cover_url && (look.cover_style === 'image' || !look.cover_style)
+    ? 'image' : look.cover_style === 'gradient' && look.color2 ? 'gradient' : 'color'
+  const coverOptions = [
+    ...(business.cover_url ? [{ value: 'image', label: 'Mi foto' }] : []),
+    { value: 'color', label: 'Mi color' },
+    ...(look.color2 ? [{ value: 'gradient', label: 'Degradado' }] : []),
+  ]
 
   return (
     <div className="space-y-5 pb-24">
@@ -80,6 +97,75 @@ export default function Appearance() {
 
       <div className="grid gap-5 md:grid-cols-[1fr_320px] md:items-start">
         <div className="space-y-5">
+          <Section title="Colores" hint="El color principal se usa en botones, portada y detalles de tu web.">
+            <ColorPicker value={color} onChange={setColor} />
+          </Section>
+
+          <Section title="Degradado" hint="Mezcla tu color con un segundo color. Se puede usar en la portada y en los botones.">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+              {GRADIENT_PRESETS.map(([name, c1, c2]) => {
+                const on = color === c1 && look.color2 === c2
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => {
+                      setColor(c1)
+                      set({ color2: c2, cover_style: coverValue === 'image' ? 'image' : 'gradient' })
+                    }}
+                    className={`overflow-hidden rounded-xl text-left text-xs font-semibold ${on ? 'ring-2 ring-slate-900' : 'ring-1 ring-slate-200'}`}
+                  >
+                    <span className="block h-10" style={{ backgroundImage: `linear-gradient(${look.gradient_angle || 135}deg, ${c1}, ${c2})` }} />
+                    <span className="block bg-white px-2 py-1">{name}</span>
+                  </button>
+                )
+              })}
+            </div>
+            {look.color2 ? (
+              <div className="space-y-4 border-t border-slate-100 pt-3">
+                <div>
+                  <p className="mb-2 text-sm font-medium text-slate-700">Segundo color</p>
+                  <ColorPicker value={look.color2} onChange={(c) => set({ color2: c })} size={30} />
+                </div>
+                <div>
+                  <p className="mb-1 text-sm font-medium text-slate-700">Dirección</p>
+                  <div className="flex gap-2">
+                    {GRADIENT_ANGLES.map((g) => (
+                      <button
+                        key={g.value}
+                        type="button"
+                        onClick={() => set({ gradient_angle: g.value })}
+                        className={`h-11 w-11 rounded-xl text-lg font-bold text-white ${(look.gradient_angle || 135) === g.value ? 'ring-2 ring-slate-900 ring-offset-2' : ''}`}
+                        style={{ backgroundImage: `linear-gradient(${g.value}deg, ${color}, ${look.color2})` }}
+                        aria-label={`Dirección ${g.label}`}
+                      >
+                        {g.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <ToggleRow checked={Boolean(look.gradient_buttons)} onChange={(v) => set({ gradient_buttons: v })} label="Botones con degradado" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => set({ color2: undefined, gradient_buttons: false, cover_style: look.cover_style === 'gradient' ? 'color' : look.cover_style })}
+                >
+                  Quitar degradado
+                </Button>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">Elige una combinación para empezar. Después puedes cambiar cada color.</p>
+            )}
+          </Section>
+
+          <Section title="Fondo de la página">
+            <Choices
+              value={look.page_bg || 'gray'}
+              onChange={(v) => set({ page_bg: v as Look['page_bg'] })}
+              options={(Object.keys(PAGE_BACKGROUNDS) as (keyof typeof PAGE_BACKGROUNDS)[]).map((k) => ({ value: k, label: PAGE_BACKGROUNDS[k] }))}
+            />
+          </Section>
+
           <Section title="Portada" hint="Una foto de tu local o de tu trabajo, en horizontal. Se oscurece un poco para que el nombre se lea bien.">
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" size="sm" onClick={() => fileRef.current?.click()} loading={uploading}>
@@ -98,12 +184,11 @@ export default function Appearance() {
                 e.target.value = ''
               }}
             />
-            {business.cover_url && (
-              <Choices
-                value={look.cover_style === 'color' ? 'color' : 'image'}
-                onChange={(v) => set({ cover_style: v as 'color' | 'image' })}
-                options={[{ value: 'image', label: 'Usar la foto' }, { value: 'color', label: 'Solo mi color' }]}
-              />
+            {coverOptions.length > 1 && (
+              <div>
+                <p className="mb-1 text-sm font-medium text-slate-700">Fondo de la portada</p>
+                <Choices value={coverValue} onChange={(v) => set({ cover_style: v as Look['cover_style'] })} options={coverOptions} />
+              </div>
             )}
           </Section>
 
@@ -180,7 +265,7 @@ export default function Appearance() {
         {/* Vista previa */}
         <div className="md:sticky md:top-20">
           <p className="mb-2 text-sm font-semibold text-slate-500">Vista previa</p>
-          <div className="overflow-hidden rounded-3xl bg-slate-50 shadow-lg ring-1 ring-slate-200" style={previewStyle}>
+          <div className="overflow-hidden rounded-3xl shadow-lg ring-1 ring-slate-200" style={previewStyle}>
             <BusinessHero preview business={{ ...business, appearance: look }} />
             <div className="space-y-3 p-3">
               <Announcement text={look.announcement} />
@@ -194,7 +279,7 @@ export default function Appearance() {
                   {shows(look, 'show_prices') && <span className="font-semibold">500 {business.currency}</span>}
                 </div>
               </div>
-              <div className="rounded-btn bg-brand py-3 text-center font-bold text-white">{look.book_label || 'Reservar cita'}</div>
+              <div className="rounded-btn bg-brand bg-btn-grad py-3 text-center font-bold text-white">{look.book_label || 'Reservar cita'}</div>
             </div>
           </div>
           <a href={publicUrl(business.slug)} target="_blank" rel="noreferrer" className="mt-3 block text-center text-sm font-semibold text-brand">
@@ -275,4 +360,10 @@ function ToggleRow({ checked, onChange, label }: { checked: boolean; onChange: (
       <Toggle checked={checked} onChange={onChange} label={label} />
     </div>
   )
+}
+
+/** "#5243e5" → "82 67 229" (formato de la variable --brand-rgb) */
+function hexToRgb(hex: string): string {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex)
+  return m ? `${parseInt(m[1], 16)} ${parseInt(m[2], 16)} ${parseInt(m[3], 16)}` : '82 67 229'
 }
