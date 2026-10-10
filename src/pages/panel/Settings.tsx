@@ -60,7 +60,7 @@ export default function Settings() {
     try {
       const blob = await resizeImage(file, 320)
       const path = `${business.id}/logo-${Date.now()}.${imageExt(blob)}`
-      const { error: upErr } = await supabase.storage.from('logos').upload(path, blob, { contentType: blob.type, upsert: true })
+      const { error: upErr } = await supabase.storage.from('logos').upload(path, blob, { contentType: blob.type })
       if (upErr) throw upErr
       const { data } = supabase.storage.from('logos').getPublicUrl(path)
       const { error } = await supabase.from('businesses').update({ logo_url: data.publicUrl }).eq('id', business.id)

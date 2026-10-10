@@ -56,7 +56,7 @@ export default function Appearance() {
     try {
       const blob = await shrinkImage(file, 1600)
       const path = `${business.id}/cover-${Date.now()}.${imageExt(blob)}`
-      const { error: upErr } = await supabase.storage.from('logos').upload(path, blob, { contentType: blob.type, upsert: true })
+      const { error: upErr } = await supabase.storage.from('logos').upload(path, blob, { contentType: blob.type })
       if (upErr) throw upErr
       const { data } = supabase.storage.from('logos').getPublicUrl(path)
       // La foto queda puesta como fondo de la portada ya mismo (sin tocar lo demás que estés editando)
