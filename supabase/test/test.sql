@@ -388,4 +388,20 @@ select admin_deactivate_business((select v from ctx where k='biz1')::uuid);
 reset role;
 set role anon;
 do $$ begin assert not (get_public_business('barberia-leo')->>'accepting')::boolean, 'desactivado'; end $$;
+-- ===== Borrar dueños =====
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select expect_error($$select admin_delete_owner('11111111-1111-1111-1111-111111111111')$$, 'NO_AUTORIZADO');
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+select expect_error($$select admin_delete_owner('22222222-2222-2222-2222-222222222222')$$, 'NEGOCIO_ACTIVO');
+select expect_error($$select admin_delete_owner('99999999-9999-9999-9999-999999999999')$$, 'NO_AUTORIZADO');
+select admin_delete_owner('11111111-1111-1111-1111-111111111111');
+reset role;
+do $$ begin
+  assert not exists (select 1 from businesses where slug = 'barberia-leo'), 'negocio borrado';
+  assert not exists (select 1 from auth.users where id = '11111111-1111-1111-1111-111111111111'), 'cuenta borrada';
+  assert not exists (select 1 from appointments where business_id = (select v from ctx where k='biz1')::uuid), 'sus citas también';
+  assert (select count(*) from payments where business_id is null and business_name like 'Barbería Leo%') >= 1, 'los pagos se conservan';
+end $$;
 \echo TODAS LAS PRUEBAS PASARON

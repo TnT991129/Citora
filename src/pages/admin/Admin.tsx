@@ -114,6 +114,7 @@ function Owners() {
   const [sort, setSort] = useState<Sort>('recientes')
   const [q, setQ] = useState('')
   const [activating, setActivating] = useState<OwnerWithBusiness | null>(null)
+  const [deleting, setDeleting] = useState<AdminOwner | null>(null)
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.rpc('admin_list_owners')
@@ -228,10 +229,24 @@ function Owners() {
               {o.id && o.status !== 'vencido' && (
                 <Button size="sm" variant="ghost" className="text-red-600" onClick={() => act('admin_deactivate_business', o, 'Inhabilitado')}>Inhabilitar</Button>
               )}
+              {(o.status === 'vencido' || o.status === 'sin_negocio') && (
+                <Button size="sm" variant="ghost" className="text-red-600" onClick={() => setDeleting(o)}>🗑 Eliminar</Button>
+              )}
             </div>
           </div>
         ))}
       </div>
+
+      {deleting && (
+        <DeleteModal
+          owner={deleting}
+          onClose={() => setDeleting(null)}
+          onDone={() => {
+            setDeleting(null)
+            load()
+          }}
+        />
+      )}
 
       {activating && (
         <ActivateModal
@@ -249,6 +264,57 @@ function Owners() {
 }
 
 const TZ = 'America/Havana'
+
+/** Confirmación para borrar para siempre a un dueño inhabilitado: hay que escribir su código (o su correo) */
+function DeleteModal({ owner, onClose, onDone }: { owner: AdminOwner; onClose: () => void; onDone: () => void }) {
+  const [typed, setTyped] = useState('')
+  const [account, setAccount] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const word = owner.code || owner.email || ''
+  const ok = typed.trim().toUpperCase() === word.toUpperCase()
+
+  const remove = async () => {
+    setBusy(true)
+    setError(null)
+    const { error } = await supabase.rpc('admin_delete_owner', { p_user: owner.user_id, p_delete_account: account })
+    setBusy(false)
+    if (error) return setError(errorMessage(error))
+    flash('Eliminado')
+    onDone()
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={owner.name ? `Eliminar · ${owner.name}` : 'Eliminar cuenta'}
+      footer={<Button block variant="danger" onClick={remove} loading={busy} disabled={!ok}>Eliminar para siempre</Button>}
+    >
+      <div className="space-y-4">
+        <Alert kind="warning">
+          {owner.id
+            ? <>Se borrarán <b>para siempre</b> su web, sus servicios, su horario, sus citas, sus clientes, sus opiniones y su galería. No se puede deshacer.</>
+            : <>Esta cuenta se registró pero no creó ningún negocio.</>}
+        </Alert>
+        <p className="text-sm text-slate-600">Cuenta: <b>{owner.email}</b></p>
+        {owner.id && (
+          <label className="flex items-start gap-3 rounded-xl bg-white p-3 ring-1 ring-slate-200">
+            <input type="checkbox" className="mt-1 h-5 w-5" checked={account} onChange={(e) => setAccount(e.target.checked)} />
+            <span className="text-sm text-slate-700">
+              Borrar también su cuenta. Si la dejas, podrá entrar con su correo y crear un negocio nuevo.
+            </span>
+          </label>
+        )}
+        <p className="text-sm text-slate-500">Los pagos que te hizo se conservan en tus estadísticas.</p>
+        <Field label={`Para confirmar, escribe ${owner.code ? 'su código' : 'su correo'}: ${word}`}>
+          <input className="input" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
+        </Field>
+        {error && <Alert>{error}</Alert>}
+      </div>
+    </Modal>
+  )
+}
 
 function ActivateModal({ business, prices, onClose, onDone }: {
   business: { id: string; name: string; code: string; plan: PlanKey | null }

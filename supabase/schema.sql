@@ -162,6 +162,17 @@ create table if not exists public.payments (
 );
 create index if not exists payments_business_idx on public.payments (business_id, created_at desc);
 
+-- Si el administrador borra un negocio, sus pagos se conservan (para las cuentas de cobros),
+-- con el nombre y el código del negocio guardados en el propio pago.
+alter table public.payments add column if not exists business_name text;
+alter table public.payments add column if not exists business_code text;
+update public.payments p set business_name = b.name, business_code = b.code
+  from public.businesses b where b.id = p.business_id and p.business_name is null;
+alter table public.payments alter column business_id drop not null;
+alter table public.payments drop constraint if exists payments_business_id_fkey;
+alter table public.payments add constraint payments_business_id_fkey
+  foreign key (business_id) references public.businesses(id) on delete set null;
+
 -- Opiniones de los clientes (una por cita). El dueño puede ocultarlas o responder.
 create table if not exists public.reviews (
   id uuid primary key default gen_random_uuid(),
@@ -1535,9 +1546,32 @@ begin
   -- Si aún tiene meses pagados, se suman al final; si no, empiezan hoy
   v_until := greatest(now(), coalesce(b.paid_until, now())) + make_interval(months => p_months);
   update businesses set plan = p_plan, paid_until = v_until where id = b.id;
-  insert into payments (business_id, plan, months, amount, note, paid_until, created_by)
-  values (b.id, p_plan, p_months, p_amount, nullif(btrim(coalesce(p_note, '')), ''), v_until, auth.uid());
+  insert into payments (business_id, plan, months, amount, note, paid_until, created_by, business_name, business_code)
+  values (b.id, p_plan, p_months, p_amount, nullif(btrim(coalesce(p_note, '')), ''), v_until, auth.uid(), b.name, b.code);
   return v_until;
+end;
+$$;
+
+-- Borra para siempre a un dueño inhabilitado (o que nunca creó su negocio): su negocio, servicios,
+-- citas, clientes, opiniones, etc. Con p_delete_account también su cuenta (su correo queda libre).
+-- No se puede con un negocio en prueba o pagando: primero hay que inhabilitarlo.
+create or replace function public.admin_delete_owner(p_user uuid, p_delete_account boolean default true)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  b businesses;
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  if exists (select 1 from platform_admins where user_id = p_user) then raise exception 'NO_AUTORIZADO'; end if;
+  select * into b from businesses where owner_id = p_user for update;
+  if found and business_status(b.plan, b.trial_ends_at, b.paid_until) <> 'vencido' then
+    raise exception 'NEGOCIO_ACTIVO';
+  end if;
+  if found then
+    delete from businesses where id = b.id;
+  end if;
+  if p_delete_account then
+    delete from auth.users where id = p_user;
+  end if;
 end;
 $$;
 
@@ -1625,8 +1659,9 @@ begin
     'recent_payments', (select coalesce(jsonb_agg(jsonb_build_object(
         'name', t.name, 'code', t.code, 'plan', t.plan, 'months', t.months, 'amount', t.amount,
         'note', t.note, 'created_at', t.created_at) order by t.created_at desc), '[]'::jsonb)
-      from (select b.name, b.code, p.plan, p.months, p.amount, p.note, p.created_at
-            from payments p join businesses b on b.id = p.business_id
+      from (select coalesce(b.name, p.business_name || ' (eliminado)') as name, coalesce(b.code, p.business_code) as code,
+                   p.plan, p.months, p.amount, p.note, p.created_at
+            from payments p left join businesses b on b.id = p.business_id
             order by p.created_at desc limit 15) t)
   );
 end;
@@ -1659,6 +1694,7 @@ grant execute on function public.admin_list_businesses() to authenticated;
 grant execute on function public.admin_list_owners() to authenticated;
 grant execute on function public.admin_activate_plan(uuid, text, int, numeric, text) to authenticated;
 grant execute on function public.admin_deactivate_business(uuid) to authenticated;
+grant execute on function public.admin_delete_owner(uuid, boolean) to authenticated;
 grant execute on function public.admin_extend_trial(uuid, int) to authenticated;
 grant execute on function public.admin_stats() to authenticated;
 grant execute on function public.submit_review(text, int, text) to anon, authenticated;

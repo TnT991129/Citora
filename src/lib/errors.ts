@@ -17,6 +17,7 @@ const MESSAGES: Record<string, string> = {
   ENLACE_NO_DISPONIBLE: 'Ese enlace ya está en uso o no es válido. Prueba otro.',
   ENLACE_INVALIDO: 'El enlace solo puede tener letras minúsculas, números y guiones (3 a 40 caracteres).',
   SIN_NEGOCIO: 'Todavía no has creado tu negocio.',
+  NEGOCIO_ACTIVO: 'Este negocio está en prueba o pagando. Inhabilítalo primero si quieres eliminarlo.',
   NO_AUTORIZADO: 'No tienes permiso para hacer esto.',
   PLAN_INVALIDO: 'Plan no válido.',
   MESES_INVALIDOS: 'Número de meses no válido.',
