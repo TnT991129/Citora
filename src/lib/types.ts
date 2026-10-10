@@ -1,3 +1,5 @@
+import type { Appearance } from './appearance'
+
 export type PlanKey = 'basico' | 'plus' | 'ultra'
 export type BusinessStatus = 'prueba' | 'activo' | 'vencido'
 export type AppointmentStatus = 'pendiente' | 'confirmada' | 'completada' | 'no_asistio' | 'cancelada'
@@ -14,6 +16,8 @@ export interface Business {
   description: string | null
   logo_url: string | null
   color_primary: string
+  cover_url: string | null
+  appearance: Appearance
   timezone: string
   currency: string
   policies: string | null
@@ -136,6 +140,8 @@ export interface PublicBusiness {
   accepting: boolean
   logo_url: string | null
   color_primary: string
+  cover_url?: string | null
+  appearance?: Appearance
   business_type?: string
   whatsapp?: string
   address?: string | null
@@ -248,6 +254,7 @@ export interface PublicBooking {
     timezone: string
     currency: string
     cancel_notice_hours: number
+    appearance?: Appearance
   }
 }
 

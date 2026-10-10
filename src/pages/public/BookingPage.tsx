@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Calendar, SlotPicker } from '../../components/Calendar'
 import { Alert, Button, LinkButton, Modal, PageLoader, StatusBadge, WhatsAppIcon } from '../../components/ui'
+import { applyAppearance } from '../../lib/appearance'
 import { setBrandColor } from '../../lib/brand'
 import { setAppManifest } from '../../lib/pwa'
 import { errorMessage } from '../../lib/errors'
@@ -33,6 +34,7 @@ export default function BookingPage() {
     setBooking(b)
     if (b) {
       setBrandColor(b.business.color_primary)
+      applyAppearance(b.business.appearance)
       setAppManifest({ name: b.business.name, path: clientPath(b.business.slug).slice(1), color: b.business.color_primary, logo: b.business.logo_url })
       document.title = `Tu cita · ${b.business.name}`
       rememberBooking({ token: b.token, slug: b.business.slug, starts_at: b.starts_at })
@@ -91,6 +93,9 @@ export default function BookingPage() {
         {isNew && active && (
           <div className="rounded-2xl bg-emerald-50 p-4 text-emerald-900 ring-1 ring-emerald-200">
             <p className="text-lg font-bold">¡Reserva hecha! 🎉</p>
+            {booking.business.appearance?.thanks_message && (
+              <p className="mt-1 whitespace-pre-line">{booking.business.appearance.thanks_message}</p>
+            )}
             <p className="mt-1 text-sm">Guarda este enlace: desde aquí puedes ver, cambiar o cancelar tu cita. También queda guardada en este móvil.</p>
           </div>
         )}
@@ -170,7 +175,7 @@ export default function BookingPage() {
         )}
 
         {!active && (
-          <Link to={clientPath(b.slug, 'reservar')} className="flex w-full items-center justify-center rounded-2xl bg-brand py-4 text-lg font-bold text-white">
+          <Link to={clientPath(b.slug, 'reservar')} className="flex w-full items-center justify-center rounded-btn bg-brand py-4 text-lg font-bold text-white">
             Reservar otra cita
           </Link>
         )}

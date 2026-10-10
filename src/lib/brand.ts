@@ -1,5 +1,9 @@
-/** Cambia el color de marca de la app (variable CSS usada por Tailwind "brand") */
+import { applyAppearance } from './appearance'
+
+/** Cambia el color de marca de la app (variable CSS usada por Tailwind "brand").
+ *  También vuelve a la letra y botones de Citora: la web de cada negocio aplica los suyos después. */
 export function setBrandColor(hex: string | null | undefined): void {
+  applyAppearance(null)
   const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '')
   const rgb = m ? `${parseInt(m[1], 16)} ${parseInt(m[2], 16)} ${parseInt(m[3], 16)}` : '82 67 229'
   document.documentElement.style.setProperty('--brand-rgb', rgb)

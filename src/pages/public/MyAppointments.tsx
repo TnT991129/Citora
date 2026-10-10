@@ -60,7 +60,7 @@ export default function MyAppointments() {
             <p className="text-slate-600">Todavía no tienes citas guardadas en este móvil.</p>
             <p className="mt-1 text-sm text-slate-500">Si reservaste desde otro móvil, abre el enlace de tu cita y quedará guardada aquí.</p>
             {business.accepting && (
-              <Link to={clientPath(business.slug, 'reservar')} className="mt-4 flex w-full items-center justify-center rounded-2xl bg-brand py-3.5 font-bold text-white">
+              <Link to={clientPath(business.slug, 'reservar')} className="mt-4 flex w-full items-center justify-center rounded-btn bg-brand py-3.5 font-bold text-white">
                 Reservar cita
               </Link>
             )}
@@ -84,7 +84,7 @@ export default function MyAppointments() {
                 <BookingList items={upcoming} slug={business.slug} tz={tz} currency={currency} />
               )}
               {business.accepting && (
-                <Link to={clientPath(business.slug, 'reservar')} className="mt-3 flex w-full items-center justify-center rounded-2xl bg-brand py-3.5 font-bold text-white">
+                <Link to={clientPath(business.slug, 'reservar')} className="mt-3 flex w-full items-center justify-center rounded-btn bg-brand py-3.5 font-bold text-white">
                   Reservar otra cita
                 </Link>
               )}

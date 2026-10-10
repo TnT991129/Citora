@@ -5,6 +5,7 @@ import { publicUrl } from '../../lib/url'
 import { usePanel } from './context'
 
 const ITEMS: { to: string; label: string; desc: string; emoji: string; module?: ModuleKey }[] = [
+  { to: 'apariencia', label: 'Apariencia', desc: 'Portada, letra, botones, textos y redes', emoji: '🎨' },
   { to: 'equipo', label: 'Equipo', desc: 'Tus profesionales, cada uno con su agenda', emoji: '👥', module: 'empleados' },
   { to: 'recordatorios', label: 'Recordatorios', desc: 'Avisa por WhatsApp a los clientes de mañana', emoji: '🔔', module: 'recordatorios' },
   { to: 'estadisticas', label: 'Estadísticas', desc: 'Ingresos, asistencia y lo más pedido', emoji: '📊', module: 'finanzas' },

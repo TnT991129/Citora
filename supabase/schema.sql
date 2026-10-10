@@ -75,6 +75,10 @@ $$;
 drop function if exists public.set_active_business(uuid);
 drop table if exists public.owner_prefs;
 
+-- Personalización de la web del negocio: portada y apariencia (ver _clean_appearance)
+alter table public.businesses add column if not exists cover_url text;
+alter table public.businesses add column if not exists appearance jsonb not null default '{}'::jsonb;
+
 -- Servicios del negocio
 create table if not exists public.services (
   id uuid primary key default gen_random_uuid(),
@@ -362,6 +366,51 @@ returns boolean language sql stable security definer set search_path = public as
      and not exists (select 1 from businesses where slug = lower(p_slug));
 $$;
 
+-- Deja solo las opciones conocidas y con valores válidos. Lo que no cumple, se descarta.
+create or replace function public._clean_appearance(p jsonb)
+returns jsonb language plpgsql immutable as $$
+declare
+  r jsonb := '{}'::jsonb;
+  k text;
+  v text;
+begin
+  if p is null or jsonb_typeof(p) <> 'object' then return r; end if;
+
+  v := p ->> 'font';
+  if v in ('inter', 'poppins', 'montserrat', 'playfair', 'nunito') then r := r || jsonb_build_object('font', v); end if;
+  v := p ->> 'buttons';
+  if v in ('rounded', 'square', 'pill') then r := r || jsonb_build_object('buttons', v); end if;
+  v := p ->> 'cover_style';
+  if v in ('color', 'image') then r := r || jsonb_build_object('cover_style', v); end if;
+
+  -- Textos libres (se muestran como texto, nunca como HTML)
+  foreach k in array array['announcement', 'book_label', 'thanks_message', 'tagline'] loop
+    v := nullif(btrim(coalesce(p ->> k, '')), '');
+    if v is not null then
+      r := r || jsonb_build_object(k, left(v, case k when 'book_label' then 30 when 'tagline' then 80
+                                                   when 'announcement' then 160 else 300 end));
+    end if;
+  end loop;
+
+  -- Qué se muestra en la web (por defecto, todo)
+  foreach k in array array['show_prices', 'show_durations', 'show_gallery', 'show_reviews', 'show_hours'] loop
+    if jsonb_typeof(p -> k) = 'boolean' then r := r || jsonb_build_object(k, (p ->> k)::boolean); end if;
+  end loop;
+
+  -- Redes: solo el nombre de usuario (el enlace lo arma la app)
+  foreach k in array array['instagram', 'facebook', 'tiktok'] loop
+    v := regexp_replace(btrim(coalesce(p ->> k, '')), '^@', '');
+    if v ~ '^[A-Za-z0-9._-]{1,50}$' then r := r || jsonb_build_object(k, v); end if;
+  end loop;
+
+  -- Enlace de mapa: solo https
+  v := btrim(coalesce(p ->> 'maps_url', ''));
+  if v ~ '^https://[^\s"<>]{4,300}$' then r := r || jsonb_build_object('maps_url', v); end if;
+
+  return r;
+end;
+$$;
+
 -- ---------------------------------------------------------------------
 -- 3. DISPARADORES (triggers)
 -- ---------------------------------------------------------------------
@@ -373,6 +422,10 @@ begin
   new.slug := lower(new.slug);
   if not is_valid_slug(new.slug) then
     raise exception 'ENLACE_INVALIDO';
+  end if;
+  new.appearance := _clean_appearance(new.appearance);
+  if new.cover_url is not null and new.cover_url !~ '^https://' then
+    new.cover_url := null;
   end if;
   if tg_op = 'UPDATE' and not is_platform_admin() and current_user in ('authenticated', 'anon') then
     new.owner_id := old.owner_id;
@@ -637,7 +690,7 @@ begin
   if v_plan is null then
     return jsonb_build_object(
       'name', b.name, 'slug', b.slug, 'logo_url', b.logo_url,
-      'color_primary', b.color_primary, 'accepting', false);
+      'color_primary', b.color_primary, 'appearance', b.appearance, 'accepting', false);
   end if;
   return jsonb_build_object(
     'id', b.id,
@@ -649,6 +702,8 @@ begin
     'description', b.description,
     'logo_url', b.logo_url,
     'color_primary', b.color_primary,
+    'cover_url', b.cover_url,
+    'appearance', b.appearance,
     'timezone', b.timezone,
     'currency', b.currency,
     'policies', b.policies,
@@ -1009,7 +1064,7 @@ returns jsonb language sql stable security definer set search_path = public as $
     'business', jsonb_build_object(
       'name', b.name, 'slug', b.slug, 'whatsapp', b.whatsapp, 'address', b.address,
       'logo_url', b.logo_url, 'color_primary', b.color_primary, 'timezone', b.timezone,
-      'currency', b.currency, 'cancel_notice_hours', b.cancel_notice_hours)
+      'currency', b.currency, 'cancel_notice_hours', b.cancel_notice_hours, 'appearance', b.appearance)
   )
   from appointments a join businesses b on b.id = a.business_id
   where a.token = p_token;
@@ -1612,6 +1667,7 @@ grant execute on function public.business_status(text, timestamptz, timestamptz)
 grant execute on function public.is_valid_slug(text) to anon, authenticated;
 grant execute on function public.is_reserved_slug(text) to anon, authenticated;
 grant execute on function public._clean_phone(text) to anon, authenticated;
+grant execute on function public._clean_appearance(jsonb) to authenticated;
 grant execute on function public.businesses_guard() to authenticated;
 grant execute on function public.appointments_guard() to authenticated;
 grant execute on function public.schedule_days_normalize() to authenticated;

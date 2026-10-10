@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { InstallButton } from '../../components/InstallButton'
-import { BusinessAvatar, LinkButton, PageLoader, StatusBadge, WhatsAppIcon } from '../../components/ui'
+import { LinkButton, PageLoader, StatusBadge, WhatsAppIcon } from '../../components/ui'
 import { dateKey, duration, money, timeOf, WEEKDAYS, dayTitle } from '../../lib/format'
 import { savedBookings, type SavedBooking } from '../../lib/storage'
 import { waLink } from '../../lib/whatsapp'
@@ -9,7 +9,8 @@ import { supabase } from '../../lib/supabase'
 import { clientPath } from '../../lib/url'
 import type { GalleryPhoto, PublicBooking, PublicReview } from '../../lib/types'
 import NotFound from '../NotFound'
-import { Centered, Closed, PoweredBy, Stars, usePublicBusiness } from './shared'
+import { shows } from '../../lib/appearance'
+import { Announcement, BusinessHero, Centered, Closed, PoweredBy, Stars, usePublicBusiness } from './shared'
 
 export default function BusinessHome() {
   const { slug } = useParams()
@@ -25,32 +26,23 @@ export default function BusinessHome() {
   const services = business.services || []
   const openDays = (business.schedule || []).filter((d) => d.is_open).map((d) => d.weekday)
   const minPrice = services.length ? Math.min(...services.map((s) => Number(s.price))) : 0
+  const look = business.appearance || {}
+  const showPrices = shows(look, 'show_prices')
+  const showDurations = shows(look, 'show_durations')
+  const showReviews = shows(look, 'show_reviews')
 
   return (
     <div className="min-h-dvh pb-28">
-      {/* Portada con el color del negocio */}
-      <div className="bg-brand pb-16 pt-10 text-white">
-        <div className="mx-auto max-w-xl px-4 text-center">
-          <div className="flex justify-center"><BusinessAvatar name={business.name} logo={business.logo_url} size={80} inverted /></div>
-          <h1 className="mt-4 text-3xl font-extrabold">{business.name}</h1>
-          {business.description && <p className="mt-2 text-white/90">{business.description}</p>}
-          {business.address && <p className="mt-2 text-sm text-white/80">📍 {business.address}</p>}
-          {business.rating && business.rating.count > 0 && (
-            <a href="#opiniones" className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-sm font-semibold">
-              <span className="text-amber-300">★</span> {Number(business.rating.avg).toFixed(1)}
-              <span className="font-normal text-white/80">· {business.rating.count} {business.rating.count === 1 ? 'opinión' : 'opiniones'}</span>
-            </a>
-          )}
-        </div>
-      </div>
+      <BusinessHero business={business} rating={showReviews ? business.rating : null} />
 
       <main className="mx-auto -mt-10 max-w-xl space-y-4 px-4">
+        <Announcement text={look.announcement} />
         <MyBookings slug={business.slug} tz={tz} />
 
         <section className="card">
           <div className="flex items-baseline justify-between">
             <h2 className="text-lg font-bold">Servicios</h2>
-            {services.length > 0 && <span className="text-sm text-slate-500">desde {money(minPrice, currency)}</span>}
+            {services.length > 0 && showPrices && <span className="text-sm text-slate-500">desde {money(minPrice, currency)}</span>}
           </div>
           <ul className="mt-3 divide-y divide-slate-100">
             {services.map((s) => (
@@ -58,9 +50,9 @@ export default function BusinessHome() {
                 <div className="min-w-0">
                   <p className="font-semibold">{s.name}</p>
                   {s.description && <p className="text-sm text-slate-500">{s.description}</p>}
-                  <p className="text-sm text-slate-500">{duration(s.duration_min)}</p>
+                  {showDurations && <p className="text-sm text-slate-500">{duration(s.duration_min)}</p>}
                 </div>
-                <span className="shrink-0 font-semibold">{money(s.price, currency)}</span>
+                {showPrices && <span className="shrink-0 font-semibold">{money(s.price, currency)}</span>}
               </li>
             ))}
             {services.length === 0 && <li className="py-3 text-slate-500">Pronto publicaremos nuestros servicios.</li>}
@@ -74,16 +66,16 @@ export default function BusinessHome() {
             <li><b className="text-brand">2.</b> Elige el día y la hora.</li>
             <li><b className="text-brand">3.</b> Pon tu nombre y teléfono. ¡Listo!</li>
           </ol>
-          {openDays.length > 0 && (
+          {openDays.length > 0 && shows(look, 'show_hours') && (
             <p className="mt-3 text-sm text-slate-500">
               Abrimos: {[1, 2, 3, 4, 5, 6, 0].filter((d) => openDays.includes(d)).map((d) => WEEKDAYS[d]).join(', ')}.
             </p>
           )}
         </section>
 
-        {(business.gallery || []).length > 0 && <Gallery photos={business.gallery!} />}
+        {shows(look, 'show_gallery') && (business.gallery || []).length > 0 && <Gallery photos={business.gallery!} />}
 
-        {(business.reviews || []).length > 0 && <Reviews reviews={business.reviews!} tz={tz} />}
+        {showReviews && (business.reviews || []).length > 0 && <Reviews reviews={business.reviews!} tz={tz} />}
 
         {business.policies && (
           <section className="card">
@@ -109,9 +101,9 @@ export default function BusinessHome() {
           <div className="mx-auto max-w-xl">
             <Link
               to={clientPath(business.slug, 'reservar')}
-              className="flex w-full items-center justify-center rounded-2xl bg-brand py-4 text-lg font-bold text-white shadow-lg shadow-brand/30 active:scale-[0.98]"
+              className="flex w-full items-center justify-center rounded-btn bg-brand py-4 text-lg font-bold text-white shadow-lg shadow-brand/30 active:scale-[0.98]"
             >
-              Reservar cita
+              {look.book_label || 'Reservar cita'}
             </Link>
           </div>
         </div>

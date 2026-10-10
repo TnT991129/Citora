@@ -4,6 +4,9 @@
 
 :root {
   --brand-rgb: 82 67 229;
+  /* Letra y forma de botones: cada negocio puede cambiarlas (ver lib/appearance.ts) */
+  --app-font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --btn-radius: 0.75rem;
 }
 
 html { -webkit-tap-highlight-color: transparent; }
@@ -16,6 +19,10 @@ body { min-height: 100dvh; }
   .label { @apply mb-1.5 block text-sm font-medium text-slate-700; }
   .card { @apply rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5; }
   .chip { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium; }
+}
+
+@layer utilities {
+  .rounded-btn { border-radius: var(--btn-radius); }
 }
 
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }

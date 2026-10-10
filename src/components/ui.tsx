@@ -23,7 +23,7 @@ export function Button({ variant = 'primary', loading, block, size = 'md', class
     <button
       {...rest}
       disabled={disabled || loading}
-      className={`inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${sizes[size]} ${VARIANTS[variant]} ${block ? 'w-full' : ''} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-btn font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${sizes[size]} ${VARIANTS[variant]} ${block ? 'w-full' : ''} ${className}`}
     >
       {loading && <Spinner small />}
       {children}
@@ -46,7 +46,7 @@ export function LinkButton({ href, variant = 'primary', block, size = 'md', clas
       href={href}
       target={newTab ? '_blank' : undefined}
       rel={newTab ? 'noopener noreferrer' : undefined}
-      className={`inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition active:scale-[0.98] ${sizes[size]} ${VARIANTS[variant]} ${block ? 'w-full' : ''} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-btn font-semibold transition active:scale-[0.98] ${sizes[size]} ${VARIANTS[variant]} ${block ? 'w-full' : ''} ${className}`}
     >
       {children}
     </a>

@@ -11,6 +11,7 @@ import { supabase } from '../../lib/supabase'
 import type { Business, MyStatus, Service, Staff } from '../../lib/types'
 import { panelPath } from '../../lib/url'
 import Agenda from './Agenda'
+import Appearance from './Appearance'
 import { PanelContext } from './context'
 import Backup from './Backup'
 import Customers from './Customers'
@@ -186,6 +187,7 @@ export default function Panel() {
               <Route path="equipo" element={<Team />} />
               <Route path="horario" element={<Schedule />} />
               <Route path="ajustes" element={<Settings />} />
+              <Route path="apariencia" element={<Appearance />} />
               <Route path="clientes" element={<Customers />} />
               <Route path="estadisticas" element={<Stats />} />
               <Route path="opiniones" element={<Reviews />} />
@@ -220,7 +222,7 @@ const NAV = [
 ] as const
 
 // Secciones a las que se llega desde "Más": la pestaña "Más" queda marcada en ellas
-const MORE_SUBS = ['mas', 'equipo', 'estadisticas', 'opiniones', 'galeria', 'recordatorios', 'espera', 'cupones', 'respaldo', 'horario', 'ajustes', 'plan']
+const MORE_SUBS = ['mas', 'apariencia', 'equipo', 'estadisticas', 'opiniones', 'galeria', 'recordatorios', 'espera', 'cupones', 'respaldo', 'horario', 'ajustes', 'plan']
 
 function useIsActive(to: string, base: string): boolean {
   const { pathname } = useLocation()

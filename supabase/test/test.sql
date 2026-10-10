@@ -128,6 +128,21 @@ do $$ begin
   assert (select name from businesses) = 'Barbería Leo VIP', 'el nombre sí se puede cambiar';
 end $$;
 select expect_error($$update businesses set slug = 'admin'$$, 'ENLACE_INVALIDO');
+-- Apariencia: solo se guardan opciones válidas
+update businesses set cover_url = 'javascript:alert(1)', appearance = '{
+  "font": "playfair", "buttons": "pill", "announcement": "  20% en cortes  ", "instagram": "@barberia.leo",
+  "tiktok": "mal usuario!", "maps_url": "javascript:alert(1)", "show_prices": false, "show_gallery": "no",
+  "otra_cosa": 1, "book_label": "Pedir turno con un texto larguísimo que no cabe en el botón"}';
+do $$ declare a jsonb := (select appearance from businesses); begin
+  assert (select cover_url from businesses) is null, 'portada sin https descartada';
+  assert a->>'font' = 'playfair' and a->>'buttons' = 'pill', 'letra y botones: ' || a;
+  assert a->>'announcement' = '20% en cortes', 'aviso recortado';
+  assert a->>'instagram' = 'barberia.leo', 'sin la @';
+  assert not a ? 'tiktok' and not a ? 'maps_url' and not a ? 'otra_cosa' and not a ? 'show_gallery', 'descarta lo no válido: ' || a;
+  assert (a->>'show_prices')::boolean = false;
+  assert char_length(a->>'book_label') = 30, 'texto del botón limitado a 30';
+end $$;
+update businesses set appearance = '{}', cover_url = 'https://x.supabase.co/storage/v1/object/public/logos/c.webp';
 
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 do $$ begin
