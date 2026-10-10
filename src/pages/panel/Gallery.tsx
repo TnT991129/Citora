@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Alert, Button, PageLoader, flash } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
-import { shrinkImage } from '../../lib/image'
+import { imageExt, shrinkImage } from '../../lib/image'
 import { supabase } from '../../lib/supabase'
 import type { GalleryPhoto } from '../../lib/types'
 import { publicUrl } from '../../lib/url'
@@ -42,8 +42,8 @@ export default function Gallery() {
       for (let i = 0; i < batch.length; i++) {
         setUploading(`Subiendo ${i + 1} de ${batch.length}…`)
         const blob = await shrinkImage(batch[i], 1280)
-        const path = `${business.id}/galeria/${Date.now()}-${i}.webp`
-        const { error: upErr } = await supabase.storage.from('logos').upload(path, blob, { contentType: 'image/webp' })
+        const path = `${business.id}/galeria/${Date.now()}-${i}.${imageExt(blob)}`
+        const { error: upErr } = await supabase.storage.from('logos').upload(path, blob, { contentType: blob.type })
         if (upErr) throw upErr
         const { data } = supabase.storage.from('logos').getPublicUrl(path)
         const { error } = await supabase.from('gallery_photos').insert({ business_id: business.id, url: data.publicUrl, position: ++pos })

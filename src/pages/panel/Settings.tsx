@@ -3,7 +3,7 @@ import { useRef, useState } from 'react'
 import { Alert, BusinessAvatar, Button, Field, flash } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { slugify } from '../../lib/format'
-import { resizeImage } from '../../lib/image'
+import { imageExt, resizeImage } from '../../lib/image'
 import { supabase } from '../../lib/supabase'
 import { BUSINESS_TYPES } from '../../lib/templates'
 import { panelUrl, publicUrl } from '../../lib/url'
@@ -59,8 +59,8 @@ export default function Settings() {
     setError(null)
     try {
       const blob = await resizeImage(file, 320)
-      const path = `${business.id}/logo-${Date.now()}.webp`
-      const { error: upErr } = await supabase.storage.from('logos').upload(path, blob, { contentType: 'image/webp', upsert: true })
+      const path = `${business.id}/logo-${Date.now()}.${imageExt(blob)}`
+      const { error: upErr } = await supabase.storage.from('logos').upload(path, blob, { contentType: blob.type, upsert: true })
       if (upErr) throw upErr
       const { data } = supabase.storage.from('logos').getPublicUrl(path)
       const { error } = await supabase.from('businesses').update({ logo_url: data.publicUrl }).eq('id', business.id)

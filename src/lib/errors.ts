@@ -46,6 +46,9 @@ export function errorMessage(err: unknown): string {
   if (/Email not confirmed/i.test(raw)) return 'Confirma tu correo antes de entrar (revisa tu bandeja de entrada).'
   if (/Password should be at least/i.test(raw)) return 'La contraseña debe tener al menos 6 caracteres.'
   if (/rate limit/i.test(raw)) return 'Demasiados intentos. Espera unos minutos y vuelve a probar.'
+  if (/schema cache|column .* does not exist|Could not find the/i.test(raw)) {
+    return 'La base de datos no está actualizada: hay que volver a ejecutar supabase/schema.sql en Supabase.'
+  }
   if (/Failed to fetch|NetworkError|network/i.test(raw)) return 'Sin conexión. Revisa tus datos o el wifi y vuelve a intentarlo.'
   if (/duplicate key|unique/i.test(raw)) return 'Ese dato ya existe.'
   return raw || 'Algo salió mal. Inténtalo de nuevo.'

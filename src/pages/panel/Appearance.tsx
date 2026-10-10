@@ -5,7 +5,7 @@ import { Alert, Button, Field, Toggle, flash } from '../../components/ui'
 import { GRADIENT_PRESETS } from '../../lib/brand'
 import { BUTTON_SHAPES, FONTS, GRADIENT_ANGLES, PAGE_BACKGROUNDS, gradientCss, loadFont, pageBackground, shows, type Appearance as Look, type ButtonShape, type FontKey } from '../../lib/appearance'
 import { errorMessage } from '../../lib/errors'
-import { shrinkImage } from '../../lib/image'
+import { imageExt, shrinkImage } from '../../lib/image'
 import { supabase } from '../../lib/supabase'
 import { publicUrl } from '../../lib/url'
 import { Announcement, BusinessHero } from '../public/shared'
@@ -25,9 +25,6 @@ export default function Appearance() {
   const font: FontKey = look.font || 'inter'
   const buttons: ButtonShape = look.buttons || 'rounded'
 
-  // Tras guardar, el servidor devuelve la versión limpia: el formulario se pone igual
-  useEffect(() => setLook(business.appearance || {}), [business.appearance])
-  useEffect(() => setColor(business.color_primary), [business.color_primary])
 
   // Descarga todas las letras para que se vean en los botones de elección
   useEffect(() => {
@@ -37,9 +34,18 @@ export default function Appearance() {
   const save = async () => {
     setBusy(true)
     setError(null)
-    const { error } = await supabase.from('businesses').update({ appearance: look, color_primary: color }).eq('id', business.id)
+    const { data, error } = await supabase
+      .from('businesses')
+      .update({ appearance: look, color_primary: color })
+      .eq('id', business.id)
+      .select('appearance, color_primary')
+      .single()
     setBusy(false)
     if (error) return setError(errorMessage(error))
+    // El servidor devuelve la versión limpia: el formulario queda igual a lo guardado
+    const saved = data as { appearance: Look; color_primary: string }
+    setLook(saved.appearance || {})
+    setColor(saved.color_primary)
     flash('Apariencia guardada')
     reloadBusiness()
   }
@@ -49,11 +55,15 @@ export default function Appearance() {
     setError(null)
     try {
       const blob = await shrinkImage(file, 1600)
-      const path = `${business.id}/cover-${Date.now()}.webp`
-      const { error: upErr } = await supabase.storage.from('logos').upload(path, blob, { contentType: 'image/webp', upsert: true })
+      const path = `${business.id}/cover-${Date.now()}.${imageExt(blob)}`
+      const { error: upErr } = await supabase.storage.from('logos').upload(path, blob, { contentType: blob.type, upsert: true })
       if (upErr) throw upErr
       const { data } = supabase.storage.from('logos').getPublicUrl(path)
-      const { error } = await supabase.from('businesses').update({ cover_url: data.publicUrl }).eq('id', business.id)
+      // La foto queda puesta como fondo de la portada ya mismo (sin tocar lo demás que estés editando)
+      const { error } = await supabase
+        .from('businesses')
+        .update({ cover_url: data.publicUrl, appearance: { ...(business.appearance || {}), cover_style: 'image' } })
+        .eq('id', business.id)
       if (error) throw error
       set({ cover_style: 'image' })
       flash('Portada actualizada')
@@ -288,9 +298,8 @@ export default function Appearance() {
         </div>
       </div>
 
-      {error && <Alert>{error}</Alert>}
-
       <div className="fixed inset-x-0 bottom-16 z-20 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur md:bottom-0">
+        {error && <div className="mx-auto mb-2 max-w-4xl"><Alert>{error}</Alert></div>}
         <div className="mx-auto flex max-w-4xl items-center justify-end gap-3">
           {changed && <span className="text-sm text-slate-500">Tienes cambios sin guardar</span>}
           <Button onClick={save} loading={busy} disabled={!changed}>Guardar apariencia</Button>

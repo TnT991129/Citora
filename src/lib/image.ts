@@ -11,10 +11,21 @@ function readImage(file: File): Promise<{ img: HTMLImageElement; done: () => voi
   })
 }
 
-function toWebp(canvas: HTMLCanvasElement): Promise<Blob> {
+function encode(canvas: HTMLCanvasElement, type: string): Promise<Blob> {
   return new Promise<Blob>((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('No se pudo procesar la imagen'))), 'image/webp', 0.85),
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('No se pudo procesar la imagen'))), type, 0.85),
   )
+}
+
+/** WebP si el navegador sabe crearlo; si no (Safari en iPhone devuelve PNG), JPEG */
+async function toWebp(canvas: HTMLCanvasElement): Promise<Blob> {
+  const webp = await encode(canvas, 'image/webp')
+  return webp.type === 'image/webp' ? webp : encode(canvas, 'image/jpeg')
+}
+
+/** Extensión de archivo según el tipo real de la imagen */
+export function imageExt(blob: Blob): string {
+  return blob.type === 'image/webp' ? 'webp' : blob.type === 'image/png' ? 'png' : 'jpg'
 }
 
 /** Reduce una imagen a un cuadrado de "size" px en formato WebP */
