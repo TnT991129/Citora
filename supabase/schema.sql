@@ -413,7 +413,10 @@ begin
 
   -- Enlace de mapa: solo https
   v := btrim(coalesce(p ->> 'maps_url', ''));
-  if v ~ '^https://[^\s"<>]{4,300}$' then r := r || jsonb_build_object('maps_url', v); end if;
+  -- (Postgres no admite repeticiones de más de 255 en una expresión: la longitud se mira aparte)
+  if v ~ '^https://[^\s"<>]+$' and char_length(v) between 12 and 300 then
+    r := r || jsonb_build_object('maps_url', v);
+  end if;
 
   return r;
 end;
