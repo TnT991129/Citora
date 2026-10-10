@@ -4,7 +4,9 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import './index.css'
 import { initPwa } from './lib/pwa'
+import { openSharedLink } from './lib/url'
 
+openSharedLink()
 initPwa()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

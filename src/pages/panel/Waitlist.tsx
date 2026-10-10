@@ -63,7 +63,7 @@ export default function Waitlist() {
           <ul className="space-y-2">
             {list.filter((e) => e.day === day).map((e) => {
               const first = e.customer_name.split(' ')[0]
-              const msg = `Hola ${first}, te escribo de ${business.name}. Se liberó un hueco el ${dayTitle(day).toLowerCase()}. Si lo quieres, resérvalo aquí antes de que lo coja otra persona: ${publicUrl(business.slug)}/reservar`
+              const msg = `Hola ${first}, te escribo de ${business.name}. Se liberó un hueco el ${dayTitle(day).toLowerCase()}. Si lo quieres, resérvalo aquí antes de que lo coja otra persona: ${publicUrl(business.slug, 'reservar')}`
               return (
                 <li key={e.id} className="card">
                   <div className="flex flex-wrap items-start justify-between gap-2">

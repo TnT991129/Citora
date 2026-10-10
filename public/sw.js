@@ -3,7 +3,7 @@
 //   sin conexión se muestra la última versión guardada.
 // - Los archivos de /assets/ llevan su huella en el nombre: se guardan y se reutilizan.
 // - Nunca se guarda nada de Supabase (datos y fotos van siempre a la red).
-const CACHE = 'citora-v1'
+const CACHE = 'citora-v2'
 const scope = new URL(self.registration.scope)
 const SHELL = scope.pathname // ej. "/citora/"
 
@@ -31,7 +31,10 @@ self.addEventListener('fetch', (event) => {
           if (res.ok) {
             const copy = res.clone()
             caches.open(CACHE).then((c) => c.put(SHELL, copy))
+            return res
           }
+          // GitHub Pages responde 404 en las páginas de cada negocio: se usa la app guardada (respuesta 200)
+          if (res.status === 404) return caches.match(SHELL).then((r) => r || res)
           return res
         })
         .catch(() => caches.match(SHELL).then((r) => r || Response.error())),
