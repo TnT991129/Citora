@@ -34,7 +34,8 @@ body { min-height: 100dvh; }
    Se traducen los colores claros que usa la app; el color de cada negocio no cambia.
    --------------------------------------------------------------------- */
 html.dark { color-scheme: dark; }
-.dark body, .dark body.bg-slate-50 { background-color: #0b1120; }
+/* !important: el fondo elegido por el negocio (blanco o con su color) se pone en línea y es claro */
+.dark body, .dark body.bg-slate-50 { background: #0b1120 !important; }
 .dark body.text-slate-900 { color: #e2e8f0; }
 
 /* Fondos */
@@ -75,6 +76,11 @@ html.dark { color-scheme: dark; }
 .dark .input::placeholder { color: #64748b; }
 .dark .input:disabled { background-color: #1e293b; }
 .dark .label { color: #cbd5e1; }
+
+/* El color del negocio puede ser oscuro: como texto y en tonos suaves se aclara para que se lea */
+.dark .text-brand, .dark .group:hover .group-hover\:text-brand { color: color-mix(in srgb, rgb(var(--brand-rgb)) 50%, #fff); }
+.dark .bg-brand\/10 { background-color: rgb(var(--brand-rgb) / 0.22); }
+.dark .bg-brand\/5 { background-color: rgb(var(--brand-rgb) / 0.12); }
 
 /* Colores de Citora (portada, administrador) */
 .dark .bg-gradient-to-b.from-citora-50 { background-image: linear-gradient(to bottom, rgb(82 67 229 / 0.18), #0b1120 55%, #0b1120); }

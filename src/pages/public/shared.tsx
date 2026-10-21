@@ -60,11 +60,14 @@ export function PublicHeader({ business, back }: { business: Pick<PublicBusiness
   )
 }
 
-/** Cabecera de la web del negocio: portada (imagen o color), logo, nombre y redes. También sirve de vista previa en el panel. */
-export function BusinessHero({ business, rating, preview }: {
+/** Cabecera de la web del negocio: portada (imagen o color), logo, nombre y redes. También sirve de vista previa en el panel.
+ *  "status": aviso de si hoy abre; "actions": botones bajo los datos (reservar, WhatsApp...). */
+export function BusinessHero({ business, rating, preview, status, actions }: {
   business: Pick<PublicBusiness, 'name' | 'logo_url' | 'description' | 'address' | 'cover_url' | 'appearance'>
   rating?: PublicBusiness['rating']
   preview?: boolean
+  status?: { open: boolean; label: string } | null
+  actions?: ReactNode
 }) {
   const a = business.appearance || {}
   const gradient = gradientCss(a)
@@ -79,24 +82,50 @@ export function BusinessHero({ business, rating, preview }: {
 
   return (
     <div
-      className={`relative overflow-hidden text-white ${preview ? 'pb-8 pt-6' : 'pb-16 pt-10'} ${withImage ? 'bg-slate-900 bg-cover bg-center' : 'bg-brand'}`}
+      className={`relative overflow-hidden text-white ${preview ? 'pb-8 pt-6' : 'pb-20 pt-12 sm:pt-16'} ${withImage ? 'bg-slate-900 bg-cover bg-center' : 'bg-brand'}`}
       style={withImage ? { backgroundImage: `url("${business.cover_url}")` } : withGradient ? { backgroundImage: gradient! } : undefined}
     >
       {/* Oscurece la foto para que el texto se lea bien */}
-      {withImage && <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/45 to-black/70" />}
+      {withImage && <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/45 to-black/75" />}
+      {/* Luces suaves sobre el color, para que no sea un bloque plano */}
+      {!withImage && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 15% 0%, rgb(255 255 255 / 0.28), transparent 45%), radial-gradient(circle at 100% 100%, rgb(0 0 0 / 0.22), transparent 55%)',
+          }}
+        />
+      )}
       {!preview && <ThemeToggle onImage className="absolute right-3 top-3 z-10" />}
       <div className="relative mx-auto max-w-xl px-4 text-center">
-        <div className="flex justify-center"><BusinessAvatar name={business.name} logo={business.logo_url} size={preview ? 56 : 80} inverted /></div>
-        <h1 className={`mt-3 font-extrabold ${preview ? 'text-xl' : 'text-3xl'}`}>{business.name}</h1>
-        {a.tagline && <p className="mt-1 text-sm font-semibold uppercase tracking-wider text-white/85">{a.tagline}</p>}
-        {business.description && <p className="mt-2 text-white/90">{business.description}</p>}
-        {business.address && <p className="mt-2 text-sm text-white/80">📍 {business.address}</p>}
-        {rating && rating.count > 0 && (
-          <a href="#opiniones" className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-sm font-semibold">
-            <span className="text-amber-300">★</span> {Number(rating.avg).toFixed(1)}
-            <span className="font-normal text-white/80">· {rating.count} {rating.count === 1 ? 'opinión' : 'opiniones'}</span>
-          </a>
+        <div className="flex justify-center">
+          <div className={`rounded-[1.6rem] bg-white/15 p-1.5 shadow-2xl shadow-black/20 backdrop-blur ${preview ? '' : 'sm:p-2'}`}>
+            <BusinessAvatar name={business.name} logo={business.logo_url} size={preview ? 56 : 88} inverted />
+          </div>
+        </div>
+        {a.tagline && <p className={`mt-4 text-xs font-bold uppercase tracking-[0.2em] text-white/80 ${preview ? 'mt-3' : ''}`}>{a.tagline}</p>}
+        <h1 className={`font-extrabold tracking-tight ${a.tagline ? 'mt-1' : 'mt-4'} ${preview ? 'text-xl' : 'text-3xl sm:text-4xl'}`}>{business.name}</h1>
+        {business.description && <p className="mx-auto mt-2 max-w-md text-white/90">{business.description}</p>}
+        {(status || (rating && rating.count > 0)) && (
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+            {status && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-sm font-semibold backdrop-blur">
+                <span className={`h-2 w-2 rounded-full ${status.open ? 'bg-emerald-300' : 'bg-white/50'}`} />
+                {status.label}
+              </span>
+            )}
+            {rating && rating.count > 0 && (
+              <a href="#opiniones" className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-sm font-semibold backdrop-blur">
+                <span className="text-amber-300">★</span> {Number(rating.avg).toFixed(1)}
+                <span className="font-normal text-white/80">· {rating.count} {rating.count === 1 ? 'opinión' : 'opiniones'}</span>
+              </a>
+            )}
+          </div>
         )}
+        {business.address && <p className="mt-3 text-sm text-white/80">📍 {business.address}</p>}
+        {actions && <div className="mt-6">{actions}</div>}
         {socials.length > 0 && (
           <div className="mt-4 flex justify-center gap-2">
             {socials.map((x) => (

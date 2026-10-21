@@ -307,14 +307,24 @@ create index if not exists staff_business_idx on public.staff (business_id, posi
 alter table public.appointments add column if not exists staff_id uuid references public.staff(id) on delete set null;
 create index if not exists appointments_staff_idx on public.appointments (staff_id, starts_at);
 
--- Dos citas activas no se solapan con el mismo profesional (las citas sin profesional comparten una agenda)
+-- Clientes a la vez: cuántas citas sin profesional pueden coincidir a la misma hora (ej. un salón
+-- con 3 manicuras). Cada cita ocupa una "silla" (lane, de 0 a slot_capacity - 1); cada profesional
+-- del Equipo es una sola silla.
+alter table public.businesses add column if not exists slot_capacity int not null default 1
+  check (slot_capacity between 1 and 50);
+alter table public.appointments add column if not exists lane smallint not null default 0;
+
+-- Dos citas activas no se solapan en la misma silla del mismo profesional (las citas sin profesional
+-- comparten las sillas del negocio)
 do $$
 begin
-  if not exists (select 1 from pg_constraint where conname = 'appointments_no_overlap_staff') then
+  if not exists (select 1 from pg_constraint where conname = 'appointments_no_overlap_lane') then
     alter table public.appointments drop constraint if exists appointments_no_overlap;
-    alter table public.appointments add constraint appointments_no_overlap_staff exclude using gist (
+    alter table public.appointments drop constraint if exists appointments_no_overlap_staff;
+    alter table public.appointments add constraint appointments_no_overlap_lane exclude using gist (
       business_id with =,
       (coalesce(staff_id, '00000000-0000-0000-0000-000000000000'::uuid)) with =,
+      lane with =,
       tstzrange(starts_at, ends_at) with &&
     ) where (status <> 'cancelada');
   end if;
@@ -827,17 +837,38 @@ returns boolean language sql stable security definer set search_path = public as
   );
 $$;
 
--- ¿Está libre la agenda de un profesional (null = la agenda común) en un intervalo?
+-- Primera silla libre de un profesional (null = la agenda común, con slot_capacity sillas) en un
+-- intervalo, o null si están todas ocupadas
+create or replace function public._free_lane(p_business uuid, p_staff uuid, p_start timestamptz, p_end timestamptz, p_exclude uuid default null)
+returns smallint language plpgsql stable security definer set search_path = public as $$
+declare
+  v_cap int := 1;
+  l int;
+begin
+  if p_staff is null then
+    select greatest(1, slot_capacity) into v_cap from businesses where id = p_business;
+  end if;
+  for l in 0 .. coalesce(v_cap, 1) - 1 loop
+    if not exists (
+      select 1 from appointments a
+      where a.business_id = p_business
+        and a.status <> 'cancelada'
+        and a.staff_id is not distinct from p_staff
+        and a.lane = l
+        and tstzrange(a.starts_at, a.ends_at) && tstzrange(p_start, p_end)
+        and (p_exclude is null or a.id <> p_exclude)
+    ) then
+      return l;
+    end if;
+  end loop;
+  return null;
+end;
+$$;
+
+-- ¿Queda alguna silla libre en la agenda de un profesional (null = la agenda común) en un intervalo?
 create or replace function public._lane_free(p_business uuid, p_staff uuid, p_start timestamptz, p_end timestamptz, p_exclude uuid default null)
 returns boolean language sql stable security definer set search_path = public as $$
-  select not exists (
-    select 1 from appointments a
-    where a.business_id = p_business
-      and a.status <> 'cancelada'
-      and a.staff_id is not distinct from p_staff
-      and tstzrange(a.starts_at, a.ends_at) && tstzrange(p_start, p_end)
-      and (p_exclude is null or a.id <> p_exclude)
-  );
+  select _free_lane(p_business, p_staff, p_start, p_end, p_exclude) is not null;
 $$;
 
 -- Busca quién puede atender un hueco. Sin profesionales: la agenda común.
@@ -1020,6 +1051,7 @@ returns text language plpgsql volatile security definer set search_path = public
 declare
   b businesses;
   v_staff uuid;
+  v_lane smallint;
   v_disc numeric := 0;
   v_code text;
   v_phone text;
@@ -1083,12 +1115,14 @@ begin
   v_start := (p_date + p_time::time) at time zone b.timezone;
   v_token := replace(gen_random_uuid()::text, '-', '');
   select f.staff_id into v_staff from _free_staff(b.id, v_start, v_start + make_interval(mins => v_dur), p_staff) f;
+  v_lane := _free_lane(b.id, v_staff, v_start, v_start + make_interval(mins => v_dur));
+  if v_lane is null then raise exception 'TURNO_OCUPADO'; end if;
   begin
     insert into appointments (business_id, token, starts_at, ends_at, customer_name, customer_phone,
-                              customer_note, total, status, source, discount_code, discount, staff_id, usd_rate)
+                              customer_note, total, status, source, discount_code, discount, staff_id, usd_rate, lane)
     values (b.id, v_token, v_start, v_start + make_interval(mins => v_dur), v_name, v_phone,
             nullif(left(btrim(coalesce(p_note, '')), 500), ''), v_total - v_disc, 'pendiente', 'web',
-            v_code, v_disc, v_staff, case when b.usd_prices then b.usd_rate end)
+            v_code, v_disc, v_staff, case when b.usd_prices then b.usd_rate end, v_lane)
     returning id into v_id;
   exception when exclusion_violation then
     raise exception 'TURNO_OCUPADO';
@@ -1168,6 +1202,8 @@ declare
   a appointments;
   b businesses;
   v_pref uuid;
+  v_staff uuid;
+  v_lane smallint;
   v_dur int;
   v_check text;
   v_start timestamptz;
@@ -1189,12 +1225,14 @@ begin
   if v_check = 'ocupado' then raise exception 'TURNO_OCUPADO'; end if;
 
   v_start := (p_date + p_time::time) at time zone b.timezone;
+  v_staff := (select f.staff_id from _free_staff(b.id, v_start, v_start + make_interval(mins => v_dur), v_pref, a.id) f);
+  v_lane := _free_lane(b.id, v_staff, v_start, v_start + make_interval(mins => v_dur), a.id);
+  if v_lane is null then raise exception 'TURNO_OCUPADO'; end if;
   begin
     update appointments
        set starts_at = v_start, ends_at = v_start + make_interval(mins => v_dur),
            reschedule_count = reschedule_count + 1, status = 'pendiente',
-           staff_id = (select f.staff_id from _free_staff(b.id, v_start, v_start + make_interval(mins => v_dur),
-                                                          v_pref, a.id) f)
+           staff_id = v_staff, lane = v_lane
      where id = a.id;
   exception when exclusion_violation then
     raise exception 'TURNO_OCUPADO';
@@ -1215,6 +1253,8 @@ declare
   d discounts;
   v_name text := btrim(coalesce(p_name, ''));
   v_time time;
+  v_staff uuid;
+  v_lane smallint;
   v_same boolean;
   v_changed boolean;
   v_count int;
@@ -1274,6 +1314,9 @@ begin
     v_check := _check_slot(b.id, p_date, p_time, v_dur, a.id, p_staff);
     if v_check = 'invalido' then raise exception 'TURNO_INVALIDO'; end if;
     if v_check = 'ocupado' then raise exception 'TURNO_OCUPADO'; end if;
+    v_staff := (select f.staff_id from _free_staff(b.id, v_start, v_start + make_interval(mins => v_dur), p_staff, a.id) f);
+    v_lane := _free_lane(b.id, v_staff, v_start, v_start + make_interval(mins => v_dur), a.id);
+    if v_lane is null then raise exception 'TURNO_OCUPADO'; end if;
   end if;
 
   begin
@@ -1282,8 +1325,8 @@ begin
            customer_note = nullif(left(btrim(coalesce(p_note, '')), 500), ''),
            starts_at = case when v_changed then v_start else starts_at end,
            ends_at = case when v_changed then v_start + make_interval(mins => v_dur) else ends_at end,
-           staff_id = case when v_changed then (select f.staff_id from _free_staff(b.id, v_start,
-                        v_start + make_interval(mins => v_dur), p_staff, a.id) f) else staff_id end,
+           staff_id = case when v_changed then v_staff else staff_id end,
+           lane = case when v_changed then v_lane else lane end,
            total = case when v_same then total else v_total - v_disc end,
            discount = case when v_same then discount else v_disc end,
            usd_rate = case when v_same then usd_rate when b.usd_prices then b.usd_rate end,
@@ -1467,6 +1510,7 @@ declare
   v_dur int;
   v_total numeric;
   v_start timestamptz;
+  v_lane smallint;
   v_id uuid;
 begin
   select * into b from businesses where owner_id = auth.uid();
@@ -1484,13 +1528,15 @@ begin
   if v_dur = 0 then v_dur := 60; end if;
 
   v_start := (p_date + p_time::time) at time zone b.timezone;
+  v_lane := _free_lane(b.id, p_staff, v_start, v_start + make_interval(mins => v_dur));
+  if v_lane is null then raise exception 'TURNO_OCUPADO'; end if;
   begin
     insert into appointments (business_id, token, starts_at, ends_at, customer_name, customer_phone,
-                              customer_note, total, status, source, staff_id, usd_rate)
+                              customer_note, total, status, source, staff_id, usd_rate, lane)
     values (b.id, replace(gen_random_uuid()::text, '-', ''), v_start,
             v_start + make_interval(mins => v_dur), btrim(p_name), _clean_phone(p_phone),
             nullif(btrim(coalesce(p_note, '')), ''), v_total, 'confirmada', 'manual', p_staff,
-            case when b.usd_prices then b.usd_rate end)
+            case when b.usd_prices then b.usd_rate end, v_lane)
     returning id into v_id;
   exception when exclusion_violation then
     raise exception 'TURNO_OCUPADO';
@@ -1512,6 +1558,7 @@ declare
   a appointments;
   v_dur int;
   v_start timestamptz;
+  v_lane smallint;
 begin
   select * into b from businesses where owner_id = auth.uid();
   if not found then raise exception 'SIN_NEGOCIO'; end if;
@@ -1522,8 +1569,10 @@ begin
   if not found then raise exception 'CITA_NO_EXISTE'; end if;
   v_dur := greatest(5, (extract(epoch from (a.ends_at - a.starts_at)) / 60)::int);
   v_start := (p_date + p_time::time) at time zone b.timezone;
+  v_lane := _free_lane(b.id, a.staff_id, v_start, v_start + make_interval(mins => v_dur), a.id);
+  if v_lane is null then raise exception 'TURNO_OCUPADO'; end if;
   begin
-    update appointments set starts_at = v_start, ends_at = v_start + make_interval(mins => v_dur)
+    update appointments set starts_at = v_start, ends_at = v_start + make_interval(mins => v_dur), lane = v_lane
      where id = a.id;
   exception when exclusion_violation then
     raise exception 'TURNO_OCUPADO';
@@ -1899,6 +1948,7 @@ grant execute on function public.schedule_days_normalize() to authenticated;
 revoke execute on function public._is_range_free(uuid, timestamptz, timestamptz, uuid) from anon, authenticated;
 revoke execute on function public._check_slot(uuid, date, text, int, uuid, uuid) from anon, authenticated;
 revoke execute on function public._lane_free(uuid, uuid, timestamptz, timestamptz, uuid) from anon, authenticated;
+revoke execute on function public._free_lane(uuid, uuid, timestamptz, timestamptz, uuid) from anon, authenticated;
 revoke execute on function public._free_staff(uuid, timestamptz, timestamptz, uuid, uuid) from anon, authenticated;
 revoke execute on function public._owner_business(text) from anon, authenticated;
 revoke execute on function public._discount_for(uuid, text, numeric, boolean) from anon, authenticated;

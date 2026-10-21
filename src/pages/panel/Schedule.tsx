@@ -10,7 +10,8 @@ import { usePanel } from './context'
 const ORDER = [1, 2, 3, 4, 5, 6, 0]
 
 export default function Schedule() {
-  const { business, reloadBusiness } = usePanel()
+  const { business, reloadBusiness, staff } = usePanel()
+  const hasTeam = staff.some((s) => s.active)
   const [days, setDays] = useState<ScheduleDay[] | null>(null)
   const [closed, setClosed] = useState<ClosedDay[]>([])
   const [newClosed, setNewClosed] = useState('')
@@ -19,6 +20,7 @@ export default function Schedule() {
     min_notice_hours: business.min_notice_hours,
     max_days_ahead: business.max_days_ahead,
     cancel_notice_hours: business.cancel_notice_hours,
+    slot_capacity: business.slot_capacity || 1,
   })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -122,6 +124,39 @@ export default function Schedule() {
               {[0, 1, 2, 3, 6, 12, 24, 48].map((h) => <option key={h} value={h}>{h === 0 ? 'Hasta la hora' : `${h} h antes`}</option>)}
             </select>
           </Field>
+        </div>
+        <div className="border-t border-slate-100 pt-4">
+          <span className="label">Clientes a la vez</span>
+          <p className="mb-3 text-sm text-slate-500">
+            Cuántos clientes pueden reservar a la misma hora. Por ejemplo, si tienes 3 manicuras trabajando a la vez, pon 3.
+          </p>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => { setDirty(true); setRules({ ...rules, slot_capacity: Math.max(1, rules.slot_capacity - 1) }) }}
+              disabled={rules.slot_capacity <= 1}
+              className="flex h-11 w-11 items-center justify-center rounded-xl text-xl font-bold ring-1 ring-slate-300 disabled:opacity-30"
+              aria-label="Uno menos"
+            >
+              −
+            </button>
+            <span className="min-w-[3rem] text-center text-2xl font-extrabold">{rules.slot_capacity}</span>
+            <button
+              type="button"
+              onClick={() => { setDirty(true); setRules({ ...rules, slot_capacity: Math.min(50, rules.slot_capacity + 1) }) }}
+              disabled={rules.slot_capacity >= 50}
+              className="flex h-11 w-11 items-center justify-center rounded-xl text-xl font-bold ring-1 ring-slate-300 disabled:opacity-30"
+              aria-label="Uno más"
+            >
+              +
+            </button>
+            <span className="text-sm text-slate-600">{rules.slot_capacity === 1 ? 'cliente por turno' : 'clientes por turno'}</span>
+          </div>
+          {hasTeam && (
+            <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              Tienes profesionales en Equipo: cada uno atiende a un cliente a la vez. Este número se aplica a las citas sin profesional asignado.
+            </p>
+          )}
         </div>
       </section>
 

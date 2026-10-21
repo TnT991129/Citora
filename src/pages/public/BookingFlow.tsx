@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Calendar, SlotPicker } from '../../components/Calendar'
 import { Alert, Button, Field, PageLoader } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
@@ -21,7 +21,9 @@ export default function BookingFlow() {
   const saved = load<{ name: string; phone: string }>('citora:cliente', { name: '', phone: '' })
 
   const [step, setStep] = useState(0)
-  const [selected, setSelected] = useState<string[]>([])
+  // ?s=<id>: viene de tocar un servicio en la web del negocio
+  const [params] = useSearchParams()
+  const [selected, setSelected] = useState<string[]>(() => (params.get('s') ? [params.get('s')!] : []))
   const [date, setDate] = useState<string | null>(null)
   const [time, setTime] = useState<string | null>(null)
   const [name, setName] = useState(saved.name)
@@ -77,7 +79,7 @@ export default function BookingFlow() {
     save('citora:cliente', { name: name.trim(), phone: phone.trim() })
     const { data, error } = await supabase.rpc('create_booking', {
       p_slug: business.slug,
-      p_service_ids: selected,
+      p_service_ids: chosen.map((s) => s.id),
       p_date: date,
       p_time: time,
       p_name: name.trim(),

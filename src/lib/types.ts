@@ -26,6 +26,7 @@ export interface Business {
   min_notice_hours: number
   max_days_ahead: number
   cancel_notice_hours: number
+  slot_capacity: number
   plan: PlanKey | null
   trial_ends_at: string
   paid_until: string | null

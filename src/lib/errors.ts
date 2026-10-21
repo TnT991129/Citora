@@ -52,6 +52,7 @@ export function errorMessage(err: unknown): string {
     return 'La base de datos no está actualizada: hay que volver a ejecutar supabase/schema.sql en Supabase.'
   }
   if (/Failed to fetch|NetworkError|network/i.test(raw)) return 'Sin conexión. Revisa tus datos o el wifi y vuelve a intentarlo.'
+  if (/exclusion constraint/i.test(raw)) return 'A esa hora ya no queda sitio libre. Elige otra hora o mueve otra cita.'
   if (/duplicate key|unique/i.test(raw)) return 'Ese dato ya existe.'
   return raw || 'Algo salió mal. Inténtalo de nuevo.'
 }
