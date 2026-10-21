@@ -20,6 +20,7 @@ export interface Draft {
   open: string
   close: string
   every: number
+  capacity?: number // clientes por turno (los borradores antiguos no lo tienen: 1)
 }
 
 const KEY = 'citora:borrador'
@@ -95,6 +96,13 @@ export async function createBusinessFromDraft(d: Draft): Promise<{ id: string; s
     p_usd_rate: money.usd_prices ? d.usd_rate ?? null : null,
   })
   if (error) throw error
+  const created = data as { id: string; slug: string; code: string }
+  // Clientes por turno: se guarda aparte (el dueño ya puede editar su negocio)
+  const capacity = Math.min(50, Math.max(1, Math.round(d.capacity || 1)))
+  if (capacity > 1) {
+    const { error: e2 } = await supabase.from('businesses').update({ slot_capacity: capacity }).eq('id', created.id)
+    if (e2) console.warn('No se pudo guardar los clientes por turno', e2)
+  }
   clearDraft()
-  return data as { id: string; slug: string; code: string }
+  return created
 }

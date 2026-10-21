@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { CapacityStepper } from '../../components/CapacityStepper'
 import { TimeChips } from '../../components/TimeChips'
 import { Alert, Button, Field, PageLoader, Toggle, flash } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
@@ -83,6 +84,23 @@ export default function Schedule() {
   return (
     <div className="space-y-5 pb-16">
       <h1 className="text-2xl font-extrabold">Horario</h1>
+
+      <section id="clientes-por-turno" className="card scroll-mt-20 space-y-3 ring-2 ring-brand/20">
+        <div>
+          <h2 className="text-lg font-bold">Clientes por turno</h2>
+          <p className="text-sm text-slate-500">
+            Cuántos clientes pueden reservar a la misma hora. Por ejemplo, si tienes 2 manicuras trabajando a la vez, pon 2.
+          </p>
+        </div>
+        <CapacityStepper value={rules.slot_capacity} onChange={(n) => { setDirty(true); setRules({ ...rules, slot_capacity: n }) }} />
+        {hasTeam && (
+          <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Tienes profesionales en Equipo: cada uno atiende a un cliente a la vez. Este número se aplica a las citas sin profesional asignado.
+          </p>
+        )}
+        {dirty && <p className="text-sm font-semibold text-brand">Recuerda pulsar «Guardar cambios» abajo.</p>}
+      </section>
+
       <p className="text-sm text-slate-500">Para cada día, las horas a las que puede empezar una cita.</p>
 
       <div className="space-y-3">
@@ -124,39 +142,6 @@ export default function Schedule() {
               {[0, 1, 2, 3, 6, 12, 24, 48].map((h) => <option key={h} value={h}>{h === 0 ? 'Hasta la hora' : `${h} h antes`}</option>)}
             </select>
           </Field>
-        </div>
-        <div className="border-t border-slate-100 pt-4">
-          <span className="label">Clientes a la vez</span>
-          <p className="mb-3 text-sm text-slate-500">
-            Cuántos clientes pueden reservar a la misma hora. Por ejemplo, si tienes 3 manicuras trabajando a la vez, pon 3.
-          </p>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => { setDirty(true); setRules({ ...rules, slot_capacity: Math.max(1, rules.slot_capacity - 1) }) }}
-              disabled={rules.slot_capacity <= 1}
-              className="flex h-11 w-11 items-center justify-center rounded-xl text-xl font-bold ring-1 ring-slate-300 disabled:opacity-30"
-              aria-label="Uno menos"
-            >
-              −
-            </button>
-            <span className="min-w-[3rem] text-center text-2xl font-extrabold">{rules.slot_capacity}</span>
-            <button
-              type="button"
-              onClick={() => { setDirty(true); setRules({ ...rules, slot_capacity: Math.min(50, rules.slot_capacity + 1) }) }}
-              disabled={rules.slot_capacity >= 50}
-              className="flex h-11 w-11 items-center justify-center rounded-xl text-xl font-bold ring-1 ring-slate-300 disabled:opacity-30"
-              aria-label="Uno más"
-            >
-              +
-            </button>
-            <span className="text-sm text-slate-600">{rules.slot_capacity === 1 ? 'cliente por turno' : 'clientes por turno'}</span>
-          </div>
-          {hasTeam && (
-            <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              Tienes profesionales en Equipo: cada uno atiende a un cliente a la vez. Este número se aplica a las citas sin profesional asignado.
-            </p>
-          )}
         </div>
       </section>
 

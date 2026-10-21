@@ -15,6 +15,7 @@ const ITEMS: { to: string; label: string; desc: string; emoji: string; module?: 
   { to: 'opiniones', label: 'Opiniones', desc: 'Lo que dicen tus clientes', emoji: '⭐', module: 'opiniones' },
   { to: 'galeria', label: 'Galería', desc: 'Fotos de tus trabajos', emoji: '📷', module: 'galeria' },
   { to: 'respaldo', label: 'Respaldo', desc: 'Descarga tus datos en Excel', emoji: '💾', module: 'respaldo' },
+  { to: 'horario#clientes-por-turno', label: 'Clientes por turno', desc: 'Cuántos clientes reservan a la misma hora', emoji: '🪑' },
   { to: 'horario', label: 'Horario', desc: 'Turnos, días cerrados y reglas', emoji: '🕒' },
   { to: 'ajustes', label: 'Ajustes', desc: 'Logo, color, enlace y políticas', emoji: '⚙️' },
   { to: 'plan', label: 'Mensualidad', desc: 'Hasta cuándo está pagado y cómo pagar', emoji: '💳' },

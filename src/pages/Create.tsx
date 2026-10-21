@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { TimeChips } from '../components/TimeChips'
 import { ThemeToggle } from '../components/ThemeToggle'
+import { CapacityStepper } from '../components/CapacityStepper'
 import { Alert, Button, BusinessAvatar, CitoraLogo, CopyButton, Field, LinkButton, WhatsAppIcon } from '../components/ui'
 import { useSession } from '../lib/auth'
 import { setBrandColor } from '../lib/brand'
@@ -473,6 +474,13 @@ export default function Create() {
               </p>
             </div>
           )}
+          <div className="card space-y-3">
+            <div>
+              <span className="label">Clientes por turno</span>
+              <p className="text-sm text-slate-500">¿Cuántos clientes puedes atender a la misma hora? Por ejemplo, si trabajan 2 manicuras a la vez, pon 2.</p>
+            </div>
+            <CapacityStepper value={draft.capacity || 1} onChange={(n) => update({ capacity: n })} />
+          </div>
           <p className="text-sm text-slate-500">
             Si un servicio dura más que un turno, el sistema bloquea solo los turnos que se solapan. Podrás poner horarios distintos por día y días cerrados desde tu panel.
           </p>
