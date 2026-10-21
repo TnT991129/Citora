@@ -30,7 +30,7 @@ export interface Business {
   cancel_notice_hours: number
   reschedule_notice_hours: number
   max_reschedules: number | null
-  max_pending_bookings: number
+  max_pending_bookings: number | null
   slot_capacity: number
   plan: PlanKey | null
   trial_ends_at: string

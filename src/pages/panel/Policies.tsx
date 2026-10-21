@@ -13,7 +13,7 @@ export default function Policies() {
   const [form, setForm] = useState({
     min_notice_hours: business.min_notice_hours,
     max_days_ahead: business.max_days_ahead,
-    max_pending_bookings: business.max_pending_bookings || 2,
+    max_pending_bookings: business.max_pending_bookings, // null = sin límite
     cancel_notice_hours: business.cancel_notice_hours,
     reschedule_notice_hours: business.reschedule_notice_hours,
     max_reschedules: business.max_reschedules, // null = sin límite
@@ -82,15 +82,27 @@ export default function Policies() {
         <div className="grid gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2">
           <div>
             <span className="label">Citas pendientes por clienta</span>
-            <p className="mb-2 text-sm text-slate-500">Cuántas citas futuras puede tener a la vez con el mismo teléfono.</p>
-            <CapacityStepper
-              size="sm"
-              min={1}
-              max={20}
-              value={form.max_pending_bookings}
-              onChange={(n) => set({ max_pending_bookings: n })}
-              unit={(n) => (n === 1 ? 'cita pendiente' : 'citas pendientes')}
-            />
+            <p className="mb-2 text-sm text-slate-500">
+              Cuántas citas futuras puede tener a la vez con el mismo teléfono. Útil para evitar abusos; si tus clientas suelen reservar varias citas seguidas (ej. de varias semanas), pon "Sin límite".
+            </p>
+            <label className="mb-2 flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={form.max_pending_bookings === null}
+                onChange={(e) => set({ max_pending_bookings: e.target.checked ? null : 2 })}
+              />
+              Sin límite
+            </label>
+            {form.max_pending_bookings !== null && (
+              <CapacityStepper
+                size="sm"
+                min={1}
+                max={50}
+                value={form.max_pending_bookings}
+                onChange={(n) => set({ max_pending_bookings: n })}
+                unit={(n) => (n === 1 ? 'cita pendiente' : 'citas pendientes')}
+              />
+            )}
           </div>
           <div>
             <span className="label">Cambios por cita</span>

@@ -254,8 +254,12 @@ alter table public.businesses add column if not exists reschedule_notice_hours i
   check (reschedule_notice_hours between 0 and 168);
 alter table public.businesses add column if not exists max_reschedules int
   check (max_reschedules is null or max_reschedules between 1 and 20);
-alter table public.businesses add column if not exists max_pending_bookings int not null default 2
-  check (max_pending_bookings between 1 and 20);
+alter table public.businesses add column if not exists max_pending_bookings int not null default 2;
+-- Ahora también admite "sin límite" (null); se separa el check para poder volver a ponerlo sin error
+alter table public.businesses alter column max_pending_bookings drop not null;
+alter table public.businesses drop constraint if exists businesses_max_pending_bookings_check;
+alter table public.businesses add constraint businesses_max_pending_bookings_check
+  check (max_pending_bookings is null or max_pending_bookings between 1 and 50);
 -- Textos propios por tema (cancelaciones, cambios, retrasos...). Sin texto propio, la app muestra
 -- uno por defecto que ya usa las reglas de arriba (lo arma el propio front-end).
 alter table public.businesses add column if not exists policy_sections jsonb not null default '{}'::jsonb;
@@ -1128,7 +1132,7 @@ begin
   end if;
 
   -- Límites antiabuso
-  if (select count(*) from appointments
+  if b.max_pending_bookings is not null and (select count(*) from appointments
       where business_id = b.id and customer_phone = v_phone
         and status in ('pendiente', 'confirmada') and starts_at > now()) >= b.max_pending_bookings then
     raise exception 'LIMITE_CITAS';

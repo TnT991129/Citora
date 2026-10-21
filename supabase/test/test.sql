@@ -380,6 +380,18 @@ insert into ctx select 'tp1', create_booking('barberia-leo', array[(select v fro
   (select v from ctx where k='day')::date, '10:00', 'Pato Prueba', '5355558888');
 select expect_error($$select create_booking('barberia-leo', array['$$ || (select v from ctx where k='corte') || $$'::uuid], '$$ || (select v from ctx where k='day') || $$', '14:00', 'Pato Prueba', '5355558888')$$, 'LIMITE_CITAS');
 select cancel_booking((select v from ctx where k='tp1'));
+-- "Sin límite" (null): el mismo teléfono puede tener varias citas pendientes a la vez
+update businesses set max_pending_bookings = null where id = my_business_id();
+insert into ctx select 'tp2', create_booking('barberia-leo', array[(select v from ctx where k='corte')::uuid],
+  (select v from ctx where k='day')::date, '10:00', 'Rita Repite', '5355559999');
+insert into ctx select 'tp3', create_booking('barberia-leo', array[(select v from ctx where k='corte')::uuid],
+  (select v from ctx where k='day')::date, '11:00', 'Rita Repite', '5355559999');
+do $$ begin
+  assert (select count(*) from appointments where customer_phone = '5355559999' and status <> 'cancelada') = 2,
+    'sin límite: 2 citas pendientes con el mismo teléfono';
+end $$;
+select cancel_booking((select v from ctx where k='tp2'));
+select cancel_booking((select v from ctx where k='tp3'));
 update businesses set max_reschedules = null, reschedule_notice_hours = 6, max_pending_bookings = 2 where id = my_business_id();
 
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
