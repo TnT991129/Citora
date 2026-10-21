@@ -6,7 +6,7 @@ import { applyAppearance } from '../../lib/appearance'
 import { setBrandColor } from '../../lib/brand'
 import { setAppManifest } from '../../lib/pwa'
 import { errorMessage } from '../../lib/errors'
-import { dateKey, duration, longDate, money, timeOf, todayKey, weekdayOf, dayTitle } from '../../lib/format'
+import { dateKey, duration, longDate, money, price, timeOf, todayKey, weekdayOf, dayTitle } from '../../lib/format'
 import { rememberBooking } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
 import type { PublicBooking, PublicBusiness } from '../../lib/types'
@@ -69,7 +69,7 @@ export default function BookingPage() {
     `Hola, soy ${booking.customer_name}. Reservé una cita en ${b.name}:`,
     `📅 ${longDate(key)} a las ${time}`,
     `✂️ ${booking.services.map((s) => s.name).join(', ')}`,
-    `💵 Total: ${money(booking.total, b.currency)}`,
+    `💵 Total: ${price(booking.total, b.currency, booking.total_usd)}`,
     booking.customer_note ? `📝 ${booking.customer_note}` : '',
     `Mi cita: ${link}`,
   ].filter(Boolean).join('\n')
@@ -114,7 +114,7 @@ export default function BookingPage() {
             {booking.services.map((s, i) => (
               <div key={i} className="flex justify-between py-1 text-slate-700">
                 <span>{s.name}</span>
-                <span>{money(s.price, b.currency)}</span>
+                <span>{price(s.price, b.currency, s.price_usd)}</span>
               </div>
             ))}
             {Number(booking.discount || 0) > 0 && (
@@ -125,7 +125,7 @@ export default function BookingPage() {
             )}
             <div className="mt-2 flex justify-between border-t border-slate-100 pt-2 font-bold">
               <span>Total</span>
-              <span>{money(booking.total, b.currency)}</span>
+              <span>{price(booking.total, b.currency, booking.total_usd)}</span>
             </div>
             <p className="mt-1 text-xs text-slate-500">Duración aproximada: {duration(minutes)}</p>
           </div>

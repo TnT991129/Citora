@@ -5,6 +5,7 @@ import { Alert, Button, Field, Toggle, flash } from '../../components/ui'
 import { GRADIENT_PRESETS } from '../../lib/brand'
 import { BUTTON_SHAPES, FONTS, GRADIENT_ANGLES, PAGE_BACKGROUNDS, gradientCss, loadFont, pageBackground, shows, type Appearance as Look, type ButtonShape, type FontKey } from '../../lib/appearance'
 import { errorMessage } from '../../lib/errors'
+import { price } from '../../lib/format'
 import { imageExt, shrinkImage } from '../../lib/image'
 import { supabase } from '../../lib/supabase'
 import { publicUrl } from '../../lib/url'
@@ -286,7 +287,7 @@ export default function Appearance() {
                     Servicio de ejemplo
                     {shows(look, 'show_durations') && <span className="block text-xs text-slate-500">45 min</span>}
                   </span>
-                  {shows(look, 'show_prices') && <span className="font-semibold">{business.currency === 'USD' ? 5 : 500} {business.currency}</span>}
+                  {shows(look, 'show_prices') && <span className="font-semibold">{business.currency === 'USD' ? price(5, 'USD') : price(500, 'CUP', business.usd_prices ? 2 : null)}</span>}
                 </div>
               </div>
               <div className="rounded-btn bg-brand bg-btn-grad py-3 text-center font-bold text-white">{look.book_label || 'Reservar cita'}</div>

@@ -1,7 +1,8 @@
 // Tipos de negocio y servicios sugeridos para cada uno
 export interface ServiceTemplate {
   name: string
-  price: number
+  price: number // en CUP
+  price_usd?: number | null
   duration_min: number
 }
 

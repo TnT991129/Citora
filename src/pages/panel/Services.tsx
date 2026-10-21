@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Alert, Button, Empty, Field, Modal, Toggle } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
-import { duration, money } from '../../lib/format'
+import { duration, price } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import type { Service } from '../../lib/types'
 import { usePanel } from './context'
@@ -23,6 +23,7 @@ export default function Services() {
       name: editing.name.trim(),
       description: editing.description?.trim() || null,
       price: Math.max(0, Number(editing.price) || 0),
+      ...(business.usd_prices ? { price_usd: editing.price_usd == null ? null : Math.max(0, Number(editing.price_usd) || 0) } : {}),
       duration_min: editing.duration_min,
     }
     const { error } = editing.id
@@ -88,7 +89,7 @@ export default function Services() {
             </div>
             <button className="min-w-0 flex-1 text-left" onClick={() => { setError(null); setEditing({ ...s }) }}>
               <p className="truncate font-semibold">{s.name}</p>
-              <p className="text-sm text-slate-500">{money(s.price, business.currency)} · {duration(s.duration_min)}</p>
+              <p className="text-sm text-slate-500">{price(s.price, business.currency, business.usd_prices ? s.price_usd : null)} · {duration(s.duration_min)}</p>
             </button>
             <Toggle checked={s.active} onChange={(v) => toggle(s, v)} label={s.active ? 'Visible' : 'Oculto'} />
           </div>
@@ -114,6 +115,11 @@ export default function Services() {
               <Field label={`Precio (${business.currency})`}>
                 <input className="input" type="number" min={0} step="any" inputMode="decimal" value={editing.price} onChange={(e) => setEditing({ ...editing, price: Number(e.target.value) })} />
               </Field>
+              {business.usd_prices && (
+                <Field label="Precio (USD)">
+                  <input className="input" type="number" min={0} step="any" inputMode="decimal" placeholder="Opcional" value={editing.price_usd ?? ''} onChange={(e) => setEditing({ ...editing, price_usd: e.target.value === '' ? null : Number(e.target.value) })} />
+                </Field>
+              )}
               <Field label="Duración">
                 <select className="input" value={editing.duration_min} onChange={(e) => setEditing({ ...editing, duration_min: Number(e.target.value) })}>
                   {[10, 15, 20, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300].map((m) => <option key={m} value={m}>{duration(m)}</option>)}

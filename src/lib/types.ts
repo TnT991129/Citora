@@ -20,6 +20,7 @@ export interface Business {
   appearance: Appearance
   timezone: string
   currency: string
+  usd_prices: boolean
   policies: string | null
   min_notice_hours: number
   max_days_ahead: number
@@ -36,6 +37,7 @@ export interface Service {
   name: string
   description: string | null
   price: number
+  price_usd: number | null
   duration_min: number
   position: number
   active: boolean
@@ -57,6 +59,7 @@ export interface ClosedDay {
 export interface AppointmentService {
   name: string
   price: number
+  price_usd?: number | null
   duration_min: number
 }
 
@@ -70,6 +73,7 @@ export interface Appointment {
   customer_phone: string
   customer_note: string | null
   total: number
+  total_usd: number | null
   status: AppointmentStatus
   source: 'web' | 'manual'
   cancelled_by: string | null
@@ -130,6 +134,7 @@ export interface PublicService {
   name: string
   description: string | null
   price: number
+  price_usd?: number | null
   duration_min: number
 }
 
@@ -148,6 +153,7 @@ export interface PublicBusiness {
   description?: string | null
   timezone?: string
   currency?: string
+  usd_prices?: boolean
   policies?: string | null
   min_notice_hours?: number
   max_days_ahead?: number
@@ -233,6 +239,7 @@ export interface PublicBooking {
   customer_phone: string
   customer_note: string | null
   total: number
+  total_usd?: number | null
   discount?: number
   discount_code?: string | null
   staff_id?: string | null

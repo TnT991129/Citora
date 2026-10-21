@@ -1,4 +1,4 @@
-import { generateSlots } from './format'
+import { currencyFields, generateSlots, type CurrencyMode } from './format'
 import { load, remove, save } from './storage'
 import { supabase } from './supabase'
 import { businessType, type ServiceTemplate } from './templates'
@@ -11,6 +11,7 @@ export interface Draft {
   whatsapp: string
   address: string
   color: string
+  currency?: CurrencyMode // los borradores antiguos no la tienen: CUP
   services: ServiceTemplate[]
   days: number[]
   mode: 'turnos' | 'intervalo'
@@ -22,7 +23,7 @@ export interface Draft {
 
 const KEY = 'citora:borrador'
 
-export function newDraft(typeKey = 'otro'): Draft {
+export function newDraft(typeKey = 'otro', currency: CurrencyMode = 'CUP'): Draft {
   const t = businessType(typeKey)
   const fixed = typeKey === 'unas' || typeKey === 'tatuajes' || typeKey === 'maquillaje'
   return {
@@ -32,7 +33,8 @@ export function newDraft(typeKey = 'otro'): Draft {
     whatsapp: '',
     address: '',
     color: '#5243e5',
-    services: t.services.map((s) => ({ ...s })),
+    currency,
+    services: changeCurrency(t.services.map((s) => ({ ...s })), t.key, 'CUP', currency),
     days: [1, 2, 3, 4, 5, 6],
     mode: fixed ? 'turnos' : 'intervalo',
     turnos: fixed ? ['10:00', '13:00', '16:00'] : ['10:00', '13:00'],
@@ -40,6 +42,17 @@ export function newDraft(typeKey = 'otro'): Draft {
     close: '18:00',
     every: typeKey === 'barberia' ? 30 : 60,
   }
+}
+
+/** Los precios sugeridos están en CUP: en USD se dejan a 0 para que el dueño ponga los suyos */
+export function changeCurrency(services: ServiceTemplate[], typeKey: string, from: CurrencyMode, to: CurrencyMode): ServiceTemplate[] {
+  if ((from === 'USD') === (to === 'USD')) return services
+  const suggested = businessType(typeKey).services
+  return services.map((s) => ({
+    ...s,
+    price: to === 'USD' ? 0 : suggested.find((x) => x.name === s.name)?.price ?? 0,
+    price_usd: null,
+  }))
 }
 
 export function loadDraft(): Draft | null {
@@ -67,6 +80,7 @@ export async function createBusinessFromDraft(d: Draft): Promise<{ id: string; s
     is_open: d.days.includes(w),
     slots,
   }))
+  const money = currencyFields(d.currency || 'CUP')
   const { data, error } = await supabase.rpc('create_business', {
     p_name: d.name.trim(),
     p_slug: d.slug,
@@ -74,8 +88,12 @@ export async function createBusinessFromDraft(d: Draft): Promise<{ id: string; s
     p_whatsapp: d.whatsapp,
     p_address: d.address,
     p_color: d.color,
-    p_services: d.services.filter((s) => s.name.trim()),
+    p_services: d.services
+      .filter((s) => s.name.trim())
+      .map((s) => ({ ...s, price_usd: money.usd_prices ? s.price_usd ?? null : null })),
     p_schedule: schedule,
+    p_currency: money.currency,
+    p_usd_prices: money.usd_prices,
   })
   if (error) throw error
   clearDraft()

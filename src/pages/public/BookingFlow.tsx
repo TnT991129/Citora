@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Calendar, SlotPicker } from '../../components/Calendar'
 import { Alert, Button, Field, PageLoader } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
-import { duration, money, weekdayOf, zonedToIso, dayTitle } from '../../lib/format'
+import { duration, money, price, sumUsd, weekdayOf, zonedToIso, dayTitle } from '../../lib/format'
 import { hasModule } from '../../lib/plans'
 import { load, rememberBooking, save } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
@@ -28,13 +28,16 @@ export default function BookingFlow() {
   const [note, setNote] = useState('')
   const [accepted, setAccepted] = useState(false)
   const [staffId, setStaffId] = useState<string | null>(null)
-  const [coupon, setCoupon] = useState<{ code: string; discount: number; total: number } | null>(null)
+  const [coupon, setCoupon] = useState<Coupon | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const services = business?.services || []
   const chosen = useMemo(() => services.filter((s) => selected.includes(s.id)), [services, selected])
   const total = chosen.reduce((a, s) => a + Number(s.price), 0)
+  // En USD, un descuento en porcentaje también se aplica; uno de importe fijo (en CUP) no se puede
+  const usd = sumUsd(chosen)
+  const totalUsd = usd == null || !coupon ? usd : coupon.percent ? usd - Math.min(usd, Math.round(usd * coupon.percent) / 100) : null
   const minutes = chosen.reduce((a, s) => a + s.duration_min, 0)
 
   // Si cambian los servicios, el descuento se vuelve a calcular
@@ -128,7 +131,7 @@ export default function BookingFlow() {
                     <span className="block font-semibold">{s.name}</span>
                     <span className="block text-sm text-slate-500">{duration(s.duration_min)}</span>
                   </span>
-                  <span className="font-semibold">{money(s.price, currency)}</span>
+                  <span className="text-right font-semibold">{price(s.price, currency, s.price_usd)}</span>
                 </button>
               )
             })}
@@ -212,7 +215,7 @@ export default function BookingFlow() {
                 {chosen.map((s) => (
                   <div key={s.id} className="flex justify-between py-1 text-slate-700">
                     <span>{s.name}</span>
-                    <span>{money(s.price, currency)}</span>
+                    <span>{price(s.price, currency, s.price_usd)}</span>
                   </div>
                 ))}
                 {coupon && (
@@ -223,7 +226,7 @@ export default function BookingFlow() {
                 )}
                 <div className="mt-2 flex justify-between border-t border-slate-100 pt-2 text-lg font-bold">
                   <span>Total</span>
-                  <span>{money(coupon ? coupon.total : total, currency)}</span>
+                  <span className="text-right">{price(coupon ? coupon.total : total, currency, totalUsd)}</span>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">Se paga en el negocio. Duración aproximada: {duration(minutes)}.</p>
               </div>
@@ -249,7 +252,7 @@ export default function BookingFlow() {
           {step > 0 && <Button variant="secondary" onClick={() => go(step - 1)} disabled={busy}>Atrás</Button>}
           {step < 3 ? (
             <Button block size="lg" onClick={next}>
-              {step === 0 && chosen.length > 0 ? `Continuar · ${money(total, currency)}` : 'Continuar'}
+              {step === 0 && chosen.length > 0 ? `Continuar · ${price(total, currency, totalUsd)}` : 'Continuar'}
             </Button>
           ) : (
             <Button block size="lg" onClick={confirm} loading={busy}>Confirmar reserva</Button>
@@ -259,6 +262,8 @@ export default function BookingFlow() {
     </div>
   )
 }
+
+type Coupon = { code: string; percent: number | null; discount: number; total: number }
 
 function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -273,7 +278,7 @@ function CouponBox({ slug, serviceIds, applied, onApplied }: {
   slug: string
   serviceIds: string[]
   applied: { code: string } | null
-  onApplied: (c: { code: string; discount: number; total: number } | null) => void
+  onApplied: (c: Coupon | null) => void
 }) {
   const [open, setOpen] = useState(false)
   const [code, setCode] = useState('')
@@ -299,8 +304,8 @@ function CouponBox({ slug, serviceIds, applied, onApplied }: {
     const { data, error } = await supabase.rpc('check_discount', { p_slug: slug, p_code: code.trim(), p_service_ids: serviceIds })
     setBusy(false)
     if (error) return setError(errorMessage(error))
-    const d = data as { code: string; discount: number; total: number }
-    onApplied({ code: d.code, discount: Number(d.discount), total: Number(d.total) })
+    const d = data as { code: string; percent: number | null; discount: number; total: number }
+    onApplied({ code: d.code, percent: d.percent, discount: Number(d.discount), total: Number(d.total) })
   }
 
   return (

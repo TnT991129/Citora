@@ -1,4 +1,4 @@
-import { addDays, dateKey, longDate, money, timeOf, zonedToIso } from './format'
+import { addDays, dateKey, longDate, price, timeOf, zonedToIso } from './format'
 import { supabase } from './supabase'
 import type { Appointment, Business } from './types'
 import { bookingUrl, publicUrl } from './url'
@@ -7,7 +7,7 @@ import { bookingUrl, publicUrl } from './url'
 export async function fetchAppointments(b: Business, fromKey: string, toKey: string): Promise<Appointment[]> {
   const { data, error } = await supabase
     .from('appointments')
-    .select('*, appointment_services(name, price, duration_min)')
+    .select('*, appointment_services(name, price, price_usd, duration_min)')
     .gte('starts_at', zonedToIso(fromKey, '00:00', b.timezone))
     .lt('starts_at', zonedToIso(addDays(toKey, 1), '00:00', b.timezone))
     .order('starts_at')
@@ -37,7 +37,7 @@ export function buildMessage(kind: MessageKind, a: Appointment, b: Business): st
   const link = bookingUrl(b.slug, a.token)
   switch (kind) {
     case 'confirmar':
-      return `Hola ${first}, te confirmo tu cita en ${b.name} el ${day} a las ${time} (${servicesText(a)}). Total: ${money(a.total, b.currency)}.\n\nDetalles o cambios aquí: ${link}`
+      return `Hola ${first}, te confirmo tu cita en ${b.name} el ${day} a las ${time} (${servicesText(a)}). Total: ${price(a.total, b.currency, a.total_usd)}.\n\nDetalles o cambios aquí: ${link}`
     case 'recordatorio':
       return `Hola ${first}, te recuerdo tu cita en ${b.name} el ${day} a las ${time}.${b.address ? `\n📍 ${b.address}` : ''}\n\nSi no puedes venir, avísame o cámbiala aquí: ${link}`
     case 'retraso':

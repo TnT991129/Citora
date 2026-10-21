@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Alert, Button, Field, Modal } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
-import { duration, money } from '../../lib/format'
+import { duration, price, sumUsd } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import { usePanel } from './context'
 
@@ -47,7 +47,7 @@ export function NewAppointment({ defaultDate, onClose, onCreated }: { defaultDat
       open
       onClose={onClose}
       title="Nueva cita"
-      footer={<Button block onClick={save} loading={busy}>Guardar cita · {money(total, business.currency)}</Button>}
+      footer={<Button block onClick={save} loading={busy}>Guardar cita · {price(total, business.currency, business.usd_prices ? sumUsd(chosen) : null)}</Button>}
     >
       <div className="space-y-4">
         <div>

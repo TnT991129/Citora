@@ -5,15 +5,15 @@ import { Alert, Button, BusinessAvatar, CitoraLogo, CopyButton, Field, LinkButto
 import { useSession } from '../lib/auth'
 import { setBrandColor } from '../lib/brand'
 import { ColorPicker } from '../components/ColorPicker'
-import { createBusinessFromDraft, draftSlots, loadDraft, newDraft, saveDraft, type Draft } from '../lib/draft'
+import { changeCurrency, createBusinessFromDraft, draftSlots, loadDraft, newDraft, saveDraft, type Draft } from '../lib/draft'
 import { errorMessage } from '../lib/errors'
-import { cleanPhone, duration, money, slugify, WEEKDAYS_SHORT } from '../lib/format'
+import { cleanPhone, currencyFields, CURRENCY_MODES, duration, money, price, slugify, WEEKDAYS_SHORT } from '../lib/format'
 import { supabase } from '../lib/supabase'
 import { BUSINESS_TYPES, businessType } from '../lib/templates'
 import { panelPath, publicUrl, siteUrl } from '../lib/url'
 import { shareLink } from '../lib/whatsapp'
 
-const STEPS = ['Tipo', 'Negocio', 'Servicios', 'Horario', 'Cuenta']
+const STEPS = ['Tipo', 'Negocio', 'Moneda', 'Servicios', 'Horario', 'Cuenta']
 
 export default function Create() {
   const session = useSession()
@@ -82,6 +82,8 @@ export default function Create() {
   const update = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }))
 
   const slots = useMemo(() => draftSlots(draft), [draft])
+  const mode = draft.currency || 'CUP'
+  const main = currencyFields(mode).currency
 
   const stepValid = (): string | null => {
     if (step === 1) {
@@ -90,11 +92,11 @@ export default function Create() {
       if (slugState === 'taken') return 'Ese enlace ya está en uso. Prueba otro.'
       if (cleanPhone(draft.whatsapp).length < 8) return 'Escribe tu número de WhatsApp con el código del país (ej. 53 5555 5555).'
     }
-    if (step === 2) {
+    if (step === 3) {
       const valid = draft.services.filter((s) => s.name.trim())
       if (valid.length === 0) return 'Añade al menos un servicio.'
     }
-    if (step === 3) {
+    if (step === 4) {
       if (draft.days.length === 0) return 'Elige al menos un día de trabajo.'
       if (slots.length === 0) return 'Añade al menos un turno.'
     }
@@ -108,7 +110,7 @@ export default function Create() {
       return
     }
     setError(null)
-    if (step === 3 && session) {
+    if (step === 4 && session) {
       await finish()
       return
     }
@@ -190,7 +192,7 @@ export default function Create() {
     )
   }
 
-  const totalSteps = session ? 4 : 5
+  const totalSteps = session ? 5 : 6
 
   return (
     <Shell>
@@ -214,8 +216,7 @@ export default function Create() {
                 key={t.key}
                 type="button"
                 onClick={() => {
-                  const fresh = newDraft(t.key)
-                  setDraft((d) => ({ ...fresh, name: d.name, slug: d.slug, whatsapp: d.whatsapp, address: d.address, color: d.color }))
+                  setDraft((d) => ({ ...newDraft(t.key, d.currency), name: d.name, slug: d.slug, whatsapp: d.whatsapp, address: d.address, color: d.color }))
                   setStep(1)
                 }}
                 className={`card flex flex-col items-center gap-2 py-5 text-center transition hover:ring-2 hover:ring-brand ${draft.type === t.key ? 'ring-2 ring-brand' : ''}`}
@@ -292,8 +293,36 @@ export default function Create() {
 
       {step === 2 && (
         <section>
+          <h1 className="text-2xl font-bold">¿En qué moneda cobras?</h1>
+          <p className="mt-1 text-slate-600">Así verán tus clientes los precios. Podrás cambiarlo después en Ajustes.</p>
+          <div className="mt-5 space-y-3">
+            {CURRENCY_MODES.map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                onClick={() => update({ currency: c.key, services: changeCurrency(draft.services, draft.type, mode, c.key) })}
+                className={`card flex w-full items-center justify-between gap-3 text-left transition hover:ring-2 hover:ring-brand ${mode === c.key ? 'ring-2 ring-brand' : ''}`}
+              >
+                <span>
+                  <span className="block text-lg font-bold">{c.name}</span>
+                  <span className="block text-sm text-slate-500">{c.hint}</span>
+                </span>
+                <span className="shrink-0 text-sm font-semibold text-slate-600">
+                  {c.key === 'USD' ? price(5, 'USD') : price(1500, 'CUP', c.key === 'AMBAS' ? 5 : null)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {step === 3 && (
+        <section>
           <h1 className="text-2xl font-bold">Tus servicios</h1>
-          <p className="mt-1 text-slate-600">Cambia nombres, precios (en CUP) y duración. Podrás editarlos después.</p>
+          <p className="mt-1 text-slate-600">
+            Cambia nombres, precios (en {mode === 'AMBAS' ? 'CUP y USD' : main}) y duración. Podrás editarlos después.
+            {mode === 'AMBAS' && ' El precio en USD es opcional.'}
+          </p>
           <div className="mt-5 space-y-3">
             {draft.services.map((s, i) => (
               <div key={i} className="card space-y-2">
@@ -315,17 +344,33 @@ export default function Create() {
                   </button>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <label className="text-xs font-medium text-slate-600">Precio (CUP)
+                  <label className="text-xs font-medium text-slate-600">Precio ({main})
                     <input
                       className="input mt-1"
                       type="number"
                       min={0}
+                      step="any"
                       inputMode="decimal"
-                      value={s.price}
+                      value={s.price || ''}
+                      placeholder="0"
                       onChange={(e) => update({ services: draft.services.map((x, j) => (j === i ? { ...x, price: Number(e.target.value) } : x)) })}
                     />
                   </label>
-                  <label className="text-xs font-medium text-slate-600">Duración
+                  {mode === 'AMBAS' && (
+                    <label className="text-xs font-medium text-slate-600">Precio (USD)
+                      <input
+                        className="input mt-1"
+                        type="number"
+                        min={0}
+                        step="any"
+                        inputMode="decimal"
+                        value={s.price_usd ?? ''}
+                        placeholder="Opcional"
+                        onChange={(e) => update({ services: draft.services.map((x, j) => (j === i ? { ...x, price_usd: e.target.value === '' ? null : Number(e.target.value) } : x)) })}
+                      />
+                    </label>
+                  )}
+                  <label className={`text-xs font-medium text-slate-600 ${mode === 'AMBAS' ? 'col-span-2' : ''}`}>Duración
                     <select
                       className="input mt-1"
                       value={s.duration_min}
@@ -349,7 +394,7 @@ export default function Create() {
         </section>
       )}
 
-      {step === 3 && (
+      {step === 4 && (
         <section className="space-y-5">
           <div>
             <h1 className="text-2xl font-bold">Tu horario</h1>
@@ -423,7 +468,7 @@ export default function Create() {
         </section>
       )}
 
-      {step === 4 && !session && (
+      {step === 5 && !session && (
         <section className="space-y-4">
           <div>
             <h1 className="text-2xl font-bold">Crea tu cuenta</h1>
@@ -437,7 +482,7 @@ export default function Create() {
           </Field>
           <div className="card bg-slate-50">
             <p className="text-sm text-slate-700">
-              <b>{businessType(draft.type).emoji} {draft.name}</b> · {draft.services.filter((s) => s.name.trim()).length} servicios · desde {money(Math.min(...draft.services.filter((s) => s.name.trim()).map((s) => s.price)))}
+              <b>{businessType(draft.type).emoji} {draft.name}</b> · {draft.services.filter((s) => s.name.trim()).length} servicios · desde {money(Math.min(...draft.services.filter((s) => s.name.trim()).map((s) => s.price)), main)}
             </p>
             <p className="mt-1 text-sm text-slate-600">Tendrás 3 días gratis con todo incluido. Después, una sola mensualidad de 1.500 CUP.</p>
           </div>
@@ -454,9 +499,9 @@ export default function Create() {
           <Button variant="secondary" onClick={() => { setError(null); setStep((s) => s - 1) }} disabled={busy}>
             Atrás
           </Button>
-          {step < 4 ? (
+          {step < 5 ? (
             <Button block onClick={next} loading={busy} disabled={step === 1 && slugState === 'checking'}>
-              {step === 3 && session ? 'Crear mi app' : 'Siguiente'}
+              {step === 4 && session ? 'Crear mi app' : 'Siguiente'}
             </Button>
           ) : (
             <Button block onClick={signUpAndCreate} loading={busy}>Crear mi app</Button>

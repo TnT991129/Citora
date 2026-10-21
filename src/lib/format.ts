@@ -2,16 +2,40 @@
 
 export const DEFAULT_TZ = 'America/Havana'
 
-export const CURRENCIES = [
-  { code: 'CUP', name: 'CUP (pesos)' },
-  { code: 'USD', name: 'USD (dólares)' },
+// Moneda del negocio. "Ambas": la principal es CUP y cada servicio puede tener además precio en USD.
+export type CurrencyMode = 'CUP' | 'USD' | 'AMBAS'
+
+export const CURRENCY_MODES: { key: CurrencyMode; name: string; hint: string }[] = [
+  { key: 'CUP', name: 'CUP', hint: 'Pesos cubanos' },
+  { key: 'USD', name: 'USD', hint: 'Dólares' },
+  { key: 'AMBAS', name: 'CUP y USD', hint: 'Cada servicio con los dos precios' },
 ]
+
+export function currencyMode(b: { currency?: string; usd_prices?: boolean }): CurrencyMode {
+  return b.usd_prices ? 'AMBAS' : b.currency === 'USD' ? 'USD' : 'CUP'
+}
+
+/** Columnas del negocio para una moneda elegida */
+export function currencyFields(m: CurrencyMode): { currency: string; usd_prices: boolean } {
+  return { currency: m === 'USD' ? 'USD' : 'CUP', usd_prices: m === 'AMBAS' }
+}
 
 export function money(n: number | string | null | undefined, currency = 'CUP'): string {
   const v = Number(n ?? 0)
   const [int, dec] = Math.abs(v).toFixed(v % 1 ? 2 : 0).split('.')
   const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
   return `${v < 0 ? '-' : ''}${grouped}${dec ? ',' + dec : ''} ${currency}`
+}
+
+/** Precio en la moneda del negocio y, si lo tiene, también en USD: "1.500 CUP · 5 USD" */
+export function price(n: number | string | null | undefined, currency: string, usd?: number | string | null): string {
+  return usd == null ? money(n, currency) : `${money(n, currency)} · ${money(usd, 'USD')}`
+}
+
+/** Suma de precios en USD; null si a alguno le falta */
+export function sumUsd(items: { price_usd?: number | string | null }[]): number | null {
+  if (!items.length || items.some((s) => s.price_usd == null)) return null
+  return items.reduce((a, s) => a + Number(s.price_usd), 0)
 }
 
 export function duration(min: number): string {

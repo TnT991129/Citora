@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Alert, Button, Field, LinkButton, Modal, StatusBadge, WhatsAppIcon } from '../../components/ui'
 import { buildMessage, MESSAGE_LABELS, type MessageKind } from '../../lib/appointments'
 import { errorMessage } from '../../lib/errors'
-import { dateKey, duration, money, timeOf, dayTitle } from '../../lib/format'
+import { dateKey, duration, price, timeOf, dayTitle } from '../../lib/format'
 import { hasModule } from '../../lib/plans'
 import { supabase } from '../../lib/supabase'
 import type { Appointment, AppointmentStatus } from '../../lib/types'
@@ -78,12 +78,12 @@ export function AppointmentModal({ appointment, onClose, onChanged }: {
           {(a.appointment_services || []).map((s, i) => (
             <div key={i} className="flex justify-between py-0.5 text-sm">
               <span>{s.name}</span>
-              <span>{money(s.price, business.currency)}</span>
+              <span>{price(s.price, business.currency, s.price_usd)}</span>
             </div>
           ))}
           <div className="mt-1 flex justify-between border-t border-slate-200 pt-1.5 font-bold">
             <span>Total</span>
-            <span>{money(a.total, business.currency)}</span>
+            <span>{price(a.total, business.currency, a.total_usd)}</span>
           </div>
         </div>
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { InstallButton } from '../../components/InstallButton'
 import { LinkButton, PageLoader, StatusBadge, WhatsAppIcon } from '../../components/ui'
-import { dateKey, duration, money, timeOf, WEEKDAYS, dayTitle } from '../../lib/format'
+import { dateKey, duration, money, price, timeOf, WEEKDAYS, dayTitle } from '../../lib/format'
 import { savedBookings, type SavedBooking } from '../../lib/storage'
 import { waLink } from '../../lib/whatsapp'
 import { supabase } from '../../lib/supabase'
@@ -52,7 +52,7 @@ export default function BusinessHome() {
                   {s.description && <p className="text-sm text-slate-500">{s.description}</p>}
                   {showDurations && <p className="text-sm text-slate-500">{duration(s.duration_min)}</p>}
                 </div>
-                {showPrices && <span className="shrink-0 font-semibold">{money(s.price, currency)}</span>}
+                {showPrices && <span className="shrink-0 text-right font-semibold">{price(s.price, currency, s.price_usd)}</span>}
               </li>
             ))}
             {services.length === 0 && <li className="py-3 text-slate-500">Pronto publicaremos nuestros servicios.</li>}
