@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { ThemeToggle } from '../../components/ThemeToggle'
 import { BusinessAvatar } from '../../components/ui'
 import { applyAppearance, gradientCss, socialUrl } from '../../lib/appearance'
 import { setBrandColor } from '../../lib/brand'
@@ -49,10 +50,11 @@ export function PublicHeader({ business, back }: { business: Pick<PublicBusiness
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 6l-6 6 6 6" /></svg>
           </Link>
         )}
-        <Link to={clientPath(business.slug)} className="flex min-w-0 items-center gap-2.5">
+        <Link to={clientPath(business.slug)} className="flex min-w-0 flex-1 items-center gap-2.5">
           <BusinessAvatar name={business.name} logo={business.logo_url} size={34} />
           <span className="truncate font-bold">{business.name}</span>
         </Link>
+        <ThemeToggle />
       </div>
     </header>
   )
@@ -82,6 +84,7 @@ export function BusinessHero({ business, rating, preview }: {
     >
       {/* Oscurece la foto para que el texto se lea bien */}
       {withImage && <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/45 to-black/70" />}
+      {!preview && <ThemeToggle onImage className="absolute right-3 top-3 z-10" />}
       <div className="relative mx-auto max-w-xl px-4 text-center">
         <div className="flex justify-center"><BusinessAvatar name={business.name} logo={business.logo_url} size={preview ? 56 : 80} inverted /></div>
         <h1 className={`mt-3 font-extrabold ${preview ? 'text-xl' : 'text-3xl'}`}>{business.name}</h1>

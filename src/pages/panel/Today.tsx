@@ -12,6 +12,7 @@ import { AppointmentRow } from './AppointmentList'
 import { AppointmentModal } from './AppointmentModal'
 import { usePanel } from './context'
 import { NewAppointment } from './NewAppointment'
+import { RateCard } from './RateCard'
 
 export default function Today() {
   const { business, status, link } = usePanel()
@@ -64,6 +65,8 @@ export default function Today() {
         <Stat label="Por confirmar" value={String(pending.length)} highlight={pending.length > 0} />
         <Stat label="Cobrado hoy" value={money(income, business.currency)} sub={expected > income ? `de ${money(expected, business.currency)}` : undefined} />
       </div>
+
+      <RateCard />
 
       {next && (
         <div className="rounded-2xl bg-brand p-4 text-white shadow-lg shadow-brand/20">

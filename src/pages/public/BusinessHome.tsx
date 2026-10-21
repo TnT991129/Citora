@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { InstallButton } from '../../components/InstallButton'
 import { LinkButton, PageLoader, StatusBadge, WhatsAppIcon } from '../../components/ui'
-import { dateKey, duration, money, price, timeOf, WEEKDAYS, dayTitle } from '../../lib/format'
+import { cupRate, dateKey, duration, money, price, timeOf, WEEKDAYS, dayTitle } from '../../lib/format'
 import { savedBookings, type SavedBooking } from '../../lib/storage'
 import { waLink } from '../../lib/whatsapp'
 import { supabase } from '../../lib/supabase'
 import { clientPath } from '../../lib/url'
-import type { GalleryPhoto, PublicBooking, PublicReview } from '../../lib/types'
+import type { GalleryPhoto, PublicBooking, PublicReview, PublicService } from '../../lib/types'
 import NotFound from '../NotFound'
 import { shows } from '../../lib/appearance'
 import { Announcement, BusinessHero, Centered, Closed, PoweredBy, Stars, usePublicBusiness } from './shared'
@@ -24,12 +24,25 @@ export default function BusinessHome() {
   const tz = business.timezone!
   const currency = business.currency!
   const services = business.services || []
+  const main = services.filter((s) => !s.is_extra)
+  const extras = services.filter((s) => s.is_extra)
   const openDays = (business.schedule || []).filter((d) => d.is_open).map((d) => d.weekday)
-  const minPrice = services.length ? Math.min(...services.map((s) => Number(s.price))) : 0
+  const minPrice = main.length ? Math.min(...main.map((s) => Number(s.price))) : 0
+  const rate = cupRate(business)
   const look = business.appearance || {}
   const showPrices = shows(look, 'show_prices')
   const showDurations = shows(look, 'show_durations')
   const showReviews = shows(look, 'show_reviews')
+  const item = (s: PublicService) => (
+    <li key={s.id} className="flex items-center justify-between gap-3 py-3">
+      <div className="min-w-0">
+        <p className="font-semibold">{s.is_extra ? '+ ' : ''}{s.name}</p>
+        {s.description && <p className="text-sm text-slate-500">{s.description}</p>}
+        {showDurations && <p className="text-sm text-slate-500">{s.is_extra ? `+${duration(s.duration_min)}` : duration(s.duration_min)}</p>}
+      </div>
+      {showPrices && <span className="shrink-0 text-right font-semibold">{price(s.price, currency, rate)}</span>}
+    </li>
+  )
 
   return (
     <div className="min-h-dvh pb-28">
@@ -42,21 +55,20 @@ export default function BusinessHome() {
         <section className="card">
           <div className="flex items-baseline justify-between">
             <h2 className="text-lg font-bold">Servicios</h2>
-            {services.length > 0 && showPrices && <span className="text-sm text-slate-500">desde {money(minPrice, currency)}</span>}
+            {main.length > 0 && showPrices && <span className="text-sm text-slate-500">desde {money(minPrice, currency)}</span>}
           </div>
           <ul className="mt-3 divide-y divide-slate-100">
-            {services.map((s) => (
-              <li key={s.id} className="flex items-center justify-between gap-3 py-3">
-                <div className="min-w-0">
-                  <p className="font-semibold">{s.name}</p>
-                  {s.description && <p className="text-sm text-slate-500">{s.description}</p>}
-                  {showDurations && <p className="text-sm text-slate-500">{duration(s.duration_min)}</p>}
-                </div>
-                {showPrices && <span className="shrink-0 text-right font-semibold">{price(s.price, currency, s.price_usd)}</span>}
-              </li>
-            ))}
-            {services.length === 0 && <li className="py-3 text-slate-500">Pronto publicaremos nuestros servicios.</li>}
+            {main.map(item)}
+            {main.length === 0 && <li className="py-3 text-slate-500">Pronto publicaremos nuestros servicios.</li>}
           </ul>
+          {extras.length > 0 && main.length > 0 && (
+            <>
+              <h3 className="mt-4 font-bold">Complementos</h3>
+              <p className="text-sm text-slate-500">Puedes añadirlos a tu servicio al reservar.</p>
+              <ul className="mt-1 divide-y divide-slate-100">{extras.map(item)}</ul>
+            </>
+          )}
+          {rate && showPrices && <p className="mt-3 text-xs text-slate-500">Cambio en CUP a la tasa de hoy: 1 USD = {money(rate, 'CUP')}.</p>}
         </section>
 
         <section className="card">
@@ -82,7 +94,7 @@ export default function BusinessHome() {
             <h2 className="text-lg font-bold">Antes de tu cita</h2>
             <p className="mt-2 whitespace-pre-line text-slate-700">{business.policies}</p>
             <p className="mt-2 text-sm text-slate-500">
-              Puedes cancelar o cambiar tu cita hasta {business.cancel_notice_hours} h antes desde el enlace que recibes al reservar.
+              Puedes cambiar (servicios, día, hora o nota) o cancelar tu cita hasta {business.cancel_notice_hours} h antes desde el enlace que recibes al reservar.
             </p>
           </section>
         )}
@@ -96,7 +108,7 @@ export default function BusinessHome() {
         <PoweredBy />
       </main>
 
-      {services.length > 0 && (
+      {main.length > 0 && (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur safe-bottom">
           <div className="mx-auto max-w-xl">
             <Link

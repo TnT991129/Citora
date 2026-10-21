@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
+import { ThemeToggle } from '../../components/ThemeToggle'
 import { Alert, Button, CitoraLogo, Field, LinkButton, Modal, PageLoader, StatusBadge, WhatsAppIcon, flash } from '../../components/ui'
 import { useSession } from '../../lib/auth'
 import { CITORA_COLOR, setBrandColor } from '../../lib/brand'
@@ -90,6 +91,7 @@ export default function Admin() {
                 {t === 'duenos' ? 'Dueños' : t === 'estadisticas' ? 'Estadísticas' : 'Ajustes'}
               </button>
             ))}
+            <ThemeToggle />
             <button onClick={() => supabase.auth.signOut()} className="ml-1 rounded-lg px-2 py-1.5 text-sm text-slate-500 hover:bg-slate-100">Salir</button>
           </div>
         </div>

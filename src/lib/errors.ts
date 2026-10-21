@@ -5,6 +5,7 @@ const MESSAGES: Record<string, string> = {
   NOMBRE_INVALIDO: 'Escribe tu nombre (al menos 2 letras).',
   TELEFONO_INVALIDO: 'Escribe un teléfono válido (al menos 8 dígitos).',
   SERVICIOS_INVALIDOS: 'Algún servicio ya no está disponible. Vuelve a elegirlos.',
+  FALTA_SERVICIO_PRINCIPAL: 'Elige al menos un servicio principal: los complementos se añaden a un servicio.',
   TURNO_INVALIDO: 'Ese turno ya no está disponible. Elige otro.',
   TURNO_OCUPADO: 'Ese horario se acaba de ocupar. Elige otro.',
   LIMITE_CITAS: 'Ya tienes varias citas pendientes con este teléfono. Si necesitas otra, escribe al negocio por WhatsApp.',

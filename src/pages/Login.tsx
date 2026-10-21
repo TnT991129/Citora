@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { ThemeToggle } from '../components/ThemeToggle'
 import { Alert, Button, CitoraLogo, Field } from '../components/ui'
 import { useSession } from '../lib/auth'
 import { setBrandColor } from '../lib/brand'
@@ -63,7 +64,8 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center px-4 py-10">
+    <div className="relative flex min-h-dvh flex-col items-center justify-center px-4 py-10">
+      <ThemeToggle className="absolute right-3 top-3" />
       <Link to="/"><CitoraLogo className="text-2xl" /></Link>
       {session && !justSignedIn ? (
         <div className="card mt-6 w-full max-w-sm space-y-3 text-center">

@@ -21,6 +21,7 @@ export interface Business {
   timezone: string
   currency: string
   usd_prices: boolean
+  usd_rate: number | null
   policies: string | null
   min_notice_hours: number
   max_days_ahead: number
@@ -37,10 +38,10 @@ export interface Service {
   name: string
   description: string | null
   price: number
-  price_usd: number | null
   duration_min: number
   position: number
   active: boolean
+  is_extra: boolean
 }
 
 export interface ScheduleDay {
@@ -57,9 +58,9 @@ export interface ClosedDay {
 }
 
 export interface AppointmentService {
+  id?: string | null
   name: string
   price: number
-  price_usd?: number | null
   duration_min: number
 }
 
@@ -73,7 +74,7 @@ export interface Appointment {
   customer_phone: string
   customer_note: string | null
   total: number
-  total_usd: number | null
+  usd_rate: number | null
   status: AppointmentStatus
   source: 'web' | 'manual'
   cancelled_by: string | null
@@ -109,6 +110,16 @@ export interface Discount {
   created_at: string
 }
 
+export interface Expense {
+  id: string
+  business_id: string
+  day: string
+  amount: number
+  category: string
+  note: string | null
+  created_at: string
+}
+
 export interface WaitlistEntry {
   id: string
   business_id: string
@@ -134,8 +145,8 @@ export interface PublicService {
   name: string
   description: string | null
   price: number
-  price_usd?: number | null
   duration_min: number
+  is_extra?: boolean
 }
 
 export interface PublicBusiness {
@@ -154,6 +165,7 @@ export interface PublicBusiness {
   timezone?: string
   currency?: string
   usd_prices?: boolean
+  usd_rate?: number | null
   policies?: string | null
   min_notice_hours?: number
   max_days_ahead?: number
@@ -224,8 +236,10 @@ export interface OwnerStats {
     manual: number
     customers: number
     new_customers: number
+    expenses: number
   }
-  by_day: { day: string; bookings: number; revenue: number }[]
+  by_day: { day: string; bookings: number; revenue: number; expenses: number }[]
+  expenses_by_category: { category: string; total: number }[]
   top_services: { name: string; count: number; revenue: number }[]
   by_weekday: number[]
   by_hour: { hour: number; count: number }[]
@@ -239,7 +253,7 @@ export interface PublicBooking {
   customer_phone: string
   customer_note: string | null
   total: number
-  total_usd?: number | null
+  usd_rate?: number | null
   discount?: number
   discount_code?: string | null
   staff_id?: string | null

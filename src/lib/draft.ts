@@ -12,6 +12,7 @@ export interface Draft {
   address: string
   color: string
   currency?: CurrencyMode // los borradores antiguos no la tienen: CUP
+  usd_rate?: number | null // CUP por 1 USD, con 'USD y CUP'
   services: ServiceTemplate[]
   days: number[]
   mode: 'turnos' | 'intervalo'
@@ -44,14 +45,13 @@ export function newDraft(typeKey = 'otro', currency: CurrencyMode = 'CUP'): Draf
   }
 }
 
-/** Los precios sugeridos están en CUP: en USD se dejan a 0 para que el dueño ponga los suyos */
+/** Los precios sugeridos están en CUP: en USD (o USD y CUP) se dejan a 0 para que el dueño ponga los suyos */
 export function changeCurrency(services: ServiceTemplate[], typeKey: string, from: CurrencyMode, to: CurrencyMode): ServiceTemplate[] {
-  if ((from === 'USD') === (to === 'USD')) return services
+  if ((from === 'CUP') === (to === 'CUP')) return services
   const suggested = businessType(typeKey).services
   return services.map((s) => ({
     ...s,
-    price: to === 'USD' ? 0 : suggested.find((x) => x.name === s.name)?.price ?? 0,
-    price_usd: null,
+    price: to === 'CUP' ? suggested.find((x) => x.name === s.name)?.price ?? 0 : 0,
   }))
 }
 
@@ -88,12 +88,11 @@ export async function createBusinessFromDraft(d: Draft): Promise<{ id: string; s
     p_whatsapp: d.whatsapp,
     p_address: d.address,
     p_color: d.color,
-    p_services: d.services
-      .filter((s) => s.name.trim())
-      .map((s) => ({ ...s, price_usd: money.usd_prices ? s.price_usd ?? null : null })),
+    p_services: d.services.filter((s) => s.name.trim()),
     p_schedule: schedule,
     p_currency: money.currency,
     p_usd_prices: money.usd_prices,
+    p_usd_rate: money.usd_prices ? d.usd_rate ?? null : null,
   })
   if (error) throw error
   clearDraft()

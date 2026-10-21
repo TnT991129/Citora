@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Alert, Button, Field, Modal } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
-import { duration, price, sumUsd } from '../../lib/format'
+import { cupRate, duration, price } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import { usePanel } from './context'
 
@@ -47,7 +47,7 @@ export function NewAppointment({ defaultDate, onClose, onCreated }: { defaultDat
       open
       onClose={onClose}
       title="Nueva cita"
-      footer={<Button block onClick={save} loading={busy}>Guardar cita · {price(total, business.currency, business.usd_prices ? sumUsd(chosen) : null)}</Button>}
+      footer={<Button block onClick={save} loading={busy}>Guardar cita · {price(total, business.currency, cupRate(business))}</Button>}
     >
       <div className="space-y-4">
         <div>
@@ -62,7 +62,7 @@ export function NewAppointment({ defaultDate, onClose, onCreated }: { defaultDat
                   onClick={() => setSelected(on ? selected.filter((x) => x !== s.id) : [...selected, s.id])}
                   className={`rounded-full px-3 py-1.5 text-sm font-semibold ${on ? 'bg-brand text-white' : 'bg-white text-slate-700 ring-1 ring-slate-300'}`}
                 >
-                  {s.name}
+                  {s.is_extra ? '+ ' : ''}{s.name}
                 </button>
               )
             })}

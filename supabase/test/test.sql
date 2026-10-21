@@ -96,7 +96,15 @@ do $$ declare j jsonb := get_booking((select v from ctx where k='t1')); begin
   assert to_char((j->>'starts_at')::timestamptz at time zone 'UTC', 'HH24:MI') = '14:00', 'zona horaria: ' || (j->>'starts_at');
 end $$;
 select reschedule_booking((select v from ctx where k='t1'), (select v from ctx where k='day')::date, '11:00');
-select expect_error($$select reschedule_booking('$$ || (select v from ctx where k='t1') || $$', '$$ || (select v from ctx where k='day') || $$', '09:00')$$, 'LIMITE_CAMBIOS');
+-- Sin límite de cambios: se puede volver a cambiar (aquí, a la misma hora)
+select reschedule_booking((select v from ctx where k='t1'), (select v from ctx where k='day')::date, '11:00');
+-- Editar solo el nombre y la nota no cambia la hora ni la confirmación
+select edit_booking((select v from ctx where k='t1'),
+  array(select (x->>'id')::uuid from jsonb_array_elements(get_booking((select v from ctx where k='t1'))->'services') x),
+  (select v from ctx where k='day')::date, '11:00', 'Ana Pérez', 'Llego puntual');
+do $$ declare j jsonb := get_booking((select v from ctx where k='t1')); begin
+  assert j->>'customer_name' = 'Ana Pérez' and j->>'customer_note' = 'Llego puntual', 'edición de nombre y nota';
+end $$;
 do $$ declare d date := (select v from ctx where k='day')::date; begin
   assert (select available from get_available_slots('barberia-leo', d, 30) where slot = '10:00'), '10:00 vuelve a estar libre';
   assert not (select available from get_available_slots('barberia-leo', d, 30) where slot = '11:00'), '11:00 ocupado';

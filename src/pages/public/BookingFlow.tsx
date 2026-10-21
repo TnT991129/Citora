@@ -3,12 +3,13 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Calendar, SlotPicker } from '../../components/Calendar'
 import { Alert, Button, Field, PageLoader } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
-import { duration, money, price, sumUsd, weekdayOf, zonedToIso, dayTitle } from '../../lib/format'
+import { cupRate, duration, money, price, weekdayOf, zonedToIso, dayTitle } from '../../lib/format'
 import { hasModule } from '../../lib/plans'
 import { load, rememberBooking, save } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
 import { clientPath } from '../../lib/url'
 import NotFound from '../NotFound'
+import { hasMainService, ServicePicker } from './ServicePicker'
 import { Closed, PublicHeader, usePublicBusiness } from './shared'
 
 const STEP_TITLES = ['Elige el servicio', 'Elige día y hora', 'Tus datos', 'Confirma tu cita']
@@ -35,9 +36,6 @@ export default function BookingFlow() {
   const services = business?.services || []
   const chosen = useMemo(() => services.filter((s) => selected.includes(s.id)), [services, selected])
   const total = chosen.reduce((a, s) => a + Number(s.price), 0)
-  // En USD, un descuento en porcentaje también se aplica; uno de importe fijo (en CUP) no se puede
-  const usd = sumUsd(chosen)
-  const totalUsd = usd == null || !coupon ? usd : coupon.percent ? usd - Math.min(usd, Math.round(usd * coupon.percent) / 100) : null
   const minutes = chosen.reduce((a, s) => a + s.duration_min, 0)
 
   // Si cambian los servicios, el descuento se vuelve a calcular
@@ -48,6 +46,7 @@ export default function BookingFlow() {
   if (!business.accepting) return <Closed business={business} />
 
   const currency = business.currency!
+  const rate = cupRate(business)
   const team = hasModule(business.plan, 'empleados') ? business.staff || [] : []
   const openDays = new Set((business.schedule || []).filter((d) => d.is_open).map((d) => d.weekday))
   const closed = new Set(business.closed_days || [])
@@ -60,7 +59,9 @@ export default function BookingFlow() {
   }
 
   const next = () => {
-    if (step === 0 && chosen.length === 0) return setError('Elige al menos un servicio.')
+    if (step === 0 && !hasMainService(services, selected)) {
+      return setError(chosen.length ? 'Elige también un servicio principal: los complementos se añaden a un servicio.' : 'Elige al menos un servicio.')
+    }
     if (step === 1 && (!date || !time)) return setError('Elige el día y la hora.')
     if (step === 2) {
       if (name.trim().length < 2) return setError('Escribe tu nombre.')
@@ -113,28 +114,8 @@ export default function BookingFlow() {
         <h1 className="text-2xl font-bold">{STEP_TITLES[step]}</h1>
 
         {step === 0 && (
-          <div className="mt-4 space-y-2">
-            <p className="text-sm text-slate-500">Puedes elegir varios.</p>
-            {services.map((s) => {
-              const on = selected.includes(s.id)
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setSelected(on ? selected.filter((x) => x !== s.id) : [...selected, s.id])}
-                  className={`card flex w-full items-center gap-3 text-left transition ${on ? 'ring-2 ring-brand' : ''}`}
-                >
-                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 ${on ? 'border-brand bg-brand text-white' : 'border-slate-300'}`}>
-                    {on && <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12l5 5 9-10" /></svg>}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-semibold">{s.name}</span>
-                    <span className="block text-sm text-slate-500">{duration(s.duration_min)}</span>
-                  </span>
-                  <span className="text-right font-semibold">{price(s.price, currency, s.price_usd)}</span>
-                </button>
-              )
-            })}
+          <div className="mt-4">
+            <ServicePicker services={services} selected={selected} onChange={setSelected} currency={currency} rate={rate} />
           </div>
         )}
 
@@ -214,8 +195,8 @@ export default function BookingFlow() {
               <div className="border-t border-slate-100 pt-3">
                 {chosen.map((s) => (
                   <div key={s.id} className="flex justify-between py-1 text-slate-700">
-                    <span>{s.name}</span>
-                    <span>{price(s.price, currency, s.price_usd)}</span>
+                    <span>{s.is_extra ? '+ ' : ''}{s.name}</span>
+                    <span>{price(s.price, currency, rate)}</span>
                   </div>
                 ))}
                 {coupon && (
@@ -226,7 +207,7 @@ export default function BookingFlow() {
                 )}
                 <div className="mt-2 flex justify-between border-t border-slate-100 pt-2 text-lg font-bold">
                   <span>Total</span>
-                  <span className="text-right">{price(coupon ? coupon.total : total, currency, totalUsd)}</span>
+                  <span className="text-right">{price(coupon ? coupon.total : total, currency, rate)}</span>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">Se paga en el negocio. Duración aproximada: {duration(minutes)}.</p>
               </div>
@@ -252,7 +233,7 @@ export default function BookingFlow() {
           {step > 0 && <Button variant="secondary" onClick={() => go(step - 1)} disabled={busy}>Atrás</Button>}
           {step < 3 ? (
             <Button block size="lg" onClick={next}>
-              {step === 0 && chosen.length > 0 ? `Continuar · ${price(total, currency, totalUsd)}` : 'Continuar'}
+              {step === 0 && chosen.length > 0 ? `Continuar · ${price(total, currency, rate)}` : 'Continuar'}
             </Button>
           ) : (
             <Button block size="lg" onClick={confirm} loading={busy}>Confirmar reserva</Button>

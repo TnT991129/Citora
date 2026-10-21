@@ -231,12 +231,32 @@ alter table public.customer_notes add column if not exists note text check (char
 alter table public.customer_notes add column if not exists tags text[] not null default '{}';
 alter table public.customer_notes add column if not exists updated_at timestamptz not null default now();
 
--- Precios también en USD: con usd_prices, la moneda principal es CUP y cada servicio puede tener
--- además su precio en USD (las cuentas y estadísticas siguen en la moneda principal)
+-- Moneda: CUP, USD, o "CUP y USD" (usd_prices): los precios se ponen en USD y, con la tasa del día
+-- (usd_rate = CUP por 1 USD), los clientes ven también su equivalente en CUP. Cada cita guarda la tasa
+-- con la que se reservó, para que su precio en CUP no cambie después.
 alter table public.businesses add column if not exists usd_prices boolean not null default false;
-alter table public.services add column if not exists price_usd numeric(10, 2) check (price_usd >= 0);
-alter table public.appointment_services add column if not exists price_usd numeric(10, 2);
-alter table public.appointments add column if not exists total_usd numeric(10, 2);
+alter table public.businesses add column if not exists usd_rate numeric(10, 2) check (usd_rate > 0);
+alter table public.appointments add column if not exists usd_rate numeric(10, 2);
+-- La primera versión de "CUP y USD" (precio en CUP más un segundo precio a mano en USD) se sustituye
+update public.businesses set usd_prices = false where usd_prices and currency <> 'USD';
+alter table public.services drop column if exists price_usd;
+alter table public.appointment_services drop column if exists price_usd;
+alter table public.appointments drop column if exists total_usd;
+
+-- Servicios complementarios: extras opcionales que el cliente añade a un servicio principal
+alter table public.services add column if not exists is_extra boolean not null default false;
+
+-- Gastos del negocio (en su moneda), para ver la ganancia en las estadísticas
+create table if not exists public.expenses (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  day date not null,
+  amount numeric(10, 2) not null check (amount > 0),
+  category text not null default 'Otros' check (char_length(category) between 1 and 40),
+  note text check (char_length(note) <= 200),
+  created_at timestamptz not null default now()
+);
+create index if not exists expenses_business_idx on public.expenses (business_id, day);
 
 -- Lista de espera: clientes que quieren un hueco en un día lleno
 create table if not exists public.waitlist (
@@ -456,8 +476,8 @@ begin
   if new.currency not in ('CUP', 'USD') then
     new.currency := 'CUP';
   end if;
-  if new.currency = 'USD' then
-    new.usd_prices := false;
+  if new.usd_prices then
+    new.currency := 'USD';
   end if;
   if new.cover_url is not null and new.cover_url !~ '^https://' then
     new.cover_url := null;
@@ -594,6 +614,13 @@ create policy notes_owner_all on public.customer_notes for all to authenticated
 alter table public.waitlist enable row level security;
 alter table public.discounts enable row level security;
 alter table public.staff enable row level security;
+alter table public.expenses enable row level security;
+
+-- expenses: el dueño gestiona los suyos (van con las estadísticas)
+drop policy if exists expenses_owner_all on public.expenses;
+create policy expenses_owner_all on public.expenses for all to authenticated
+  using (business_id = my_business_id() and my_plan_has('finanzas'))
+  with check (business_id = my_business_id() and my_plan_has('finanzas'));
 
 -- staff: el dueño ve los suyos y los gestiona si su plan incluye varios empleados
 drop policy if exists staff_owner_select on public.staff;
@@ -742,6 +769,7 @@ begin
     'timezone', b.timezone,
     'currency', b.currency,
     'usd_prices', b.usd_prices,
+    'usd_rate', case when b.usd_prices then b.usd_rate end,
     'policies', b.policies,
     'min_notice_hours', b.min_notice_hours,
     'max_days_ahead', b.max_days_ahead,
@@ -752,8 +780,8 @@ begin
     'services', coalesce((
       select jsonb_agg(jsonb_build_object(
         'id', s.id, 'name', s.name, 'description', s.description,
-        'price', s.price, 'price_usd', case when b.usd_prices then s.price_usd end,
-        'duration_min', s.duration_min) order by s.position, s.created_at)
+        'price', s.price, 'duration_min', s.duration_min, 'is_extra', s.is_extra)
+        order by s.position, s.created_at)
       from services s where s.business_id = b.id and s.active), '[]'::jsonb),
     'schedule', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -885,9 +913,12 @@ begin
 end;
 $$;
 
--- Turnos de un día con su disponibilidad (con p_staff: solo la agenda de ese profesional)
+-- Turnos de un día con su disponibilidad (con p_staff: solo la agenda de ese profesional).
+-- Con p_exclude_token (el cliente editando su cita), su propia cita no cuenta como ocupada.
 drop function if exists public.get_available_slots(text, date, int);
-create or replace function public.get_available_slots(p_slug text, p_date date, p_duration int, p_staff uuid default null)
+drop function if exists public.get_available_slots(text, date, int, uuid);
+create or replace function public.get_available_slots(p_slug text, p_date date, p_duration int, p_staff uuid default null,
+                                                      p_exclude_token text default null)
 returns table (slot text, available boolean)
 language plpgsql stable security definer set search_path = public as $$
 declare
@@ -895,12 +926,16 @@ declare
   v_today date;
   v_is_open boolean;
   v_slots time[];
+  v_exclude uuid;
   t time;
   v_start timestamptz;
 begin
   select * into b from businesses where slug = lower(p_slug);
   if not found or business_effective_plan(b.plan, b.trial_ends_at, b.paid_until) is null then
     return;
+  end if;
+  if p_exclude_token is not null then
+    select a.id into v_exclude from appointments a where a.token = p_exclude_token and a.business_id = b.id;
   end if;
   v_today := (now() at time zone b.timezone)::date;
   if p_date < v_today or p_date > v_today + b.max_days_ahead then return; end if;
@@ -913,7 +948,7 @@ begin
     slot := to_char(t, 'HH24:MI');
     available := v_start >= now() + make_interval(hours => b.min_notice_hours)
       and (select f.ok from _free_staff(b.id, v_start, v_start + make_interval(mins => greatest(coalesce(p_duration, 60), 5)),
-                                        p_staff) f);
+                                        p_staff, v_exclude) f);
     return next;
   end loop;
 end;
@@ -987,8 +1022,6 @@ declare
   v_staff uuid;
   v_disc numeric := 0;
   v_code text;
-  v_pct int;
-  v_usd numeric;
   v_phone text;
   v_name text;
   v_count int;
@@ -1020,10 +1053,9 @@ begin
   if v_count = 0 or v_count <> (select count(distinct x) from unnest(p_service_ids) x) then
     raise exception 'SERVICIOS_INVALIDOS';
   end if;
-  -- Total en USD: solo si todos los servicios elegidos tienen precio en USD
-  if b.usd_prices then
-    select case when count(price_usd) = count(*) then sum(price_usd) end into v_usd
-      from services where business_id = b.id and active and id = any (p_service_ids);
+  -- Los complementos van con al menos un servicio principal
+  if not exists (select 1 from services where business_id = b.id and active and not is_extra and id = any (p_service_ids)) then
+    raise exception 'FALTA_SERVICIO_PRINCIPAL';
   end if;
 
   -- Límites antiabuso
@@ -1044,10 +1076,8 @@ begin
 
   -- Cupón: se valida y se gasta en la misma transacción que la reserva
   if nullif(btrim(coalesce(p_code, '')), '') is not null then
-    select d.code, d.discount, d.percent into v_code, v_disc, v_pct from _discount_for(b.id, p_code, v_total, true) d;
+    select d.code, d.discount into v_code, v_disc from _discount_for(b.id, p_code, v_total, true) d;
     update discounts set uses = uses + 1 where business_id = b.id and code = v_code;
-    -- Un porcentaje también se aplica al total en USD; un importe fijo está en CUP y no se puede
-    v_usd := case when v_pct is not null then v_usd - least(v_usd, round(v_usd * v_pct / 100.0, 2)) end;
   end if;
 
   v_start := (p_date + p_time::time) at time zone b.timezone;
@@ -1055,19 +1085,19 @@ begin
   select f.staff_id into v_staff from _free_staff(b.id, v_start, v_start + make_interval(mins => v_dur), p_staff) f;
   begin
     insert into appointments (business_id, token, starts_at, ends_at, customer_name, customer_phone,
-                              customer_note, total, status, source, discount_code, discount, staff_id, total_usd)
+                              customer_note, total, status, source, discount_code, discount, staff_id, usd_rate)
     values (b.id, v_token, v_start, v_start + make_interval(mins => v_dur), v_name, v_phone,
             nullif(left(btrim(coalesce(p_note, '')), 500), ''), v_total - v_disc, 'pendiente', 'web',
-            v_code, v_disc, v_staff, v_usd)
+            v_code, v_disc, v_staff, case when b.usd_prices then b.usd_rate end)
     returning id into v_id;
   exception when exclusion_violation then
     raise exception 'TURNO_OCUPADO';
   end;
 
-  insert into appointment_services (appointment_id, service_id, name, price, duration_min, price_usd)
-  select v_id, s.id, s.name, s.price, s.duration_min, case when b.usd_prices then s.price_usd end
+  insert into appointment_services (appointment_id, service_id, name, price, duration_min)
+  select v_id, s.id, s.name, s.price, s.duration_min
     from services s where s.business_id = b.id and s.id = any (p_service_ids)
-    order by s.position;
+    order by s.is_extra, s.position;
 
   return v_token;
 end;
@@ -1084,7 +1114,7 @@ returns jsonb language sql stable security definer set search_path = public as $
     'customer_phone', a.customer_phone,
     'customer_note', a.customer_note,
     'total', a.total,
-    'total_usd', a.total_usd,
+    'usd_rate', a.usd_rate,
     'discount', a.discount,
     'discount_code', a.discount_code,
     'staff_id', (select st.id from staff st where st.id = a.staff_id and st.active),
@@ -1093,8 +1123,8 @@ returns jsonb language sql stable security definer set search_path = public as $
     'reschedule_count', a.reschedule_count,
     'can_change', a.status in ('pendiente', 'confirmada')
        and a.starts_at > now() + make_interval(hours => b.cancel_notice_hours),
-    'services', coalesce((select jsonb_agg(jsonb_build_object('name', s.name, 'price', s.price,
-                 'price_usd', s.price_usd, 'duration_min', s.duration_min)) from appointment_services s
+    'services', coalesce((select jsonb_agg(jsonb_build_object('id', s.service_id, 'name', s.name, 'price', s.price,
+                 'duration_min', s.duration_min)) from appointment_services s
                  where s.appointment_id = a.id), '[]'::jsonb),
     'can_review', plan_has(business_effective_plan(b.plan, b.trial_ends_at, b.paid_until), 'opiniones')
        and _appt_done(a.status, a.ends_at)
@@ -1150,7 +1180,6 @@ begin
   end if;
   if a.status not in ('pendiente', 'confirmada') then raise exception 'CITA_NO_MODIFICABLE'; end if;
   if a.starts_at <= now() + make_interval(hours => b.cancel_notice_hours) then raise exception 'FUERA_DE_PLAZO'; end if;
-  if a.reschedule_count >= 1 then raise exception 'LIMITE_CAMBIOS'; end if;
 
   v_dur := greatest(5, (extract(epoch from (a.ends_at - a.starts_at)) / 60)::int);
   -- Mismo profesional; si ya no está activo, cualquiera que esté libre
@@ -1170,6 +1199,108 @@ begin
   exception when exclusion_violation then
     raise exception 'TURNO_OCUPADO';
   end;
+end;
+$$;
+
+-- El cliente cambia su cita desde su enlace: servicios, día y hora, profesional, nombre y nota.
+-- Se puede cambiar las veces que quiera hasta el plazo de aviso del negocio. Si cambia algo más que
+-- el nombre o la nota, la cita vuelve a quedar pendiente de que el negocio la confirme.
+create or replace function public.edit_booking(
+  p_token text, p_service_ids uuid[], p_date date, p_time text, p_name text,
+  p_note text default null, p_staff uuid default null)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  a appointments;
+  b businesses;
+  d discounts;
+  v_name text := btrim(coalesce(p_name, ''));
+  v_time time;
+  v_same boolean;
+  v_changed boolean;
+  v_count int;
+  v_dur int;
+  v_total numeric;
+  v_disc numeric := 0;
+  v_start timestamptz;
+  v_check text;
+begin
+  select ap.* into a from appointments ap where ap.token = p_token for update;
+  if not found then raise exception 'CITA_NO_EXISTE'; end if;
+  select * into b from businesses where id = a.business_id;
+  if business_effective_plan(b.plan, b.trial_ends_at, b.paid_until) is null then
+    raise exception 'NEGOCIO_INACTIVO';
+  end if;
+  if a.status not in ('pendiente', 'confirmada') then raise exception 'CITA_NO_MODIFICABLE'; end if;
+  if a.starts_at <= now() + make_interval(hours => b.cancel_notice_hours) then raise exception 'FUERA_DE_PLAZO'; end if;
+  if char_length(v_name) not between 2 and 80 then raise exception 'NOMBRE_INVALIDO'; end if;
+  if p_service_ids is null or cardinality(p_service_ids) = 0 or cardinality(p_service_ids) > 10 then
+    raise exception 'SERVICIOS_INVALIDOS';
+  end if;
+  if p_staff is not null and not exists (select 1 from staff where id = p_staff and business_id = b.id and active) then
+    raise exception 'PROFESIONAL_INVALIDO';
+  end if;
+  begin
+    v_time := p_time::time;
+  exception when others then
+    raise exception 'TURNO_INVALIDO';
+  end;
+
+  -- Mismos servicios: se mantienen el precio y la duración con los que se reservó
+  v_same := coalesce((select array_agg(distinct s.service_id order by s.service_id)
+                        from appointment_services s where s.appointment_id = a.id), '{}')
+            = (select array_agg(distinct x order by x) from unnest(p_service_ids) x);
+  if v_same then
+    v_dur := greatest(5, (extract(epoch from (a.ends_at - a.starts_at)) / 60)::int);
+  else
+    select count(*), sum(duration_min), sum(price) into v_count, v_dur, v_total
+      from services where business_id = b.id and active and id = any (p_service_ids);
+    if v_count = 0 or v_count <> (select count(distinct x) from unnest(p_service_ids) x) then
+      raise exception 'SERVICIOS_INVALIDOS';
+    end if;
+    if not exists (select 1 from services where business_id = b.id and active and not is_extra and id = any (p_service_ids)) then
+      raise exception 'FALTA_SERVICIO_PRINCIPAL';
+    end if;
+    -- El cupón ya usado se vuelve a aplicar al nuevo total (sin gastar otro uso)
+    if a.discount_code is not null then
+      select * into d from discounts where business_id = b.id and code = a.discount_code;
+      v_disc := case when found then least(v_total, coalesce(d.amount, round(v_total * d.percent / 100.0, 2)))
+                     else least(v_total, a.discount) end;
+    end if;
+  end if;
+
+  v_start := (p_date + v_time) at time zone b.timezone;
+  v_changed := not v_same or v_start <> a.starts_at or p_staff is distinct from a.staff_id;
+  if v_changed then
+    v_check := _check_slot(b.id, p_date, p_time, v_dur, a.id, p_staff);
+    if v_check = 'invalido' then raise exception 'TURNO_INVALIDO'; end if;
+    if v_check = 'ocupado' then raise exception 'TURNO_OCUPADO'; end if;
+  end if;
+
+  begin
+    update appointments
+       set customer_name = v_name,
+           customer_note = nullif(left(btrim(coalesce(p_note, '')), 500), ''),
+           starts_at = case when v_changed then v_start else starts_at end,
+           ends_at = case when v_changed then v_start + make_interval(mins => v_dur) else ends_at end,
+           staff_id = case when v_changed then (select f.staff_id from _free_staff(b.id, v_start,
+                        v_start + make_interval(mins => v_dur), p_staff, a.id) f) else staff_id end,
+           total = case when v_same then total else v_total - v_disc end,
+           discount = case when v_same then discount else v_disc end,
+           usd_rate = case when v_same then usd_rate when b.usd_prices then b.usd_rate end,
+           reschedule_count = reschedule_count + case when v_start <> a.starts_at then 1 else 0 end,
+           status = case when v_changed then 'pendiente' else status end
+     where id = a.id;
+  exception when exclusion_violation then
+    raise exception 'TURNO_OCUPADO';
+  end;
+
+  if not v_same then
+    delete from appointment_services where appointment_id = a.id;
+    insert into appointment_services (appointment_id, service_id, name, price, duration_min)
+    select a.id, s.id, s.name, s.price, s.duration_min
+      from services s where s.business_id = b.id and s.id = any (p_service_ids)
+      order by s.is_extra, s.position;
+  end if;
 end;
 $$;
 
@@ -1235,12 +1366,13 @@ $$;
 -- ---------------------------------------------------------------------
 
 -- Crea el negocio al terminar el asistente. Empieza la prueba gratis.
--- Moneda: p_currency 'CUP' o 'USD'; con p_usd_prices, CUP y además precio en USD por servicio.
+-- Moneda: p_currency 'CUP' o 'USD'; con p_usd_prices, precios en USD y su equivalente en CUP a la tasa p_usd_rate.
 drop function if exists public.create_business(text, text, text, text, text, text, jsonb, jsonb);
+drop function if exists public.create_business(text, text, text, text, text, text, jsonb, jsonb, text, boolean);
 create or replace function public.create_business(
   p_name text, p_slug text, p_type text, p_whatsapp text, p_address text,
   p_color text, p_services jsonb, p_schedule jsonb,
-  p_currency text default 'CUP', p_usd_prices boolean default false)
+  p_currency text default 'CUP', p_usd_prices boolean default false, p_usd_rate numeric default null)
 returns jsonb language plpgsql volatile security definer set search_path = public as $$
 declare
   v_uid uuid := auth.uid();
@@ -1267,23 +1399,23 @@ begin
   end loop;
 
   insert into businesses (owner_id, slug, code, name, business_type, whatsapp, address,
-                          color_primary, trial_ends_at, policies, currency, usd_prices)
+                          color_primary, trial_ends_at, policies, currency, usd_prices, usd_rate)
   values (v_uid, lower(p_slug), v_code, btrim(p_name), coalesce(nullif(p_type, ''), 'otro'),
           _clean_phone(p_whatsapp), nullif(btrim(coalesce(p_address, '')), ''),
           coalesce(nullif(p_color, ''), '#7c3aed'),
           now() + make_interval(days => coalesce(v_trial, 3)),
           'Llega 5 minutos antes de tu cita. Si no puedes venir, cancela o cambia la fecha desde el enlace de tu cita.',
-          coalesce(p_currency, 'CUP'), coalesce(p_usd_prices, false))
+          coalesce(p_currency, 'CUP'), coalesce(p_usd_prices, false),
+          case when p_usd_rate > 0 then round(p_usd_rate, 2) end)
   returning id into v_id;
 
   for v_item in select * from jsonb_array_elements(coalesce(p_services, '[]'::jsonb)) loop
     if coalesce(btrim(v_item ->> 'name'), '') <> '' then
-      insert into services (business_id, name, price, duration_min, position, price_usd)
+      insert into services (business_id, name, price, duration_min, position)
       values (v_id, left(btrim(v_item ->> 'name'), 80),
               greatest(0, coalesce((v_item ->> 'price')::numeric, 0)),
               least(600, greatest(5, coalesce((v_item ->> 'duration_min')::int, 60))),
-              v_pos, case when p_usd_prices and nullif(v_item ->> 'price_usd', '') is not null
-                          then greatest(0, (v_item ->> 'price_usd')::numeric) end);
+              v_pos);
       v_pos := v_pos + 1;
     end if;
   end loop;
@@ -1334,7 +1466,6 @@ declare
   b businesses;
   v_dur int;
   v_total numeric;
-  v_usd numeric;
   v_start timestamptz;
   v_id uuid;
 begin
@@ -1351,27 +1482,24 @@ begin
   select coalesce(sum(duration_min), 0), coalesce(sum(price), 0) into v_dur, v_total
     from services where business_id = b.id and id = any (coalesce(p_service_ids, '{}'));
   if v_dur = 0 then v_dur := 60; end if;
-  if b.usd_prices then
-    select case when count(*) > 0 and count(price_usd) = count(*) then sum(price_usd) end into v_usd
-      from services where business_id = b.id and id = any (coalesce(p_service_ids, '{}'));
-  end if;
 
   v_start := (p_date + p_time::time) at time zone b.timezone;
   begin
     insert into appointments (business_id, token, starts_at, ends_at, customer_name, customer_phone,
-                              customer_note, total, status, source, staff_id, total_usd)
+                              customer_note, total, status, source, staff_id, usd_rate)
     values (b.id, replace(gen_random_uuid()::text, '-', ''), v_start,
             v_start + make_interval(mins => v_dur), btrim(p_name), _clean_phone(p_phone),
-            nullif(btrim(coalesce(p_note, '')), ''), v_total, 'confirmada', 'manual', p_staff, v_usd)
+            nullif(btrim(coalesce(p_note, '')), ''), v_total, 'confirmada', 'manual', p_staff,
+            case when b.usd_prices then b.usd_rate end)
     returning id into v_id;
   exception when exclusion_violation then
     raise exception 'TURNO_OCUPADO';
   end;
 
-  insert into appointment_services (appointment_id, service_id, name, price, duration_min, price_usd)
-  select v_id, s.id, s.name, s.price, s.duration_min, case when b.usd_prices then s.price_usd end
+  insert into appointment_services (appointment_id, service_id, name, price, duration_min)
+  select v_id, s.id, s.name, s.price, s.duration_min
     from services s where s.business_id = b.id and s.id = any (coalesce(p_service_ids, '{}'))
-    order by s.position;
+    order by s.is_extra, s.position;
   return v_id;
 end;
 $$;
@@ -1484,20 +1612,32 @@ begin
           where a.status <> 'cancelada' and not exists (
             select 1 from appointments p
             where p.business_id = b.id and p.customer_phone = a.customer_phone
-              and p.status <> 'cancelada' and p.starts_at < v_from))
+              and p.status <> 'cancelada' and p.starts_at < v_from)),
+        'expenses', (select coalesce(sum(e.amount), 0) from expenses e
+                     where e.business_id = b.id and e.day between p_from and p_to)
       )
       from appointments a
       where a.business_id = b.id and a.starts_at >= v_from and a.starts_at < v_to),
     'by_day', (
       select coalesce(jsonb_agg(jsonb_build_object(
-        'day', d.day, 'bookings', coalesce(x.n, 0), 'revenue', coalesce(x.r, 0)) order by d.day), '[]'::jsonb)
+        'day', d.day, 'bookings', coalesce(x.n, 0), 'revenue', coalesce(x.r, 0),
+        'expenses', coalesce(e.total, 0)) order by d.day), '[]'::jsonb)
       from (select g::date as day from generate_series(p_from::timestamp, p_to::timestamp, interval '1 day') g) d
       left join (
         select (a.starts_at at time zone b.timezone)::date as day, count(*) as n,
                sum(a.total) filter (where _appt_done(a.status, a.ends_at)) as r
         from appointments a
         where a.business_id = b.id and a.starts_at >= v_from and a.starts_at < v_to and a.status <> 'cancelada'
-        group by 1) x on x.day = d.day),
+        group by 1) x on x.day = d.day
+      left join (
+        select ex.day, sum(ex.amount) as total from expenses ex
+        where ex.business_id = b.id and ex.day between p_from and p_to
+        group by 1) e on e.day = d.day),
+    'expenses_by_category', (
+      select coalesce(jsonb_agg(jsonb_build_object('category', q.category, 'total', q.total) order by q.total desc), '[]'::jsonb)
+      from (select e.category, sum(e.amount) as total from expenses e
+            where e.business_id = b.id and e.day between p_from and p_to
+            group by e.category) q),
     'top_services', (
       select coalesce(jsonb_agg(jsonb_build_object('name', q.name, 'count', q.n, 'revenue', q.r) order by q.n desc, q.r desc), '[]'::jsonb)
       from (
@@ -1710,16 +1850,17 @@ revoke execute on all functions in schema public from public;
 
 grant execute on function public.get_public_prices() to anon, authenticated;
 grant execute on function public.get_public_business(text) to anon, authenticated;
-grant execute on function public.get_available_slots(text, date, int, uuid) to anon, authenticated;
+grant execute on function public.get_available_slots(text, date, int, uuid, text) to anon, authenticated;
 grant execute on function public.create_booking(text, uuid[], date, text, text, text, text, text, uuid) to anon, authenticated;
 grant execute on function public.check_discount(text, text, uuid[]) to anon, authenticated;
 grant execute on function public.join_waitlist(text, date, text, text, text) to anon, authenticated;
 grant execute on function public.get_booking(text) to anon, authenticated;
 grant execute on function public.cancel_booking(text) to anon, authenticated;
 grant execute on function public.reschedule_booking(text, date, text) to anon, authenticated;
+grant execute on function public.edit_booking(text, uuid[], date, text, text, text, uuid) to anon, authenticated;
 grant execute on function public.check_slug_available(text) to anon, authenticated;
 
-grant execute on function public.create_business(text, text, text, text, text, text, jsonb, jsonb, text, boolean) to authenticated;
+grant execute on function public.create_business(text, text, text, text, text, text, jsonb, jsonb, text, boolean, numeric) to authenticated;
 grant execute on function public.get_my_business_status() to authenticated;
 grant execute on function public.get_payment_info() to authenticated;
 grant execute on function public.owner_create_appointment(uuid[], date, text, text, text, text, uuid) to authenticated;

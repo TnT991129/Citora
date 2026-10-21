@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { TimeChips } from '../components/TimeChips'
+import { ThemeToggle } from '../components/ThemeToggle'
 import { Alert, Button, BusinessAvatar, CitoraLogo, CopyButton, Field, LinkButton, WhatsAppIcon } from '../components/ui'
 import { useSession } from '../lib/auth'
 import { setBrandColor } from '../lib/brand'
@@ -84,6 +85,7 @@ export default function Create() {
   const slots = useMemo(() => draftSlots(draft), [draft])
   const mode = draft.currency || 'CUP'
   const main = currencyFields(mode).currency
+  const rate = mode === 'AMBAS' ? Number(draft.usd_rate) || 0 : 0
 
   const stepValid = (): string | null => {
     if (step === 1) {
@@ -92,6 +94,7 @@ export default function Create() {
       if (slugState === 'taken') return 'Ese enlace ya está en uso. Prueba otro.'
       if (cleanPhone(draft.whatsapp).length < 8) return 'Escribe tu número de WhatsApp con el código del país (ej. 53 5555 5555).'
     }
+    if (step === 2 && mode === 'AMBAS' && !(rate > 0)) return 'Escribe la tasa del dólar: cuántos CUP vale 1 USD.'
     if (step === 3) {
       const valid = draft.services.filter((s) => s.name.trim())
       if (valid.length === 0) return 'Añade al menos un servicio.'
@@ -308,11 +311,31 @@ export default function Create() {
                   <span className="block text-sm text-slate-500">{c.hint}</span>
                 </span>
                 <span className="shrink-0 text-sm font-semibold text-slate-600">
-                  {c.key === 'USD' ? price(5, 'USD') : price(1500, 'CUP', c.key === 'AMBAS' ? 5 : null)}
+                  {c.key === 'CUP' ? price(1500, 'CUP') : price(5, 'USD', c.key === 'AMBAS' ? rate || 300 : null)}
                 </span>
               </button>
             ))}
           </div>
+          {mode === 'AMBAS' && (
+            <div className="card mt-4">
+              <Field label="Tasa del dólar de hoy" hint="Pondrás tus precios en USD y tus clientes verán también su cambio en CUP. Podrás actualizar la tasa cuando quieras desde tu panel.">
+                <div className="flex items-center gap-2">
+                  <span className="shrink-0 font-semibold text-slate-600">1 USD =</span>
+                  <input
+                    className="input"
+                    type="number"
+                    min={1}
+                    step="any"
+                    inputMode="decimal"
+                    placeholder="Ej. 300"
+                    value={draft.usd_rate ?? ''}
+                    onChange={(e) => update({ usd_rate: e.target.value === '' ? null : Number(e.target.value) })}
+                  />
+                  <span className="shrink-0 font-semibold text-slate-600">CUP</span>
+                </div>
+              </Field>
+            </div>
+          )}
         </section>
       )}
 
@@ -320,8 +343,9 @@ export default function Create() {
         <section>
           <h1 className="text-2xl font-bold">Tus servicios</h1>
           <p className="mt-1 text-slate-600">
-            Cambia nombres, precios (en {mode === 'AMBAS' ? 'CUP y USD' : main}) y duración. Podrás editarlos después.
-            {mode === 'AMBAS' && ' El precio en USD es opcional.'}
+            Cambia nombres, precios (en {main}) y duración. Podrás editarlos después.
+            {rate > 0 && ` Tus clientes verán también el cambio en CUP (1 USD = ${money(rate, 'CUP')}).`}
+            {' '}Los servicios complementarios (extras) los añades después desde tu panel.
           </p>
           <div className="mt-5 space-y-3">
             {draft.services.map((s, i) => (
@@ -355,22 +379,9 @@ export default function Create() {
                       placeholder="0"
                       onChange={(e) => update({ services: draft.services.map((x, j) => (j === i ? { ...x, price: Number(e.target.value) } : x)) })}
                     />
+                    {rate > 0 && s.price > 0 && <span className="mt-1 block text-slate-400">≈ {money(Math.round(s.price * rate), 'CUP')}</span>}
                   </label>
-                  {mode === 'AMBAS' && (
-                    <label className="text-xs font-medium text-slate-600">Precio (USD)
-                      <input
-                        className="input mt-1"
-                        type="number"
-                        min={0}
-                        step="any"
-                        inputMode="decimal"
-                        value={s.price_usd ?? ''}
-                        placeholder="Opcional"
-                        onChange={(e) => update({ services: draft.services.map((x, j) => (j === i ? { ...x, price_usd: e.target.value === '' ? null : Number(e.target.value) } : x)) })}
-                      />
-                    </label>
-                  )}
-                  <label className={`text-xs font-medium text-slate-600 ${mode === 'AMBAS' ? 'col-span-2' : ''}`}>Duración
+                  <label className="text-xs font-medium text-slate-600">Duración
                     <select
                       className="input mt-1"
                       value={s.duration_min}
@@ -518,7 +529,10 @@ function Shell({ children }: { children: ReactNode }) {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-xl items-center justify-between px-4 py-3">
           <Link to="/"><CitoraLogo className="text-lg" /></Link>
-          <Link to="/entrar" className="text-sm font-semibold text-slate-600">Entrar</Link>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Link to="/entrar" className="text-sm font-semibold text-slate-600">Entrar</Link>
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-xl px-4 py-6">{children}</main>

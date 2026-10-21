@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { BarChart, RankBars } from '../../components/BarChart'
 import { Alert, PageLoader } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
@@ -24,7 +25,7 @@ function rangeDates(r: Range, today: string): [string, string] {
 
 export default function Stats() {
   const allowed = useModule('finanzas')
-  const { business } = usePanel()
+  const { business, link } = usePanel()
   const [range, setRange] = useState<Range>('30')
   const [s, setS] = useState<OwnerStats | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -62,13 +63,17 @@ export default function Stats() {
 
       {error && <Alert>{error}</Alert>}
       {!s && !error && <PageLoader />}
-      {s && <StatsBody s={s} cur={cur} long={range === '365' || range === '90'} />}
+      {s && <StatsBody s={s} cur={cur} long={range === '365' || range === '90'} expensesLink={link('gastos')} />}
     </div>
   )
 }
 
-function StatsBody({ s, cur, long }: { s: OwnerStats; cur: (n: number) => string; long: boolean }) {
+function StatsBody({ s, cur, long, expensesLink }: { s: OwnerStats; cur: (n: number) => string; long: boolean; expensesLink: string }) {
   const t = s.summary
+  // Las estadísticas anteriores a los gastos no traen estos campos
+  const expenses = Number(t.expenses || 0)
+  const profit = Number(t.revenue) - expenses
+  const margin = Number(t.revenue) > 0 ? Math.round((profit / Number(t.revenue)) * 100) : null
   const finished = t.done + t.no_shows
   const showRate = finished ? Math.round((t.done / finished) * 100) : null
   const cancelRate = t.bookings + t.cancelled ? Math.round((t.cancelled / (t.bookings + t.cancelled)) * 100) : null
@@ -80,9 +85,10 @@ function StatsBody({ s, cur, long }: { s: OwnerStats; cur: (n: number) => string
   const bars = groups.map((g) => {
     const bookings = g.reduce((a, d) => a + d.bookings, 0)
     const revenue = g.reduce((a, d) => a + Number(d.revenue), 0)
+    const spent = g.reduce((a, d) => a + Number(d.expenses || 0), 0)
     const label = shortDate(g[0].day).split(' ').slice(1).join(' ')
     const span = g.length > 1 ? `${shortDate(g[0].day)} – ${shortDate(g[g.length - 1].day)}` : dayTitle(g[0].day)
-    return { bookings, revenue, label, span }
+    return { bookings, revenue, spent, label, span }
   })
   const every = Math.ceil(bars.length / 10)
 
@@ -94,6 +100,8 @@ function StatsBody({ s, cur, long }: { s: OwnerStats; cur: (n: number) => string
     <>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Tile label="Ingresos" value={cur(t.revenue)} hint={t.expected > 0 ? `+ ${cur(t.expected)} por venir` : undefined} />
+        <Tile label="Gastos" value={cur(expenses)} link={expensesLink} hint={expenses ? undefined : 'Toca para apuntarlos'} />
+        <Tile label="Ganancia" value={cur(profit)} hint={margin === null ? undefined : `${margin}% de lo ingresado`} tone={profit < 0 ? 'bad' : 'good'} />
         <Tile label="Citas atendidas" value={String(t.done)} hint={t.upcoming ? `${t.upcoming} por venir` : undefined} />
         <Tile label="Clientes" value={String(t.customers)} hint={`${t.new_customers} nuevos`} />
         <Tile label="Ticket medio" value={t.done ? cur(Math.round(avgTicket)) : '—'} />
@@ -102,6 +110,25 @@ function StatsBody({ s, cur, long }: { s: OwnerStats; cur: (n: number) => string
         <Tile label="Reservas online" value={String(t.web)} hint={`${t.manual} añadidas por ti`} />
         <Tile label="Día con más citas" value={t.bookings ? WEEKDAYS[busiestDay] : '—'} />
       </div>
+
+      {expenses > 0 && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <section className="card md:col-span-2">
+            <h2 className="font-bold">Ganancia {long ? 'por semana' : 'por día'}</h2>
+            <p className="text-sm text-slate-500">Ingresos menos gastos</p>
+            <BarChart bars={bars.map((b) => ({ label: b.label, value: Math.max(0, b.revenue - b.spent), tip: `${b.span} · ingresos ${cur(b.revenue)} · gastos ${cur(b.spent)} · ganancia ${cur(b.revenue - b.spent)}` }))} format={cur} labelEvery={every} />
+          </section>
+          <section className="card md:col-span-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <h2 className="font-bold">Gastos por categoría</h2>
+              <Link to={expensesLink} className="text-sm font-semibold text-brand">Ver gastos</Link>
+            </div>
+            <div className="mt-3">
+              <RankBars items={(s.expenses_by_category || []).map((x) => ({ label: x.category, value: Number(x.total), extra: cur(Number(x.total)) }))} />
+            </div>
+          </section>
+        </div>
+      )}
 
       {t.bookings === 0 && t.cancelled === 0 ? (
         <div className="card text-center text-slate-600">No hay citas en este periodo.</div>
@@ -159,12 +186,14 @@ function range(a: number, b: number): number[] {
   return Array.from({ length: b - a + 1 }, (_, i) => a + i)
 }
 
-function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
+function Tile({ label, value, hint, link, tone }: { label: string; value: string; hint?: string; link?: string; tone?: 'good' | 'bad' }) {
+  const body = (
+    <>
       <p className="text-xs font-medium text-slate-500">{label}</p>
-      <p className="mt-1 truncate text-xl font-extrabold">{value}</p>
+      <p className={`mt-1 truncate text-xl font-extrabold ${tone === 'bad' ? 'text-red-600' : tone === 'good' ? 'text-emerald-700' : ''}`}>{value}</p>
       {hint && <p className="mt-0.5 truncate text-xs text-slate-400">{hint}</p>}
-    </div>
+    </>
   )
+  const cls = 'block rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200'
+  return link ? <Link to={link} className={`${cls} hover:ring-slate-300`}>{body}</Link> : <div className={cls}>{body}</div>
 }

@@ -1,18 +1,27 @@
 import { useState } from 'react'
 import { Alert, Button, Empty, Field, Modal, Toggle } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
-import { duration, price } from '../../lib/format'
+import { cupRate, duration, money, price } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import type { Service } from '../../lib/types'
 import { usePanel } from './context'
+import { RateCard } from './RateCard'
 
-type Editing = Partial<Service> & { name: string; price: number; duration_min: number }
+type Editing = Partial<Service> & { name: string; price: number; duration_min: number; is_extra: boolean }
 
 export default function Services() {
   const { business, services, reloadServices } = usePanel()
   const [editing, setEditing] = useState<Editing | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const rate = cupRate(business)
+  const main = services.filter((s) => !s.is_extra)
+  const extras = services.filter((s) => s.is_extra)
+
+  const open = (e: Editing) => {
+    setError(null)
+    setEditing(e)
+  }
 
   const save = async () => {
     if (!editing) return
@@ -23,8 +32,8 @@ export default function Services() {
       name: editing.name.trim(),
       description: editing.description?.trim() || null,
       price: Math.max(0, Number(editing.price) || 0),
-      ...(business.usd_prices ? { price_usd: editing.price_usd == null ? null : Math.max(0, Number(editing.price_usd) || 0) } : {}),
       duration_min: editing.duration_min,
+      is_extra: editing.is_extra,
     }
     const { error } = editing.id
       ? await supabase.from('services').update(payload).eq('id', editing.id)
@@ -50,57 +59,65 @@ export default function Services() {
     reloadServices()
   }
 
-  const moveItem = async (index: number, dir: -1 | 1) => {
+  // Sube o baja dentro de su lista (principales o complementos) y deja las posiciones seguidas
+  const moveItem = async (list: Service[], index: number, dir: -1 | 1) => {
     const j = index + dir
-    if (j < 0 || j >= services.length) return
-    const a = services[index]
-    const b = services[j]
-    await Promise.all([
-      supabase.from('services').update({ position: j }).eq('id', a.id),
-      supabase.from('services').update({ position: index }).eq('id', b.id),
-    ])
-    // Normaliza el resto de posiciones si estaban repetidas
-    await Promise.all(
-      services.map((s, i) => (s.id === a.id || s.id === b.id || s.position === i ? null : supabase.from('services').update({ position: i }).eq('id', s.id))),
-    )
+    if (j < 0 || j >= list.length) return
+    const order = [...list]
+    ;[order[index], order[j]] = [order[j], order[index]]
+    const all = [...(list === main ? order : main), ...(list === extras ? order : extras)]
+    await Promise.all(all.map((s, i) => (s.position === i ? null : supabase.from('services').update({ position: i }).eq('id', s.id))))
     reloadServices()
   }
+
+  const row = (list: Service[]) => (s: Service, i: number) => (
+    <div key={s.id} className={`flex items-center gap-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200 ${s.active ? '' : 'opacity-60'}`}>
+      <div className="flex flex-col">
+        <button onClick={() => moveItem(list, i, -1)} disabled={i === 0} className="rounded p-0.5 text-slate-400 hover:text-slate-700 disabled:opacity-20" aria-label="Subir">
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 15l6-6 6 6" /></svg>
+        </button>
+        <button onClick={() => moveItem(list, i, 1)} disabled={i === list.length - 1} className="rounded p-0.5 text-slate-400 hover:text-slate-700 disabled:opacity-20" aria-label="Bajar">
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6" /></svg>
+        </button>
+      </div>
+      <button className="min-w-0 flex-1 text-left" onClick={() => open({ ...s })}>
+        <p className="truncate font-semibold">{s.is_extra ? '+ ' : ''}{s.name}</p>
+        <p className="text-sm text-slate-500">{price(s.price, business.currency, rate)} · {duration(s.duration_min)}</p>
+      </button>
+      <Toggle checked={s.active} onChange={(v) => toggle(s, v)} label={s.active ? 'Visible' : 'Oculto'} />
+    </div>
+  )
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-extrabold">Servicios</h1>
-        <Button size="sm" onClick={() => { setError(null); setEditing({ name: '', price: 0, duration_min: 60 }) }}>+ Servicio</Button>
+        <Button size="sm" onClick={() => open({ name: '', price: 0, duration_min: 60, is_extra: false })}>+ Servicio</Button>
       </div>
       <p className="text-sm text-slate-500">Los servicios ocultos no aparecen en tu web, pero se guardan. Las citas ya hechas mantienen su precio.</p>
 
-      {services.length === 0 && <Empty title="No tienes servicios">Añade el primero para que puedan reservar.</Empty>}
+      <RateCard />
 
-      <div className="space-y-2">
-        {services.map((s, i) => (
-          <div key={s.id} className={`flex items-center gap-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200 ${s.active ? '' : 'opacity-60'}`}>
-            <div className="flex flex-col">
-              <button onClick={() => moveItem(i, -1)} disabled={i === 0} className="rounded p-0.5 text-slate-400 hover:text-slate-700 disabled:opacity-20" aria-label="Subir">
-                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 15l6-6 6 6" /></svg>
-              </button>
-              <button onClick={() => moveItem(i, 1)} disabled={i === services.length - 1} className="rounded p-0.5 text-slate-400 hover:text-slate-700 disabled:opacity-20" aria-label="Bajar">
-                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6" /></svg>
-              </button>
-            </div>
-            <button className="min-w-0 flex-1 text-left" onClick={() => { setError(null); setEditing({ ...s }) }}>
-              <p className="truncate font-semibold">{s.name}</p>
-              <p className="text-sm text-slate-500">{price(s.price, business.currency, business.usd_prices ? s.price_usd : null)} · {duration(s.duration_min)}</p>
-            </button>
-            <Toggle checked={s.active} onChange={(v) => toggle(s, v)} label={s.active ? 'Visible' : 'Oculto'} />
+      {main.length === 0 && <Empty title="No tienes servicios">Añade el primero para que puedan reservar.</Empty>}
+      <div className="space-y-2">{main.map(row(main))}</div>
+
+      <section className="space-y-2 pt-2">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold">Complementos</h2>
+            <p className="text-sm text-slate-500">Extras opcionales que el cliente añade a un servicio, como un lavado o un diseño.</p>
           </div>
-        ))}
-      </div>
+          <Button size="sm" variant="secondary" onClick={() => open({ name: '', price: 0, duration_min: 15, is_extra: true })}>+ Complemento</Button>
+        </div>
+        {extras.length === 0 && <p className="rounded-2xl bg-white/60 px-4 py-3 text-sm text-slate-500 ring-1 ring-slate-200">Todavía no tienes complementos.</p>}
+        <div className="space-y-2">{extras.map(row(extras))}</div>
+      </section>
 
       {editing && (
         <Modal
           open
           onClose={() => setEditing(null)}
-          title={editing.id ? 'Editar servicio' : 'Nuevo servicio'}
+          title={editing.id ? (editing.is_extra ? 'Editar complemento' : 'Editar servicio') : editing.is_extra ? 'Nuevo complemento' : 'Nuevo servicio'}
           footer={
             <div className="flex gap-2">
               {editing.id && <Button variant="danger" onClick={remove} disabled={busy}>Eliminar</Button>}
@@ -112,20 +129,20 @@ export default function Services() {
             <Field label="Nombre"><input className="input" value={editing.name} maxLength={80} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></Field>
             <Field label="Descripción (opcional)"><input className="input" value={editing.description || ''} maxLength={160} onChange={(e) => setEditing({ ...editing, description: e.target.value })} /></Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label={`Precio (${business.currency})`}>
+              <Field label={`Precio (${business.currency})`} hint={rate && editing.price > 0 ? `≈ ${money(Math.round(editing.price * rate), 'CUP')}` : undefined}>
                 <input className="input" type="number" min={0} step="any" inputMode="decimal" value={editing.price} onChange={(e) => setEditing({ ...editing, price: Number(e.target.value) })} />
               </Field>
-              {business.usd_prices && (
-                <Field label="Precio (USD)">
-                  <input className="input" type="number" min={0} step="any" inputMode="decimal" placeholder="Opcional" value={editing.price_usd ?? ''} onChange={(e) => setEditing({ ...editing, price_usd: e.target.value === '' ? null : Number(e.target.value) })} />
-                </Field>
-              )}
-              <Field label="Duración">
+              <Field label={editing.is_extra ? 'Tiempo que añade' : 'Duración'}>
                 <select className="input" value={editing.duration_min} onChange={(e) => setEditing({ ...editing, duration_min: Number(e.target.value) })}>
-                  {[10, 15, 20, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300].map((m) => <option key={m} value={m}>{duration(m)}</option>)}
+                  {[5, 10, 15, 20, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300].map((m) => <option key={m} value={m}>{duration(m)}</option>)}
                 </select>
               </Field>
             </div>
+            <Toggle
+              checked={editing.is_extra}
+              onChange={(v) => setEditing({ ...editing, is_extra: v })}
+              label="Es un complemento (extra opcional que se añade a un servicio)"
+            />
             {error && <Alert>{error}</Alert>}
           </div>
         </Modal>

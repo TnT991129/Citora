@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { ThemeToggle } from '../../components/ThemeToggle'
 import { Alert, BusinessAvatar, Button, CitoraLogo, PageLoader } from '../../components/ui'
 import { useSession } from '../../lib/auth'
 import { setBrandColor } from '../../lib/brand'
@@ -16,6 +17,7 @@ import { PanelContext } from './context'
 import Backup from './Backup'
 import Customers from './Customers'
 import Discounts from './Discounts'
+import Expenses from './Expenses'
 import Gallery from './Gallery'
 import More from './More'
 import PlanPage from './PlanPage'
@@ -169,6 +171,7 @@ export default function Panel() {
               {!blocked && NAV.map((n) => <TopLink key={n.sub} base={base} to={link(n.sub)} label={n.label} />)}
               {blocked && <TopLink base={base} to={link('plan')} label="Plan" />}
             </nav>
+            <ThemeToggle />
           </div>
         </header>
 
@@ -190,6 +193,7 @@ export default function Panel() {
               <Route path="apariencia" element={<Appearance />} />
               <Route path="clientes" element={<Customers />} />
               <Route path="estadisticas" element={<Stats />} />
+              <Route path="gastos" element={<Expenses />} />
               <Route path="opiniones" element={<Reviews />} />
               <Route path="galeria" element={<Gallery />} />
               <Route path="recordatorios" element={<Reminders />} />
@@ -222,7 +226,7 @@ const NAV = [
 ] as const
 
 // Secciones a las que se llega desde "Más": la pestaña "Más" queda marcada en ellas
-const MORE_SUBS = ['mas', 'apariencia', 'equipo', 'estadisticas', 'opiniones', 'galeria', 'recordatorios', 'espera', 'cupones', 'respaldo', 'horario', 'ajustes', 'plan']
+const MORE_SUBS = ['mas', 'apariencia', 'equipo', 'estadisticas', 'gastos', 'opiniones', 'galeria', 'recordatorios', 'espera', 'cupones', 'respaldo', 'horario', 'ajustes', 'plan']
 
 function useIsActive(to: string, base: string): boolean {
   const { pathname } = useLocation()

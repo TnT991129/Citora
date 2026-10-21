@@ -2,13 +2,14 @@
 
 export const DEFAULT_TZ = 'America/Havana'
 
-// Moneda del negocio. "Ambas": la principal es CUP y cada servicio puede tener además precio en USD.
+// Moneda del negocio. "Ambas": los precios van en USD y se muestra también su cambio en CUP
+// con la tasa del día que pone el dueño (usd_rate = CUP por 1 USD).
 export type CurrencyMode = 'CUP' | 'USD' | 'AMBAS'
 
 export const CURRENCY_MODES: { key: CurrencyMode; name: string; hint: string }[] = [
   { key: 'CUP', name: 'CUP', hint: 'Pesos cubanos' },
   { key: 'USD', name: 'USD', hint: 'Dólares' },
-  { key: 'AMBAS', name: 'CUP y USD', hint: 'Cada servicio con los dos precios' },
+  { key: 'AMBAS', name: 'USD y CUP', hint: 'Precios en USD y su cambio en CUP a la tasa del día' },
 ]
 
 export function currencyMode(b: { currency?: string; usd_prices?: boolean }): CurrencyMode {
@@ -17,7 +18,13 @@ export function currencyMode(b: { currency?: string; usd_prices?: boolean }): Cu
 
 /** Columnas del negocio para una moneda elegida */
 export function currencyFields(m: CurrencyMode): { currency: string; usd_prices: boolean } {
-  return { currency: m === 'USD' ? 'USD' : 'CUP', usd_prices: m === 'AMBAS' }
+  return { currency: m === 'CUP' ? 'CUP' : 'USD', usd_prices: m === 'AMBAS' }
+}
+
+/** Tasa con la que se muestra el cambio en CUP; null si el negocio no lo muestra */
+export function cupRate(b: { usd_prices?: boolean; usd_rate?: number | string | null }): number | null {
+  const r = Number(b.usd_rate)
+  return b.usd_prices && r > 0 ? r : null
 }
 
 export function money(n: number | string | null | undefined, currency = 'CUP'): string {
@@ -27,15 +34,10 @@ export function money(n: number | string | null | undefined, currency = 'CUP'): 
   return `${v < 0 ? '-' : ''}${grouped}${dec ? ',' + dec : ''} ${currency}`
 }
 
-/** Precio en la moneda del negocio y, si lo tiene, también en USD: "1.500 CUP · 5 USD" */
-export function price(n: number | string | null | undefined, currency: string, usd?: number | string | null): string {
-  return usd == null ? money(n, currency) : `${money(n, currency)} · ${money(usd, 'USD')}`
-}
-
-/** Suma de precios en USD; null si a alguno le falta */
-export function sumUsd(items: { price_usd?: number | string | null }[]): number | null {
-  if (!items.length || items.some((s) => s.price_usd == null)) return null
-  return items.reduce((a, s) => a + Number(s.price_usd), 0)
+/** Precio en la moneda del negocio y, con tasa, también su cambio en CUP: "5 USD · 1.500 CUP" */
+export function price(n: number | string | null | undefined, currency: string, rate?: number | string | null): string {
+  const r = Number(rate)
+  return r > 0 ? `${money(n, currency)} · ${money(Math.round(Number(n ?? 0) * r), 'CUP')}` : money(n, currency)
 }
 
 export function duration(min: number): string {

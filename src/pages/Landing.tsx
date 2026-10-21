@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { ThemeToggle } from '../components/ThemeToggle'
 import { CitoraLogo } from '../components/ui'
 import { setBrandColor } from '../lib/brand'
 import { money } from '../lib/format'
@@ -25,6 +26,7 @@ export default function Landing() {
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
           <CitoraLogo className="text-xl text-slate-900" />
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <Link to="/entrar" className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">Entrar</Link>
             <Link to="/crear" className="rounded-xl bg-citora-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-citora-700">Crear mi app</Link>
           </div>

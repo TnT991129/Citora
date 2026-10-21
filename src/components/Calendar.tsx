@@ -101,10 +101,12 @@ interface SlotPickerProps {
   staff?: string | null
   /** Se muestra debajo del aviso cuando el día está lleno (ej. lista de espera) */
   whenFull?: ReactNode
+  /** Al editar una cita: su propio hueco no cuenta como ocupado */
+  excludeToken?: string
 }
 
 /** Turnos de un día, con los ocupados bloqueados */
-export function SlotPicker({ slug, date, duration, value, onChange, staff, whenFull }: SlotPickerProps) {
+export function SlotPicker({ slug, date, duration, value, onChange, staff, whenFull, excludeToken }: SlotPickerProps) {
   const [slots, setSlots] = useState<{ slot: string; available: boolean }[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -113,7 +115,10 @@ export function SlotPicker({ slug, date, duration, value, onChange, staff, whenF
     setSlots(null)
     setError(null)
     supabase
-      .rpc('get_available_slots', { p_slug: slug, p_date: date, p_duration: duration, p_staff: staff || null })
+      .rpc('get_available_slots', {
+        p_slug: slug, p_date: date, p_duration: duration, p_staff: staff || null,
+        ...(excludeToken ? { p_exclude_token: excludeToken } : {}),
+      })
       .then(({ data, error }) => {
         if (!alive) return
         if (error) setError(errorMessage(error))
@@ -122,7 +127,7 @@ export function SlotPicker({ slug, date, duration, value, onChange, staff, whenF
     return () => {
       alive = false
     }
-  }, [slug, date, duration, staff])
+  }, [slug, date, duration, staff, excludeToken])
 
   if (error) return <Alert>{error}</Alert>
   if (!slots) return <div className="flex justify-center py-6 text-slate-400"><Spinner /></div>

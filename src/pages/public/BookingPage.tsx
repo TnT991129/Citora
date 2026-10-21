@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Calendar, SlotPicker } from '../../components/Calendar'
-import { Alert, Button, LinkButton, Modal, PageLoader, StatusBadge, WhatsAppIcon } from '../../components/ui'
+import { Alert, Button, Field, flash, LinkButton, Modal, PageLoader, StatusBadge, WhatsAppIcon } from '../../components/ui'
 import { applyAppearance } from '../../lib/appearance'
 import { setBrandColor } from '../../lib/brand'
 import { setAppManifest } from '../../lib/pwa'
 import { errorMessage } from '../../lib/errors'
-import { dateKey, duration, longDate, money, price, timeOf, todayKey, weekdayOf, dayTitle } from '../../lib/format'
+import { cupRate, dateKey, duration, longDate, money, price, timeOf, todayKey, weekdayOf, dayTitle } from '../../lib/format'
+import { hasModule } from '../../lib/plans'
 import { rememberBooking } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
 import type { PublicBooking, PublicBusiness } from '../../lib/types'
 import { bookingUrl, clientPath } from '../../lib/url'
 import { waLink } from '../../lib/whatsapp'
+import { hasMainService, ServicePicker } from './ServicePicker'
 import { Centered, PoweredBy, PublicHeader, Stars } from './shared'
 
 export default function BookingPage() {
@@ -21,7 +23,7 @@ export default function BookingPage() {
   const [booking, setBooking] = useState<PublicBooking | null | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
   const [confirmCancel, setConfirmCancel] = useState(false)
-  const [rescheduling, setRescheduling] = useState(false)
+  const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const loadBooking = useCallback(async () => {
@@ -69,7 +71,7 @@ export default function BookingPage() {
     `Hola, soy ${booking.customer_name}. Reservé una cita en ${b.name}:`,
     `📅 ${longDate(key)} a las ${time}`,
     `✂️ ${booking.services.map((s) => s.name).join(', ')}`,
-    `💵 Total: ${price(booking.total, b.currency, booking.total_usd)}`,
+    `💵 Total: ${price(booking.total, b.currency, booking.usd_rate)}`,
     booking.customer_note ? `📝 ${booking.customer_note}` : '',
     `Mi cita: ${link}`,
   ].filter(Boolean).join('\n')
@@ -114,7 +116,7 @@ export default function BookingPage() {
             {booking.services.map((s, i) => (
               <div key={i} className="flex justify-between py-1 text-slate-700">
                 <span>{s.name}</span>
-                <span>{price(s.price, b.currency, s.price_usd)}</span>
+                <span className="text-right">{price(s.price, b.currency, booking.usd_rate)}</span>
               </div>
             ))}
             {Number(booking.discount || 0) > 0 && (
@@ -125,7 +127,7 @@ export default function BookingPage() {
             )}
             <div className="mt-2 flex justify-between border-t border-slate-100 pt-2 font-bold">
               <span>Total</span>
-              <span>{price(booking.total, b.currency, booking.total_usd)}</span>
+              <span className="text-right">{price(booking.total, b.currency, booking.usd_rate)}</span>
             </div>
             <p className="mt-1 text-xs text-slate-500">Duración aproximada: {duration(minutes)}</p>
           </div>
@@ -160,12 +162,8 @@ export default function BookingPage() {
 
         {active && booking.can_change && (
           <div className="grid grid-cols-2 gap-3">
-            {booking.reschedule_count < 1 && (
-              <Button variant="secondary" onClick={() => setRescheduling(true)}>Cambiar fecha</Button>
-            )}
-            <Button variant="danger" onClick={() => setConfirmCancel(true)} className={booking.reschedule_count >= 1 ? 'col-span-2' : ''}>
-              Cancelar cita
-            </Button>
+            <Button variant="secondary" onClick={() => setEditing(true)}>Editar cita</Button>
+            <Button variant="danger" onClick={() => setConfirmCancel(true)}>Cancelar cita</Button>
           </div>
         )}
         {active && !booking.can_change && (
@@ -197,13 +195,13 @@ export default function BookingPage() {
         <p className="text-slate-700">Se liberará tu turno del <b>{longDate(key)}</b> a las <b>{time}</b>.</p>
       </Modal>
 
-      {rescheduling && (
-        <Reschedule
+      {editing && (
+        <EditBooking
           booking={booking}
-          minutes={minutes}
-          onClose={() => setRescheduling(false)}
+          onClose={() => setEditing(false)}
           onDone={() => {
-            setRescheduling(false)
+            setEditing(false)
+            flash('Cita actualizada')
             loadBooking()
           }}
         />
@@ -212,15 +210,20 @@ export default function BookingPage() {
   )
 }
 
-function Reschedule({ booking, minutes, onClose, onDone }: {
+function EditBooking({ booking, onClose, onDone }: {
   booking: PublicBooking
-  minutes: number
   onClose: () => void
   onDone: () => void
 }) {
+  const tz = booking.business.timezone
+  const original = booking.services.map((s) => s.id).filter((id): id is string => Boolean(id))
   const [biz, setBiz] = useState<PublicBusiness | null>(null)
-  const [date, setDate] = useState<string | null>(null)
-  const [time, setTime] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string[]>(original)
+  const [staffId, setStaffId] = useState<string | null>(booking.staff_id || null)
+  const [date, setDate] = useState<string | null>(dateKey(booking.starts_at, tz))
+  const [time, setTime] = useState<string | null>(timeOf(booking.starts_at, tz))
+  const [name, setName] = useState(booking.customer_name)
+  const [note, setNote] = useState(booking.customer_note || '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -228,45 +231,109 @@ function Reschedule({ booking, minutes, onClose, onDone }: {
     supabase.rpc('get_public_business', { p_slug: booking.business.slug }).then(({ data }) => setBiz(data as PublicBusiness))
   }, [booking.business.slug])
 
-  const save = async () => {
-    if (!date || !time) return setError('Elige el día y la hora.')
-    setBusy(true)
-    const { error } = await supabase.rpc('reschedule_booking', { p_token: booking.token, p_date: date, p_time: time })
-    setBusy(false)
-    if (error) {
-      setError(errorMessage(error))
-      setTime(null)
-    } else onDone()
-  }
-
+  const services = biz?.services || []
+  const same = selected.length === original.length && selected.every((id) => original.includes(id))
+  const chosen = services.filter((s) => selected.includes(s.id))
+  const minutes = same ? booking.services.reduce((a, s) => a + s.duration_min, 0) : chosen.reduce((a, s) => a + s.duration_min, 0)
+  const total = same ? Number(booking.total) : chosen.reduce((a, s) => a + Number(s.price), 0)
+  const rate = same ? booking.usd_rate : biz ? cupRate(biz) : null
+  const team = biz && hasModule(biz.plan, 'empleados') ? biz.staff || [] : []
   const openDays = new Set((biz?.schedule || []).filter((d) => d.is_open).map((d) => d.weekday))
   const closed = new Set(biz?.closed_days || [])
+
+  const save = async () => {
+    if (!same && !hasMainService(services, selected)) return setError('Elige al menos un servicio principal.')
+    if (!date || !time) return setError('Elige el día y la hora.')
+    if (name.trim().length < 2) return setError('Escribe tu nombre.')
+    setBusy(true)
+    setError(null)
+    const { error } = await supabase.rpc('edit_booking', {
+      p_token: booking.token,
+      p_service_ids: selected,
+      p_date: date,
+      p_time: time,
+      p_name: name.trim(),
+      p_note: note.trim() || null,
+      p_staff: staffId,
+    })
+    setBusy(false)
+    if (error) {
+      const msg = errorMessage(error)
+      setError(msg)
+      if (/turno|horario/i.test(msg)) setTime(null)
+    } else onDone()
+  }
 
   return (
     <Modal
       open
       onClose={onClose}
-      title="Cambiar fecha"
-      footer={<Button block onClick={save} loading={busy} disabled={!date || !time}>Guardar cambio</Button>}
+      title="Editar mi cita"
+      footer={<Button block onClick={save} loading={busy} disabled={!biz?.accepting}>Guardar cambios · {price(total, booking.business.currency, rate)}</Button>}
     >
       {!biz ? (
         <PageLoader />
       ) : !biz.accepting ? (
-        <Alert kind="warning">El negocio no está recibiendo reservas ahora.</Alert>
+        <Alert kind="warning">El negocio no está recibiendo reservas ahora. Para cambios, escríbele por WhatsApp.</Alert>
       ) : (
-        <div className="space-y-4">
-          <p className="text-sm text-slate-500">Solo puedes cambiar la fecha una vez.</p>
-          <Calendar
-            today={biz.today || todayKey(booking.business.timezone)}
-            maxDays={biz.max_days_ahead || 60}
-            isOpen={(k) => openDays.has(weekdayOf(k)) && !closed.has(k)}
-            value={date}
-            onChange={(d) => {
-              setDate(d)
-              setTime(null)
-            }}
-          />
-          {date && <SlotPicker slug={biz.slug} date={date} duration={minutes} value={time} onChange={setTime} staff={booking.staff_id} />}
+        <div className="space-y-5">
+          <div>
+            <h3 className="mb-2 font-bold">Servicios</h3>
+            <ServicePicker
+              services={services}
+              selected={selected}
+              onChange={(ids) => setSelected(ids.filter((id) => services.some((s) => s.id === id)))}
+              currency={booking.business.currency}
+              rate={cupRate(biz)}
+            />
+          </div>
+          {team.length > 0 && (
+            <div>
+              <h3 className="mb-2 font-bold">¿Con quién?</h3>
+              <div className="flex flex-wrap gap-2">
+                {[{ id: null, name: 'Cualquiera' }, ...team].map((s) => (
+                  <button
+                    key={s.id || 'any'}
+                    type="button"
+                    onClick={() => {
+                      setStaffId(s.id)
+                      setTime(null)
+                    }}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold ${staffId === s.id ? 'bg-brand text-white shadow' : 'bg-white text-slate-700 ring-1 ring-slate-200'}`}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div>
+            <h3 className="mb-2 font-bold">Día y hora</h3>
+            <Calendar
+              today={biz.today || todayKey(tz)}
+              maxDays={biz.max_days_ahead || 60}
+              isOpen={(k) => openDays.has(weekdayOf(k)) && !closed.has(k)}
+              value={date}
+              onChange={(d) => {
+                setDate(d)
+                setTime(null)
+              }}
+            />
+            {date && (
+              <div className="mt-3">
+                <SlotPicker slug={biz.slug} date={date} duration={minutes || 60} value={time} onChange={setTime} staff={staffId} excludeToken={booking.token} />
+              </div>
+            )}
+          </div>
+          <Field label="Tu nombre">
+            <input className="input" autoComplete="name" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
+          </Field>
+          <Field label="Nota para el negocio (opcional)">
+            <textarea className="input min-h-[80px]" maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
+          </Field>
+          <p className="text-xs text-slate-500">
+            Si cambias los servicios, el día, la hora o el profesional, el negocio tendrá que volver a confirmar tu cita.
+          </p>
           {error && <Alert>{error}</Alert>}
         </div>
       )}

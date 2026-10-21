@@ -78,12 +78,12 @@ export function AppointmentModal({ appointment, onClose, onChanged }: {
           {(a.appointment_services || []).map((s, i) => (
             <div key={i} className="flex justify-between py-0.5 text-sm">
               <span>{s.name}</span>
-              <span>{price(s.price, business.currency, s.price_usd)}</span>
+              <span>{price(s.price, business.currency, a.usd_rate)}</span>
             </div>
           ))}
           <div className="mt-1 flex justify-between border-t border-slate-200 pt-1.5 font-bold">
             <span>Total</span>
-            <span>{price(a.total, business.currency, a.total_usd)}</span>
+            <span>{price(a.total, business.currency, a.usd_rate)}</span>
           </div>
         </div>
 

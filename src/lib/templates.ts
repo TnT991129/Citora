@@ -2,7 +2,6 @@
 export interface ServiceTemplate {
   name: string
   price: number // en CUP
-  price_usd?: number | null
   duration_min: number
 }
 

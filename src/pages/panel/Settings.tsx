@@ -20,6 +20,7 @@ export default function Settings() {
     description: business.description || '',
     policies: business.policies || '',
     currency: currencyMode(business),
+    usd_rate: business.usd_rate ? String(business.usd_rate) : '',
   })
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -30,6 +31,8 @@ export default function Settings() {
 
   const save = async () => {
     if (form.name.trim().length < 2) return setError('Escribe el nombre del negocio.')
+    const rate = Number(form.usd_rate)
+    if (form.currency === 'AMBAS' && !(rate > 0)) return setError('Escribe la tasa del dólar: cuántos CUP vale 1 USD.')
     setBusy(true)
     setError(null)
     if (form.slug !== business.slug) {
@@ -48,6 +51,7 @@ export default function Settings() {
       description: form.description.trim() || null,
       policies: form.policies.trim() || null,
       ...currencyFields(form.currency),
+      ...(form.currency === 'AMBAS' ? { usd_rate: Math.round(rate * 100) / 100 } : {}),
     }).eq('id', business.id)
     setBusy(false)
     if (error) return setError(errorMessage(error))
@@ -137,7 +141,13 @@ export default function Settings() {
           </div>
         </Field>
         {form.currency === 'AMBAS' && (
-          <p className="text-sm text-slate-500">Pon el precio en USD de cada servicio en Servicios. Las cuentas y estadísticas se llevan en CUP.</p>
+          <Field label="Tasa del dólar" hint="Tus precios van en USD y tus clientes ven también su cambio en CUP. Las citas ya hechas mantienen la tasa con la que se reservaron.">
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 font-semibold text-slate-600">1 USD =</span>
+              <input className="input" type="number" min={1} step="any" inputMode="decimal" placeholder="Ej. 300" value={form.usd_rate} onChange={(e) => set({ usd_rate: e.target.value })} />
+              <span className="shrink-0 font-semibold text-slate-600">CUP</span>
+            </div>
+          </Field>
         )}
         {currencyFields(form.currency).currency !== business.currency && (
           <Alert kind="warning">Los precios no se convierten solos: revisa tus servicios y descuentos después de guardar. Las citas ya hechas se verán en la nueva moneda.</Alert>

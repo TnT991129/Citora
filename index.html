@@ -7,6 +7,16 @@
     <meta name="theme-color" content="#5243e5" />
     <meta name="description" content="Citora: crea la app de reservas de tu negocio en minutos." />
     <title>Citora · Reservas para tu negocio</title>
+    <script>
+      // Modo oscuro antes de pintar (ver src/lib/theme.ts)
+      try {
+        var t = JSON.parse(localStorage.getItem('citora:tema') || 'null')
+        if (t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark')
+          document.documentElement.style.colorScheme = 'dark'
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body class="bg-slate-50 text-slate-900 antialiased">
     <div id="root"></div>
