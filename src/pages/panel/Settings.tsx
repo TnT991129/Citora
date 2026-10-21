@@ -9,8 +9,6 @@ import { BUSINESS_TYPES } from '../../lib/templates'
 import { panelUrl, publicUrl } from '../../lib/url'
 import { usePanel } from './context'
 
-const POLICIES_MAX = 5000
-
 export default function Settings() {
   const { business, reloadBusiness, slugChanged, link } = usePanel()
   const [form, setForm] = useState({
@@ -20,7 +18,6 @@ export default function Settings() {
     whatsapp: business.whatsapp,
     address: business.address || '',
     description: business.description || '',
-    policies: business.policies || '',
     currency: currencyMode(business),
     usd_rate: business.usd_rate ? String(business.usd_rate) : '',
   })
@@ -51,7 +48,6 @@ export default function Settings() {
       whatsapp: form.whatsapp.replace(/\D/g, ''),
       address: form.address.trim() || null,
       description: form.description.trim() || null,
-      policies: form.policies.trim() || null,
       ...currencyFields(form.currency),
       ...(form.currency === 'AMBAS' ? { usd_rate: Math.round(rate * 100) / 100 } : {}),
     }).eq('id', business.id)
@@ -160,22 +156,7 @@ export default function Settings() {
         </Field>
         <p className="text-sm text-slate-500">
           El color, los degradados, la portada y la letra están en <Link to={link('apariencia')} className="font-semibold text-brand">Apariencia</Link>.
-        </p>
-      </section>
-
-      <section className="card space-y-3">
-        <h2 className="font-bold">Políticas</h2>
-        <p className="text-sm text-slate-500">Lo que tus clientes aceptan al reservar: puntualidad, cancelaciones, etc.</p>
-        <textarea
-          className="input min-h-[320px] resize-y leading-relaxed"
-          rows={14}
-          value={form.policies}
-          maxLength={POLICIES_MAX}
-          placeholder={'Ej.\n• Llega 5 minutos antes de tu cita.\n• Si llegas más de 15 minutos tarde, puede que tengamos que cambiar tu cita.\n• Cancela con al menos 6 horas de antelación.'}
-          onChange={(e) => set({ policies: e.target.value })}
-        />
-        <p className={`text-right text-xs ${form.policies.length > POLICIES_MAX * 0.9 ? 'text-amber-700' : 'text-slate-400'}`}>
-          {form.policies.length.toLocaleString('es-ES')} / {POLICIES_MAX.toLocaleString('es-ES')} caracteres
+          Las reglas de reserva y lo que leen tus clientas están en <Link to={link('politicas')} className="font-semibold text-brand">Políticas</Link>.
         </p>
       </section>
 

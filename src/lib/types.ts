@@ -1,4 +1,5 @@
 import type { Appearance } from './appearance'
+import type { PolicySections } from './policies'
 
 export type PlanKey = 'basico' | 'plus' | 'ultra'
 export type BusinessStatus = 'prueba' | 'activo' | 'vencido'
@@ -23,9 +24,13 @@ export interface Business {
   usd_prices: boolean
   usd_rate: number | null
   policies: string | null
+  policy_sections: PolicySections
   min_notice_hours: number
   max_days_ahead: number
   cancel_notice_hours: number
+  reschedule_notice_hours: number
+  max_reschedules: number | null
+  max_pending_bookings: number
   slot_capacity: number
   plan: PlanKey | null
   trial_ends_at: string
@@ -168,9 +173,12 @@ export interface PublicBusiness {
   usd_prices?: boolean
   usd_rate?: number | null
   policies?: string | null
+  policy_sections?: PolicySections
   min_notice_hours?: number
   max_days_ahead?: number
   cancel_notice_hours?: number
+  reschedule_notice_hours?: number
+  max_reschedules?: number | null
   plan?: PlanKey
   today?: string
   services?: PublicService[]
@@ -261,7 +269,8 @@ export interface PublicBooking {
   staff_name?: string | null
   status: AppointmentStatus
   reschedule_count: number
-  can_change: boolean
+  can_cancel: boolean
+  can_edit: boolean
   services: AppointmentService[]
   can_review: boolean
   review: { rating: number; comment: string | null; reply: string | null } | null
@@ -276,6 +285,8 @@ export interface PublicBooking {
     timezone: string
     currency: string
     cancel_notice_hours: number
+    reschedule_notice_hours: number
+    max_reschedules: number | null
     appearance?: Appearance
   }
 }

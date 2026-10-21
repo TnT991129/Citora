@@ -12,7 +12,7 @@ const MESSAGES: Record<string, string> = {
   CITA_NO_EXISTE: 'No encontramos esta cita.',
   CITA_NO_MODIFICABLE: 'Esta cita ya no se puede modificar.',
   FUERA_DE_PLAZO: 'Ya no se puede cambiar ni cancelar desde aquí. Escribe al negocio por WhatsApp.',
-  LIMITE_CAMBIOS: 'Esta cita ya se cambió una vez. Para otro cambio, escribe al negocio por WhatsApp.',
+  LIMITE_CAMBIOS: 'Esta cita ya llegó al máximo de cambios que permite el negocio. Para otro cambio, escribe al negocio por WhatsApp.',
   SIN_SESION: 'Tu sesión expiró. Vuelve a entrar.',
   YA_TIENE_NEGOCIO: 'Esta cuenta ya tiene un negocio creado.',
   ENLACE_NO_DISPONIBLE: 'Ese enlace ya está en uso o no es válido. Prueba otro.',

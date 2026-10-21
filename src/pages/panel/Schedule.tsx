@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { CapacityStepper } from '../../components/CapacityStepper'
 import { TimeChips } from '../../components/TimeChips'
-import { Alert, Button, Field, PageLoader, Toggle, flash } from '../../components/ui'
+import { Alert, Button, PageLoader, Toggle, flash } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { normalizeSlot, todayKey, WEEKDAYS, dayTitle } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
@@ -11,18 +12,13 @@ import { usePanel } from './context'
 const ORDER = [1, 2, 3, 4, 5, 6, 0]
 
 export default function Schedule() {
-  const { business, reloadBusiness, staff } = usePanel()
+  const { business, reloadBusiness, staff, link } = usePanel()
   const hasTeam = staff.some((s) => s.active)
   const [days, setDays] = useState<ScheduleDay[] | null>(null)
   const [closed, setClosed] = useState<ClosedDay[]>([])
   const [newClosed, setNewClosed] = useState('')
   const [reason, setReason] = useState('')
-  const [rules, setRules] = useState({
-    min_notice_hours: business.min_notice_hours,
-    max_days_ahead: business.max_days_ahead,
-    cancel_notice_hours: business.cancel_notice_hours,
-    slot_capacity: business.slot_capacity || 1,
-  })
+  const [capacity, setCapacity] = useState(business.slot_capacity || 1)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
@@ -57,7 +53,7 @@ export default function Schedule() {
     setBusy(true)
     setError(null)
     const { error: e1 } = await supabase.from('schedule_days').upsert(days!.map((d) => ({ ...d, business_id: business.id })))
-    const { error: e2 } = await supabase.from('businesses').update(rules).eq('id', business.id)
+    const { error: e2 } = await supabase.from('businesses').update({ slot_capacity: capacity }).eq('id', business.id)
     setBusy(false)
     if (e1 || e2) return setError(errorMessage(e1 || e2))
     setDirty(false)
@@ -92,7 +88,7 @@ export default function Schedule() {
             Cuántos clientes pueden reservar a la misma hora. Por ejemplo, si tienes 2 manicuras trabajando a la vez, pon 2.
           </p>
         </div>
-        <CapacityStepper value={rules.slot_capacity} onChange={(n) => { setDirty(true); setRules({ ...rules, slot_capacity: n }) }} />
+        <CapacityStepper value={capacity} onChange={(n) => { setDirty(true); setCapacity(n) }} />
         {hasTeam && (
           <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
             Tienes profesionales en Equipo: cada uno atiende a un cliente a la vez. Este número se aplica a las citas sin profesional asignado.
@@ -124,26 +120,9 @@ export default function Schedule() {
         ))}
       </div>
 
-      <section className="card space-y-4">
-        <h2 className="font-bold">Reglas de reserva</h2>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="Antelación mínima" hint="Horas antes de la cita para poder reservar.">
-            <select className="input" value={rules.min_notice_hours} onChange={(e) => { setDirty(true); setRules({ ...rules, min_notice_hours: Number(e.target.value) }) }}>
-              {[0, 1, 2, 3, 4, 6, 12, 24, 48].map((h) => <option key={h} value={h}>{h === 0 ? 'Sin mínimo' : `${h} h`}</option>)}
-            </select>
-          </Field>
-          <Field label="Reservar hasta" hint="Días hacia adelante.">
-            <select className="input" value={rules.max_days_ahead} onChange={(e) => { setDirty(true); setRules({ ...rules, max_days_ahead: Number(e.target.value) }) }}>
-              {[7, 14, 30, 60, 90].map((d) => <option key={d} value={d}>{d} días</option>)}
-            </select>
-          </Field>
-          <Field label="Cancelar o cambiar" hint="Hasta cuántas horas antes puede el cliente.">
-            <select className="input" value={rules.cancel_notice_hours} onChange={(e) => { setDirty(true); setRules({ ...rules, cancel_notice_hours: Number(e.target.value) }) }}>
-              {[0, 1, 2, 3, 6, 12, 24, 48].map((h) => <option key={h} value={h}>{h === 0 ? 'Hasta la hora' : `${h} h antes`}</option>)}
-            </select>
-          </Field>
-        </div>
-      </section>
+      <p className="text-sm text-slate-500">
+        La antelación mínima para reservar y los plazos para cancelar o cambiar están en <Link to={link('politicas')} className="font-semibold text-brand">Políticas</Link>.
+      </p>
 
       <section className="card space-y-3">
         <h2 className="font-bold">Días cerrados</h2>

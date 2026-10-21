@@ -246,6 +246,20 @@ alter table public.appointments drop column if exists total_usd;
 -- Servicios complementarios: extras opcionales que el cliente añade a un servicio principal
 alter table public.services add column if not exists is_extra boolean not null default false;
 
+-- Políticas: reglas y textos que personaliza el dueño (ver _clean_policy_sections)
+-- reschedule_notice_hours: plazo para cambiar (puede ser distinto de cancelar). max_reschedules:
+-- veces que se puede cambiar una misma cita (null = sin límite). max_pending_bookings: citas futuras
+-- que puede tener un mismo teléfono a la vez (antes era un 2 fijo en el código).
+alter table public.businesses add column if not exists reschedule_notice_hours int not null default 6
+  check (reschedule_notice_hours between 0 and 168);
+alter table public.businesses add column if not exists max_reschedules int
+  check (max_reschedules is null or max_reschedules between 1 and 20);
+alter table public.businesses add column if not exists max_pending_bookings int not null default 2
+  check (max_pending_bookings between 1 and 20);
+-- Textos propios por tema (cancelaciones, cambios, retrasos...). Sin texto propio, la app muestra
+-- uno por defecto que ya usa las reglas de arriba (lo arma el propio front-end).
+alter table public.businesses add column if not exists policy_sections jsonb not null default '{}'::jsonb;
+
 -- Gastos del negocio (en su moneda), para ver la ganancia en las estadísticas
 create table if not exists public.expenses (
   id uuid primary key default gen_random_uuid(),
@@ -470,6 +484,25 @@ begin
 end;
 $$;
 
+-- Deja solo los temas de políticas conocidos, con el texto recortado. Lo que no cumple, se descarta.
+create or replace function public._clean_policy_sections(p jsonb)
+returns jsonb language plpgsql immutable as $$
+declare
+  r jsonb := '{}'::jsonb;
+  k text;
+  v text;
+begin
+  if p is null or jsonb_typeof(p) <> 'object' then return r; end if;
+  foreach k in array array['cancelaciones', 'cambios', 'retrasos', 'no_asistio', 'reembolsos', 'espera', 'privacidad'] loop
+    v := nullif(btrim(coalesce(p ->> k, '')), '');
+    if v is not null then
+      r := r || jsonb_build_object(k, left(v, 800));
+    end if;
+  end loop;
+  return r;
+end;
+$$;
+
 -- ---------------------------------------------------------------------
 -- 3. DISPARADORES (triggers)
 -- ---------------------------------------------------------------------
@@ -483,6 +516,7 @@ begin
     raise exception 'ENLACE_INVALIDO';
   end if;
   new.appearance := _clean_appearance(new.appearance);
+  new.policy_sections := _clean_policy_sections(new.policy_sections);
   if new.currency not in ('CUP', 'USD') then
     new.currency := 'CUP';
   end if;
@@ -781,9 +815,12 @@ begin
     'usd_prices', b.usd_prices,
     'usd_rate', case when b.usd_prices then b.usd_rate end,
     'policies', b.policies,
+    'policy_sections', b.policy_sections,
     'min_notice_hours', b.min_notice_hours,
     'max_days_ahead', b.max_days_ahead,
     'cancel_notice_hours', b.cancel_notice_hours,
+    'reschedule_notice_hours', b.reschedule_notice_hours,
+    'max_reschedules', b.max_reschedules,
     'plan', v_plan,
     'accepting', true,
     'today', (now() at time zone b.timezone)::date,
@@ -1093,7 +1130,7 @@ begin
   -- Límites antiabuso
   if (select count(*) from appointments
       where business_id = b.id and customer_phone = v_phone
-        and status in ('pendiente', 'confirmada') and starts_at > now()) >= 2 then
+        and status in ('pendiente', 'confirmada') and starts_at > now()) >= b.max_pending_bookings then
     raise exception 'LIMITE_CITAS';
   end if;
   if (select count(*) from appointments
@@ -1155,8 +1192,10 @@ returns jsonb language sql stable security definer set search_path = public as $
     'staff_name', (select st.name from staff st where st.id = a.staff_id),
     'status', a.status,
     'reschedule_count', a.reschedule_count,
-    'can_change', a.status in ('pendiente', 'confirmada')
+    'can_cancel', a.status in ('pendiente', 'confirmada')
        and a.starts_at > now() + make_interval(hours => b.cancel_notice_hours),
+    'can_edit', a.status in ('pendiente', 'confirmada')
+       and a.starts_at > now() + make_interval(hours => b.reschedule_notice_hours),
     'services', coalesce((select jsonb_agg(jsonb_build_object('id', s.service_id, 'name', s.name, 'price', s.price,
                  'duration_min', s.duration_min)) from appointment_services s
                  where s.appointment_id = a.id), '[]'::jsonb),
@@ -1175,7 +1214,9 @@ returns jsonb language sql stable security definer set search_path = public as $
     'business', jsonb_build_object(
       'name', b.name, 'slug', b.slug, 'whatsapp', b.whatsapp, 'address', b.address,
       'logo_url', b.logo_url, 'color_primary', b.color_primary, 'timezone', b.timezone,
-      'currency', b.currency, 'cancel_notice_hours', b.cancel_notice_hours, 'appearance', b.appearance)
+      'currency', b.currency, 'cancel_notice_hours', b.cancel_notice_hours,
+      'reschedule_notice_hours', b.reschedule_notice_hours, 'max_reschedules', b.max_reschedules,
+      'appearance', b.appearance)
   )
   from appointments a join businesses b on b.id = a.business_id
   where a.token = p_token;
@@ -1215,7 +1256,8 @@ begin
     raise exception 'NEGOCIO_INACTIVO';
   end if;
   if a.status not in ('pendiente', 'confirmada') then raise exception 'CITA_NO_MODIFICABLE'; end if;
-  if a.starts_at <= now() + make_interval(hours => b.cancel_notice_hours) then raise exception 'FUERA_DE_PLAZO'; end if;
+  if a.starts_at <= now() + make_interval(hours => b.reschedule_notice_hours) then raise exception 'FUERA_DE_PLAZO'; end if;
+  if b.max_reschedules is not null and a.reschedule_count >= b.max_reschedules then raise exception 'LIMITE_CAMBIOS'; end if;
 
   v_dur := greatest(5, (extract(epoch from (a.ends_at - a.starts_at)) / 60)::int);
   -- Mismo profesional; si ya no está activo, cualquiera que esté libre
@@ -1271,7 +1313,7 @@ begin
     raise exception 'NEGOCIO_INACTIVO';
   end if;
   if a.status not in ('pendiente', 'confirmada') then raise exception 'CITA_NO_MODIFICABLE'; end if;
-  if a.starts_at <= now() + make_interval(hours => b.cancel_notice_hours) then raise exception 'FUERA_DE_PLAZO'; end if;
+  if a.starts_at <= now() + make_interval(hours => b.reschedule_notice_hours) then raise exception 'FUERA_DE_PLAZO'; end if;
   if char_length(v_name) not between 2 and 80 then raise exception 'NOMBRE_INVALIDO'; end if;
   if p_service_ids is null or cardinality(p_service_ids) = 0 or cardinality(p_service_ids) > 10 then
     raise exception 'SERVICIOS_INVALIDOS';
@@ -1309,6 +1351,10 @@ begin
   end if;
 
   v_start := (p_date + v_time) at time zone b.timezone;
+  -- El límite de cambios solo cuenta cuando se cambia el día o la hora (igual que reschedule_count)
+  if v_start <> a.starts_at and b.max_reschedules is not null and a.reschedule_count >= b.max_reschedules then
+    raise exception 'LIMITE_CAMBIOS';
+  end if;
   v_changed := not v_same or v_start <> a.starts_at or p_staff is distinct from a.staff_id;
   if v_changed then
     v_check := _check_slot(b.id, p_date, p_time, v_dur, a.id, p_staff);
@@ -1940,6 +1986,7 @@ grant execute on function public.is_valid_slug(text) to anon, authenticated;
 grant execute on function public.is_reserved_slug(text) to anon, authenticated;
 grant execute on function public._clean_phone(text) to anon, authenticated;
 grant execute on function public._clean_appearance(jsonb) to authenticated;
+grant execute on function public._clean_policy_sections(jsonb) to authenticated;
 grant execute on function public.businesses_guard() to authenticated;
 grant execute on function public.appointments_guard() to authenticated;
 grant execute on function public.schedule_days_normalize() to authenticated;

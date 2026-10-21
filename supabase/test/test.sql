@@ -90,7 +90,7 @@ set role anon;
 do $$ declare j jsonb := get_booking((select v from ctx where k='t1')); begin
   assert j->>'status' = 'pendiente';
   assert (j->>'total')::numeric = 500;
-  assert (j->>'can_change')::boolean;
+  assert (j->>'can_cancel')::boolean and (j->>'can_edit')::boolean;
   assert j->'business'->>'name' = 'Barbería Leo';
   -- 10:00 en La Habana (UTC-4 en octubre) = 14:00 UTC
   assert to_char((j->>'starts_at')::timestamptz at time zone 'UTC', 'HH24:MI') = '14:00', 'zona horaria: ' || (j->>'starts_at');
@@ -356,6 +356,32 @@ update waitlist set status = 'avisado';
 do $$ begin assert (select status from waitlist) = 'avisado'; end $$;
 update appointments set reminded_at = now() where token = (select v from ctx where k='tc');
 do $$ begin assert (select reminded_at from appointments where token = (select v from ctx where k='tc')) is not null, 'recordatorio marcado'; end $$;
+
+-- ===== Políticas: límite de cambios por cita y de citas pendientes (configurables) =====
+update businesses set max_reschedules = 1, reschedule_notice_hours = 1 where id = my_business_id();
+insert into ctx select 'tl', create_booking('barberia-leo', array[(select v from ctx where k='corte')::uuid],
+  (select v from ctx where k='day')::date, '09:00', 'Lili Límite', '5355557777');
+select reschedule_booking((select v from ctx where k='tl'), (select v from ctx where k='day')::date, '11:00');
+select expect_error($$select reschedule_booking('$$ || (select v from ctx where k='tl') || $$', '$$ || (select v from ctx where k='day') || $$', '09:00')$$, 'LIMITE_CAMBIOS');
+-- El nombre se puede seguir editando aunque ya no queden cambios de hora
+select edit_booking((select v from ctx where k='tl'),
+  array(select (x->>'id')::uuid from jsonb_array_elements(get_booking((select v from ctx where k='tl'))->'services') x),
+  (select v from ctx where k='day')::date, '11:00', 'Lili L.', null);
+do $$ begin assert (get_booking((select v from ctx where k='tl'))->>'customer_name') = 'Lili L.', 'nombre editado pese al límite de cambios'; end $$;
+-- Pero si intenta cambiar también la hora, choca con el límite
+select expect_error($$select edit_booking('$$ || (select v from ctx where k='tl') || $$',
+  array(select (x->>'id')::uuid from jsonb_array_elements(get_booking('$$ || (select v from ctx where k='tl') || $$')->'services') x),
+  '$$ || (select v from ctx where k='day') || $$', '14:30', 'Lili L.', null)$$, 'LIMITE_CAMBIOS');
+select cancel_booking((select v from ctx where k='tl'));
+
+-- "Citas pendientes por clienta" también configurable (antes era un 2 fijo)
+update businesses set max_pending_bookings = 1 where id = my_business_id();
+insert into ctx select 'tp1', create_booking('barberia-leo', array[(select v from ctx where k='corte')::uuid],
+  (select v from ctx where k='day')::date, '10:00', 'Pato Prueba', '5355558888');
+select expect_error($$select create_booking('barberia-leo', array['$$ || (select v from ctx where k='corte') || $$'::uuid], '$$ || (select v from ctx where k='day') || $$', '14:00', 'Pato Prueba', '5355558888')$$, 'LIMITE_CITAS');
+select cancel_booking((select v from ctx where k='tp1'));
+update businesses set max_reschedules = null, reschedule_notice_hours = 6, max_pending_bookings = 2 where id = my_business_id();
+
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 do $$ begin
   assert (select count(*) from waitlist) = 0, 'dueño 2 no ve la lista de espera ajena';

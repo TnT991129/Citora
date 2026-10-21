@@ -1,12 +1,21 @@
-/** Cuántos clientes pueden reservar a la misma hora (1 a 50), con botones − y + */
-export function CapacityStepper({ value, onChange }: { value: number; onChange: (n: number) => void }) {
-  const btn = 'flex h-12 w-12 items-center justify-center rounded-xl text-2xl font-bold ring-1 ring-slate-300 transition hover:bg-slate-100 disabled:opacity-30'
+/** Número con botones − y +. Por defecto, para "clientes por turno" (1 a 50); se puede reutilizar para otros contadores. */
+export function CapacityStepper({ value, onChange, min = 1, max = 50, unit, size = 'lg' }: {
+  value: number
+  onChange: (n: number) => void
+  min?: number
+  max?: number
+  unit?: (n: number) => string
+  size?: 'lg' | 'sm'
+}) {
+  const label = unit ? unit(value) : value === 1 ? 'cliente por turno' : 'clientes por turno'
+  const big = size === 'lg'
+  const btn = `flex items-center justify-center rounded-xl font-bold ring-1 ring-slate-300 transition hover:bg-slate-100 disabled:opacity-30 ${big ? 'h-12 w-12 text-2xl' : 'h-10 w-10 text-lg'}`
   return (
     <div className="flex items-center gap-3">
-      <button type="button" onClick={() => onChange(Math.max(1, value - 1))} disabled={value <= 1} className={btn} aria-label="Uno menos">−</button>
-      <span className="min-w-[3rem] text-center text-3xl font-extrabold" aria-live="polite">{value}</span>
-      <button type="button" onClick={() => onChange(Math.min(50, value + 1))} disabled={value >= 50} className={btn} aria-label="Uno más">+</button>
-      <span className="text-sm text-slate-600">{value === 1 ? 'cliente por turno' : 'clientes por turno'}</span>
+      <button type="button" onClick={() => onChange(Math.max(min, value - 1))} disabled={value <= min} className={btn} aria-label="Uno menos">−</button>
+      <span className={`min-w-[3rem] text-center font-extrabold ${big ? 'text-3xl' : 'text-xl'}`} aria-live="polite">{value}</span>
+      <button type="button" onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max} className={btn} aria-label="Uno más">+</button>
+      {label && <span className="text-sm text-slate-600">{label}</span>}
     </div>
   )
 }

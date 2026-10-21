@@ -160,15 +160,15 @@ export default function BookingPage() {
           </LinkButton>
         )}
 
-        {active && booking.can_change && (
-          <div className="grid grid-cols-2 gap-3">
-            <Button variant="secondary" onClick={() => setEditing(true)}>Editar cita</Button>
-            <Button variant="danger" onClick={() => setConfirmCancel(true)}>Cancelar cita</Button>
+        {active && (booking.can_cancel || booking.can_edit) && (
+          <div className={`grid gap-3 ${booking.can_edit && booking.can_cancel ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            {booking.can_edit && <Button variant="secondary" onClick={() => setEditing(true)}>Editar cita</Button>}
+            {booking.can_cancel && <Button variant="danger" onClick={() => setConfirmCancel(true)}>Cancelar cita</Button>}
           </div>
         )}
-        {active && !booking.can_change && (
+        {active && !booking.can_cancel && !booking.can_edit && (
           <p className="text-center text-sm text-slate-500">
-            Faltan menos de {b.cancel_notice_hours} h para tu cita. Para cambios, escribe al negocio por WhatsApp.
+            Ya no se puede cambiar ni cancelar desde aquí. Para cambios, escribe al negocio por WhatsApp.
           </p>
         )}
 
@@ -333,6 +333,9 @@ function EditBooking({ booking, onClose, onDone }: {
           </Field>
           <p className="text-xs text-slate-500">
             Si cambias los servicios, el día, la hora o el profesional, el negocio tendrá que volver a confirmar tu cita.
+            {booking.business.max_reschedules != null && (
+              <> Cambios de día u hora usados: {booking.reschedule_count} de {booking.business.max_reschedules}.</>
+            )}
           </p>
           {error && <Alert>{error}</Alert>}
         </div>
