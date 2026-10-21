@@ -12,7 +12,14 @@ import NotFound from '../NotFound'
 import { hasMainService, ServicePicker } from './ServicePicker'
 import { Closed, PublicHeader, usePublicBusiness } from './shared'
 
-const STEP_TITLES = ['Elige el servicio', 'Elige día y hora', 'Tus datos', 'Confirma tu cita']
+type StepKey = 'servicio' | 'equipo' | 'fecha' | 'datos' | 'confirmar'
+const STEP_TITLES: Record<StepKey, string> = {
+  servicio: 'Elige el servicio',
+  equipo: '¿Con quién quieres tu cita?',
+  fecha: 'Elige día y hora',
+  datos: 'Tus datos',
+  confirmar: 'Confirma tu cita',
+}
 
 export default function BookingFlow() {
   const { slug } = useParams()
@@ -30,7 +37,8 @@ export default function BookingFlow() {
   const [phone, setPhone] = useState(saved.phone)
   const [note, setNote] = useState('')
   const [accepted, setAccepted] = useState(false)
-  const [staffId, setStaffId] = useState<string | null>(null)
+  // ?p=<id>: viene de tocar a una persona del equipo en la web del negocio
+  const [staffId, setStaffId] = useState<string | null>(() => params.get('p'))
   const [coupon, setCoupon] = useState<Coupon | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -53,6 +61,11 @@ export default function BookingFlow() {
   const openDays = new Set((business.schedule || []).filter((d) => d.is_open).map((d) => d.weekday))
   const closed = new Set(business.closed_days || [])
   const isOpen = (key: string) => openDays.has(weekdayOf(key)) && !closed.has(key)
+  // Con equipo, el cliente elige con quién antes del día y la hora
+  const steps: StepKey[] = team.length > 0 ? ['servicio', 'equipo', 'fecha', 'datos', 'confirmar'] : ['servicio', 'fecha', 'datos', 'confirmar']
+  const cur = steps[Math.min(step, steps.length - 1)]
+  const last = steps.length - 1
+  const person = team.find((s) => s.id === staffId) || null
 
   const go = (n: number) => {
     setError(null)
@@ -60,12 +73,18 @@ export default function BookingFlow() {
     window.scrollTo(0, 0)
   }
 
+  const pickStaff = (id: string | null) => {
+    if (id !== staffId) setTime(null)
+    setStaffId(id)
+    go(steps.indexOf('fecha'))
+  }
+
   const next = () => {
-    if (step === 0 && !hasMainService(services, selected)) {
+    if (cur === 'servicio' && !hasMainService(services, selected)) {
       return setError(chosen.length ? 'Elige también un servicio principal: los complementos se añaden a un servicio.' : 'Elige al menos un servicio.')
     }
-    if (step === 1 && (!date || !time)) return setError('Elige el día y la hora.')
-    if (step === 2) {
+    if (cur === 'fecha' && (!date || !time)) return setError('Elige el día y la hora.')
+    if (cur === 'datos') {
       if (name.trim().length < 2) return setError('Escribe tu nombre.')
       if (phone.replace(/\D/g, '').length < 8) return setError('Escribe tu teléfono (al menos 8 dígitos).')
     }
@@ -86,7 +105,7 @@ export default function BookingFlow() {
       p_phone: phone.trim(),
       p_note: note.trim() || null,
       p_code: coupon?.code || null,
-      p_staff: staffId,
+      p_staff: person?.id ?? null,
     })
     setBusy(false)
     if (error) {
@@ -94,7 +113,7 @@ export default function BookingFlow() {
       setError(msg)
       if (/turno|horario/i.test(msg)) {
         setTime(null)
-        setStep(1)
+        setStep(steps.indexOf('fecha'))
       }
       if (/código de descuento/i.test(msg)) setCoupon(null)
       return
@@ -109,38 +128,44 @@ export default function BookingFlow() {
       <PublicHeader business={business} back />
       <main className="mx-auto max-w-xl px-4 py-5">
         <div className="mb-4 flex gap-1.5">
-          {STEP_TITLES.map((_, i) => (
-            <div key={i} className={`h-1.5 flex-1 rounded-full ${i <= step ? 'bg-brand' : 'bg-slate-200'}`} />
+          {steps.map((k, i) => (
+            <div key={k} className={`h-1.5 flex-1 rounded-full ${i <= step ? 'bg-brand' : 'bg-slate-200'}`} />
           ))}
         </div>
-        <h1 className="text-2xl font-bold">{STEP_TITLES[step]}</h1>
+        <h1 className="text-2xl font-bold">{STEP_TITLES[cur]}</h1>
 
-        {step === 0 && (
+        {cur === 'servicio' && (
           <div className="mt-4">
             <ServicePicker services={services} selected={selected} onChange={setSelected} currency={currency} rate={rate} />
           </div>
         )}
 
-        {step === 1 && (
+        {cur === 'equipo' && (
+          <div className="mt-4 space-y-2.5">
+            <p className="text-sm text-slate-500">Elige a la persona que prefieras o deja que te atienda quien esté libre.</p>
+            <StaffCard
+              name="Cualquiera disponible"
+              hint="Te atiende quien esté libre a la hora que elijas. Así verás más horas."
+              icon="any"
+              selected={staffId === null}
+              onClick={() => pickStaff(null)}
+            />
+            {team.map((s) => (
+              <StaffCard key={s.id} name={s.name} hint="Ver sus horas libres" selected={staffId === s.id} onClick={() => pickStaff(s.id)} />
+            ))}
+          </div>
+        )}
+
+        {cur === 'fecha' && (
           <div className="mt-4 space-y-5">
             {team.length > 0 && (
-              <div>
-                <h2 className="mb-2 font-semibold">¿Con quién?</h2>
-                <div className="flex flex-wrap gap-2">
-                  {[{ id: null, name: 'Cualquiera' }, ...team].map((s) => (
-                    <button
-                      key={s.id || 'any'}
-                      type="button"
-                      onClick={() => {
-                        setStaffId(s.id)
-                        setTime(null)
-                      }}
-                      className={`rounded-full px-4 py-2 text-sm font-semibold ${staffId === s.id ? 'bg-brand text-white shadow' : 'bg-white text-slate-700 ring-1 ring-slate-200'}`}
-                    >
-                      {s.name}
-                    </button>
-                  ))}
-                </div>
+              <div className="flex items-center gap-3 rounded-2xl bg-white p-3 ring-1 ring-slate-200">
+                <Initial name={person?.name || '?'} any={!person} />
+                <p className="min-w-0 flex-1 text-sm">
+                  <span className="block text-slate-500">Tu cita con</span>
+                  <span className="block truncate font-bold">{person?.name || 'Cualquiera disponible'}</span>
+                </p>
+                <button onClick={() => go(steps.indexOf('equipo'))} className="text-sm font-semibold text-brand">Cambiar</button>
               </div>
             )}
             <div className="card">
@@ -164,7 +189,7 @@ export default function BookingFlow() {
                   duration={minutes}
                   value={time}
                   onChange={setTime}
-                  staff={staffId}
+                  staff={person?.id ?? null}
                   whenFull={hasModule(business.plan, 'espera') ? <WaitlistForm slug={business.slug} date={date} name={name} phone={phone} /> : null}
                 />
               </div>
@@ -172,7 +197,7 @@ export default function BookingFlow() {
           </div>
         )}
 
-        {step === 2 && (
+        {cur === 'datos' && (
           <div className="mt-4 space-y-4">
             <Field label="Tu nombre">
               <input className="input" autoComplete="name" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
@@ -186,12 +211,12 @@ export default function BookingFlow() {
           </div>
         )}
 
-        {step === 3 && (
+        {cur === 'confirmar' && (
           <div className="mt-4 space-y-4">
             <div className="card space-y-3">
               <Row label="Día" value={<span>{dayTitle(date!)}</span>} />
               <Row label="Hora" value={time!} />
-              {team.length > 0 && <Row label="Con" value={team.find((s) => s.id === staffId)?.name || 'Cualquiera disponible'} />}
+              {team.length > 0 && <Row label="Con" value={person?.name || 'Cualquiera disponible'} />}
               <Row label="Nombre" value={name} />
               <Row label="Teléfono" value={phone} />
               <div className="border-t border-slate-100 pt-3">
@@ -235,9 +260,9 @@ export default function BookingFlow() {
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur safe-bottom">
         <div className="mx-auto flex max-w-xl items-center gap-3">
           {step > 0 && <Button variant="secondary" onClick={() => go(step - 1)} disabled={busy}>Atrás</Button>}
-          {step < 3 ? (
+          {step < last ? (
             <Button block size="lg" onClick={next}>
-              {step === 0 && chosen.length > 0 ? `Continuar · ${price(total, currency, rate)}` : 'Continuar'}
+              {cur === 'servicio' && chosen.length > 0 ? `Continuar · ${price(total, currency, rate)}` : 'Continuar'}
             </Button>
           ) : (
             <Button block size="lg" onClick={confirm} loading={busy}>Confirmar reserva</Button>
@@ -248,7 +273,35 @@ export default function BookingFlow() {
   )
 }
 
-type Coupon = { code: string; percent: number | null; discount: number; total: number }
+/** Inicial de la persona en un círculo (o un icono de grupo para "cualquiera") */
+function Initial({ name, any }: { name: string; any?: boolean }) {
+  return (
+    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand/10 text-lg font-extrabold text-brand">
+      {any ? (
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM22 21v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8" />
+        </svg>
+      ) : (
+        name.trim().charAt(0).toUpperCase() || '·'
+      )}
+    </span>
+  )
+}
+
+function StaffCard({ name, hint, icon, selected, onClick }: { name: string; hint: string; icon?: 'any'; selected: boolean; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className={`card flex w-full items-center gap-3 text-left transition hover:ring-2 hover:ring-brand ${selected ? 'ring-2 ring-brand' : ''}`}>
+      <Initial name={name} any={icon === 'any'} />
+      <span className="min-w-0 flex-1">
+        <span className="block font-bold">{name}</span>
+        <span className="block text-sm text-slate-500">{hint}</span>
+      </span>
+      <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden><path d="M9 6l6 6-6 6" /></svg>
+    </button>
+  )
+}
+
+type Coupon ={ code: string; percent: number | null; discount: number; total: number }
 
 function Row({ label, value }: { label: string; value: ReactNode }) {
   return (

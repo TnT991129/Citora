@@ -10,6 +10,7 @@ import { clientPath } from '../../lib/url'
 import type { GalleryPhoto, PublicBooking, PublicBusiness, PublicReview, PublicService } from '../../lib/types'
 import NotFound from '../NotFound'
 import { shows } from '../../lib/appearance'
+import { hasModule } from '../../lib/plans'
 import { Announcement, BusinessHero, Centered, Closed, PoweredBy, Stars, usePublicBusiness } from './shared'
 
 const WEEK = [1, 2, 3, 4, 5, 6, 0]
@@ -31,6 +32,7 @@ export default function BusinessHome() {
   const openDays = (business.schedule || []).filter((d) => d.is_open).map((d) => d.weekday)
   const minPrice = main.length ? Math.min(...main.map((s) => Number(s.price))) : 0
   const rate = cupRate(business)
+  const team = hasModule(business.plan, 'empleados') ? business.staff || [] : []
   const look = business.appearance || {}
   const showPrices = shows(look, 'show_prices')
   const showDurations = shows(look, 'show_durations')
@@ -110,6 +112,27 @@ export default function BusinessHome() {
             <p className="mt-3 text-center text-xs text-slate-500">Cambio en CUP a la tasa de hoy: 1 USD = {money(rate, 'CUP')}</p>
           )}
         </section>
+
+        {team.length > 0 && main.length > 0 && (
+          <section>
+            <SectionTitle eyebrow="Quién te atiende" title="Nuestro equipo" />
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+              {team.map((s) => (
+                <Link
+                  key={s.id}
+                  to={clientPath(business.slug, `reservar?p=${s.id}`)}
+                  className="card flex flex-col items-center gap-2 py-5 text-center transition hover:-translate-y-0.5 hover:shadow-md"
+                >
+                  <span className="flex h-14 w-14 items-center justify-center rounded-full bg-brand/10 text-2xl font-extrabold text-brand">
+                    {s.name.trim().charAt(0).toUpperCase()}
+                  </span>
+                  <span className="w-full truncate font-bold">{s.name}</span>
+                  <span className="text-xs font-semibold text-brand">Reservar con {s.name.split(' ')[0]} ›</span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="card">
           <SectionTitle eyebrow="Fácil y rápido" title="Reserva en 3 pasos" inCard />
