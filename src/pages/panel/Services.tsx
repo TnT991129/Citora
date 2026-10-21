@@ -112,7 +112,7 @@ export default function Services() {
             <Field label="Descripción (opcional)"><input className="input" value={editing.description || ''} maxLength={160} onChange={(e) => setEditing({ ...editing, description: e.target.value })} /></Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label={`Precio (${business.currency})`}>
-                <input className="input" type="number" min={0} inputMode="decimal" value={editing.price} onChange={(e) => setEditing({ ...editing, price: Number(e.target.value) })} />
+                <input className="input" type="number" min={0} step="any" inputMode="decimal" value={editing.price} onChange={(e) => setEditing({ ...editing, price: Number(e.target.value) })} />
               </Field>
               <Field label="Duración">
                 <select className="input" value={editing.duration_min} onChange={(e) => setEditing({ ...editing, duration_min: Number(e.target.value) })}>

@@ -160,7 +160,7 @@ function NewDiscount({ businessId, currency, onClose, onDone }: { businessId: st
           ))}
         </div>
         <Field label={kind === 'percent' ? 'Descuento (%)' : `Descuento (${currency})`}>
-          <input className="input" type="number" min={1} max={kind === 'percent' ? 100 : undefined} value={value} onChange={(e) => setValue(Number(e.target.value))} />
+          <input className="input" type="number" min={1} step="any" inputMode="decimal" max={kind === 'percent' ? 100 : undefined} value={value} onChange={(e) => setValue(Number(e.target.value))} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Válido hasta (opcional)">

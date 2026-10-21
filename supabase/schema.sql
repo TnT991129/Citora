@@ -446,6 +446,9 @@ begin
     raise exception 'ENLACE_INVALIDO';
   end if;
   new.appearance := _clean_appearance(new.appearance);
+  if new.currency not in ('CUP', 'USD') then
+    new.currency := 'CUP';
+  end if;
   if new.cover_url is not null and new.cover_url !~ '^https://' then
     new.cover_url := null;
   end if;

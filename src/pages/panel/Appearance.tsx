@@ -286,7 +286,7 @@ export default function Appearance() {
                     Servicio de ejemplo
                     {shows(look, 'show_durations') && <span className="block text-xs text-slate-500">45 min</span>}
                   </span>
-                  {shows(look, 'show_prices') && <span className="font-semibold">500 {business.currency}</span>}
+                  {shows(look, 'show_prices') && <span className="font-semibold">{business.currency === 'USD' ? 5 : 500} {business.currency}</span>}
                 </div>
               </div>
               <div className="rounded-btn bg-brand bg-btn-grad py-3 text-center font-bold text-white">{look.book_label || 'Reservar cita'}</div>

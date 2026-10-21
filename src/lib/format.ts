@@ -2,6 +2,11 @@
 
 export const DEFAULT_TZ = 'America/Havana'
 
+export const CURRENCIES = [
+  { code: 'CUP', name: 'CUP (pesos)' },
+  { code: 'USD', name: 'USD (dólares)' },
+]
+
 export function money(n: number | string | null | undefined, currency = 'CUP'): string {
   const v = Number(n ?? 0)
   const [int, dec] = Math.abs(v).toFixed(v % 1 ? 2 : 0).split('.')

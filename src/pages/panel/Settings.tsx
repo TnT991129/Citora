@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { useRef, useState } from 'react'
 import { Alert, BusinessAvatar, Button, Field, flash } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
-import { slugify } from '../../lib/format'
+import { CURRENCIES, slugify } from '../../lib/format'
 import { imageExt, resizeImage } from '../../lib/image'
 import { supabase } from '../../lib/supabase'
 import { BUSINESS_TYPES } from '../../lib/templates'
@@ -19,6 +19,7 @@ export default function Settings() {
     address: business.address || '',
     description: business.description || '',
     policies: business.policies || '',
+    currency: business.currency,
   })
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -46,6 +47,7 @@ export default function Settings() {
       address: form.address.trim() || null,
       description: form.description.trim() || null,
       policies: form.policies.trim() || null,
+      currency: form.currency,
     }).eq('id', business.id)
     setBusy(false)
     if (error) return setError(errorMessage(error))
@@ -125,6 +127,18 @@ export default function Settings() {
         <Field label="WhatsApp" hint="Con código de país, ej. 53 5555 5555.">
           <input className="input" type="tel" inputMode="tel" value={form.whatsapp} onChange={(e) => set({ whatsapp: e.target.value })} />
         </Field>
+        <Field label="Moneda" hint="En la que pones los precios de tus servicios y descuentos.">
+          <div className="grid grid-cols-2 gap-2">
+            {CURRENCIES.map((c) => (
+              <button key={c.code} type="button" onClick={() => set({ currency: c.code })} className={`rounded-xl py-2.5 font-semibold ${form.currency === c.code ? 'bg-brand text-white' : 'bg-white ring-1 ring-slate-300'}`}>
+                {c.name}
+              </button>
+            ))}
+          </div>
+        </Field>
+        {form.currency !== business.currency && (
+          <Alert kind="warning">Los precios no se convierten solos: revisa tus servicios y descuentos después de guardar. Las citas ya hechas se verán en la nueva moneda.</Alert>
+        )}
         <Field label="Dirección"><input className="input" value={form.address} maxLength={120} onChange={(e) => set({ address: e.target.value })} /></Field>
         <Field label="Descripción corta" hint="Aparece debajo del nombre en tu web.">
           <input className="input" value={form.description} maxLength={140} onChange={(e) => set({ description: e.target.value })} placeholder="Ej. Uñas con amor en el centro de Matanzas" />
