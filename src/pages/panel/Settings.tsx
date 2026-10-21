@@ -9,6 +9,8 @@ import { BUSINESS_TYPES } from '../../lib/templates'
 import { panelUrl, publicUrl } from '../../lib/url'
 import { usePanel } from './context'
 
+const POLICIES_MAX = 5000
+
 export default function Settings() {
   const { business, reloadBusiness, slugChanged, link } = usePanel()
   const [form, setForm] = useState({
@@ -164,7 +166,17 @@ export default function Settings() {
       <section className="card space-y-3">
         <h2 className="font-bold">Políticas</h2>
         <p className="text-sm text-slate-500">Lo que tus clientes aceptan al reservar: puntualidad, cancelaciones, etc.</p>
-        <textarea className="input min-h-[120px]" value={form.policies} maxLength={1500} onChange={(e) => set({ policies: e.target.value })} />
+        <textarea
+          className="input min-h-[320px] resize-y leading-relaxed"
+          rows={14}
+          value={form.policies}
+          maxLength={POLICIES_MAX}
+          placeholder={'Ej.\n• Llega 5 minutos antes de tu cita.\n• Si llegas más de 15 minutos tarde, puede que tengamos que cambiar tu cita.\n• Cancela con al menos 6 horas de antelación.'}
+          onChange={(e) => set({ policies: e.target.value })}
+        />
+        <p className={`text-right text-xs ${form.policies.length > POLICIES_MAX * 0.9 ? 'text-amber-700' : 'text-slate-400'}`}>
+          {form.policies.length.toLocaleString('es-ES')} / {POLICIES_MAX.toLocaleString('es-ES')} caracteres
+        </p>
       </section>
 
       {error && <Alert>{error}</Alert>}

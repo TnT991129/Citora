@@ -221,7 +221,9 @@ export default function BookingFlow() {
               <input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} className="mt-1 h-5 w-5 accent-[rgb(var(--brand-rgb))]" />
               <span className="text-sm text-slate-700">
                 Acepto las condiciones del negocio. Puedo cancelar o cambiar mi cita hasta {business.cancel_notice_hours} h antes.
-                {business.policies && <span className="mt-1 block whitespace-pre-line text-slate-500">{business.policies}</span>}
+                {business.policies && (
+                  <span className="mt-2 block max-h-48 overflow-y-auto whitespace-pre-line rounded-lg bg-slate-50 px-3 py-2 text-slate-500">{business.policies}</span>
+                )}
               </span>
             </label>
           </div>
