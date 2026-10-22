@@ -9,6 +9,7 @@ const MESSAGES: Record<string, string> = {
   TURNO_INVALIDO: 'Ese turno ya no está disponible. Elige otro.',
   TURNO_OCUPADO: 'Ese horario se acaba de ocupar. Elige otro.',
   LIMITE_CITAS: 'Ya tienes varias citas pendientes con este teléfono. Si necesitas otra, escribe al negocio por WhatsApp.',
+  LIMITE_DIARIO: 'Ya reservaste varias veces hoy con este teléfono. Si necesitas otra cita, escribe al negocio por WhatsApp.',
   CITA_NO_EXISTE: 'No encontramos esta cita.',
   CITA_NO_MODIFICABLE: 'Esta cita ya no se puede modificar.',
   FUERA_DE_PLAZO: 'Ya no se puede cambiar ni cancelar desde aquí. Escribe al negocio por WhatsApp.',

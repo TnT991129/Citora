@@ -18,7 +18,8 @@ body { min-height: 100dvh; }
   }
   .label { @apply mb-1.5 block text-sm font-medium text-slate-700; }
   .card { @apply rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5; }
-  .chip { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium; }
+  /* shrink-0: dentro de una fila flex (ej. junto al nombre de un cliente), nunca se aprieta ni se parte en dos líneas */
+  .chip { @apply inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium; }
 }
 
 @layer utilities {

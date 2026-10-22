@@ -27,7 +27,7 @@ export function ServicePicker({ services, selected, onChange, currency, rate }: 
           <span className="block font-semibold">{s.is_extra ? '+ ' : ''}{s.name}</span>
           <span className="block text-sm text-slate-500">{s.is_extra ? `+${duration(s.duration_min)}` : duration(s.duration_min)}</span>
         </span>
-        <span className="text-right font-semibold">{price(s.price, currency, rate)}</span>
+        <span className="shrink-0 text-right font-semibold">{price(s.price, currency, rate)}</span>
       </button>
     )
   }

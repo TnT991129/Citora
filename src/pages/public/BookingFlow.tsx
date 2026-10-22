@@ -221,20 +221,20 @@ export default function BookingFlow() {
               <Row label="Teléfono" value={phone} />
               <div className="border-t border-slate-100 pt-3">
                 {chosen.map((s) => (
-                  <div key={s.id} className="flex justify-between py-1 text-slate-700">
-                    <span>{s.is_extra ? '+ ' : ''}{s.name}</span>
-                    <span>{price(s.price, currency, rate)}</span>
+                  <div key={s.id} className="flex justify-between gap-3 py-1 text-slate-700">
+                    <span className="min-w-0 break-words">{s.is_extra ? '+ ' : ''}{s.name}</span>
+                    <span className="shrink-0 text-right">{price(s.price, currency, rate)}</span>
                   </div>
                 ))}
                 {coupon && (
-                  <div className="flex justify-between py-1 font-medium text-emerald-700">
-                    <span>Descuento ({coupon.code})</span>
-                    <span>-{money(coupon.discount, currency)}</span>
+                  <div className="flex justify-between gap-3 py-1 font-medium text-emerald-700">
+                    <span className="min-w-0 break-words">Descuento ({coupon.code})</span>
+                    <span className="shrink-0 text-right">-{money(coupon.discount, currency)}</span>
                   </div>
                 )}
-                <div className="mt-2 flex justify-between border-t border-slate-100 pt-2 text-lg font-bold">
-                  <span>Total</span>
-                  <span className="text-right">{price(coupon ? coupon.total : total, currency, rate)}</span>
+                <div className="mt-2 flex justify-between gap-3 border-t border-slate-100 pt-2 text-lg font-bold">
+                  <span className="shrink-0">Total</span>
+                  <span className="min-w-0 text-right">{price(coupon ? coupon.total : total, currency, rate)}</span>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">Se paga en el negocio. Duración aproximada: {duration(minutes)}.</p>
               </div>
@@ -306,8 +306,8 @@ type Coupon ={ code: string; percent: number | null; discount: number; total: nu
 function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex justify-between gap-3">
-      <span className="text-slate-500">{label}</span>
-      <span className="text-right font-semibold">{value}</span>
+      <span className="shrink-0 text-slate-500">{label}</span>
+      <span className="min-w-0 text-right font-semibold">{value}</span>
     </div>
   )
 }

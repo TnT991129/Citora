@@ -392,7 +392,23 @@ do $$ begin
 end $$;
 select cancel_booking((select v from ctx where k='tp2'));
 select cancel_booking((select v from ctx where k='tp3'));
-update businesses set max_reschedules = null, reschedule_notice_hours = 6, max_pending_bookings = 2 where id = my_business_id();
+
+-- "Citas creadas por día" es un límite distinto (y también configurable), con su propio error
+update businesses set max_daily_bookings = 2, max_pending_bookings = null where id = my_business_id();
+insert into ctx select 'td1', create_booking('barberia-leo', array[(select v from ctx where k='corte')::uuid],
+  (select v from ctx where k='day')::date, '10:00', 'Dani Diario', '5355556666');
+select cancel_booking((select v from ctx where k='td1'));
+insert into ctx select 'td2', create_booking('barberia-leo', array[(select v from ctx where k='corte')::uuid],
+  (select v from ctx where k='day')::date, '10:00', 'Dani Diario', '5355556666');
+select expect_error($$select create_booking('barberia-leo', array['$$ || (select v from ctx where k='corte') || $$'::uuid], '$$ || (select v from ctx where k='day') || $$', '11:00', 'Dani Diario', '5355556666')$$, 'LIMITE_DIARIO');
+select cancel_booking((select v from ctx where k='td2'));
+update businesses set max_daily_bookings = null where id = my_business_id();
+-- "Sin límite": tercera reserva del mismo teléfono en el día ya no choca
+insert into ctx select 'td3', create_booking('barberia-leo', array[(select v from ctx where k='corte')::uuid],
+  (select v from ctx where k='day')::date, '10:00', 'Dani Diario', '5355556666');
+select cancel_booking((select v from ctx where k='td3'));
+
+update businesses set max_reschedules = null, reschedule_notice_hours = 6, max_pending_bookings = 2, max_daily_bookings = 3 where id = my_business_id();
 
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 do $$ begin

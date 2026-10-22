@@ -104,30 +104,30 @@ export default function BookingPage() {
 
         <section className="card">
           <div className="flex items-start justify-between gap-3">
-            <div>
+            <div className="min-w-0">
               <p className="text-sm text-slate-500">Tu cita</p>
-              <p className="mt-1 text-2xl font-extrabold">{dayTitle(key)}</p>
+              <p className="mt-1 truncate text-2xl font-extrabold">{dayTitle(key)}</p>
               <p className="text-xl font-bold text-brand">{time}</p>
-              {booking.staff_name && <p className="text-sm text-slate-600">Con <b>{booking.staff_name}</b></p>}
+              {booking.staff_name && <p className="truncate text-sm text-slate-600">Con <b>{booking.staff_name}</b></p>}
             </div>
             <StatusBadge status={booking.status} />
           </div>
           <div className="mt-4 border-t border-slate-100 pt-3">
             {booking.services.map((s, i) => (
-              <div key={i} className="flex justify-between py-1 text-slate-700">
-                <span>{s.name}</span>
-                <span className="text-right">{price(s.price, b.currency, booking.usd_rate)}</span>
+              <div key={i} className="flex justify-between gap-3 py-1 text-slate-700">
+                <span className="min-w-0 break-words">{s.name}</span>
+                <span className="shrink-0 text-right">{price(s.price, b.currency, booking.usd_rate)}</span>
               </div>
             ))}
             {Number(booking.discount || 0) > 0 && (
-              <div className="flex justify-between py-1 font-medium text-emerald-700">
-                <span>Descuento{booking.discount_code ? ` (${booking.discount_code})` : ''}</span>
-                <span>-{money(Number(booking.discount), b.currency)}</span>
+              <div className="flex justify-between gap-3 py-1 font-medium text-emerald-700">
+                <span className="min-w-0 break-words">Descuento{booking.discount_code ? ` (${booking.discount_code})` : ''}</span>
+                <span className="shrink-0 text-right">-{money(Number(booking.discount), b.currency)}</span>
               </div>
             )}
-            <div className="mt-2 flex justify-between border-t border-slate-100 pt-2 font-bold">
-              <span>Total</span>
-              <span className="text-right">{price(booking.total, b.currency, booking.usd_rate)}</span>
+            <div className="mt-2 flex justify-between gap-3 border-t border-slate-100 pt-2 font-bold">
+              <span className="shrink-0">Total</span>
+              <span className="min-w-0 text-right">{price(booking.total, b.currency, booking.usd_rate)}</span>
             </div>
             <p className="mt-1 text-xs text-slate-500">Duración aproximada: {duration(minutes)}</p>
           </div>

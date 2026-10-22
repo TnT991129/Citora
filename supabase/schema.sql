@@ -260,6 +260,13 @@ alter table public.businesses alter column max_pending_bookings drop not null;
 alter table public.businesses drop constraint if exists businesses_max_pending_bookings_check;
 alter table public.businesses add constraint businesses_max_pending_bookings_check
   check (max_pending_bookings is null or max_pending_bookings between 1 and 50);
+-- Citas que puede CREAR un mismo teléfono en un día (antes un 3 fijo, aparte del límite de arriba;
+-- compartían el mismo mensaje de error y eso confundía). Ahora también configurable y con su propio aviso.
+alter table public.businesses add column if not exists max_daily_bookings int not null default 3;
+alter table public.businesses alter column max_daily_bookings drop not null;
+alter table public.businesses drop constraint if exists businesses_max_daily_bookings_check;
+alter table public.businesses add constraint businesses_max_daily_bookings_check
+  check (max_daily_bookings is null or max_daily_bookings between 1 and 50);
 -- Se probó a tener un texto por tema (cancelaciones, cambios...) en vez de uno libre; se volvió
 -- atrás, así que esa columna y su limpieza (_clean_policy_sections) ya no se usan.
 alter table public.businesses drop column if exists policy_sections;
@@ -1117,10 +1124,10 @@ begin
         and status in ('pendiente', 'confirmada') and starts_at > now()) >= b.max_pending_bookings then
     raise exception 'LIMITE_CITAS';
   end if;
-  if (select count(*) from appointments
+  if b.max_daily_bookings is not null and (select count(*) from appointments
       where business_id = b.id and customer_phone = v_phone
-        and created_at > now() - interval '1 day') >= 3 then
-    raise exception 'LIMITE_CITAS';
+        and created_at > now() - interval '1 day') >= b.max_daily_bookings then
+    raise exception 'LIMITE_DIARIO';
   end if;
 
   v_check := _check_slot(b.id, p_date, p_time, v_dur, null, p_staff);

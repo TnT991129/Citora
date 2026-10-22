@@ -352,7 +352,7 @@ function MyBookings({ slug, tz }: { slug: string; tz: string }) {
           return (
             <li key={b.token}>
               <Link to={clientPath(slug, `cita/${b.token}`)} className="flex items-center justify-between gap-2 py-3">
-                <span>
+                <span className="min-w-0 truncate">
                   <span className="font-semibold">{dayTitle(dateKey(start, tz))}</span>
                   <span className="text-slate-500"> · {timeOf(start, tz)}</span>
                 </span>

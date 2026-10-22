@@ -13,6 +13,7 @@ export default function Policies() {
     min_notice_hours: business.min_notice_hours,
     max_days_ahead: business.max_days_ahead,
     max_pending_bookings: business.max_pending_bookings, // null = sin límite
+    max_daily_bookings: business.max_daily_bookings, // null = sin límite
     cancel_notice_hours: business.cancel_notice_hours,
     reschedule_notice_hours: business.reschedule_notice_hours,
     max_reschedules: business.max_reschedules, // null = sin límite
@@ -30,6 +31,7 @@ export default function Policies() {
       min_notice_hours: form.min_notice_hours,
       max_days_ahead: form.max_days_ahead,
       max_pending_bookings: form.max_pending_bookings,
+      max_daily_bookings: form.max_daily_bookings,
       cancel_notice_hours: form.cancel_notice_hours,
       reschedule_notice_hours: form.reschedule_notice_hours,
       max_reschedules: form.max_reschedules,
@@ -94,6 +96,30 @@ export default function Policies() {
                 value={form.max_pending_bookings}
                 onChange={(n) => set({ max_pending_bookings: n })}
                 unit={(n) => (n === 1 ? 'cita pendiente' : 'citas pendientes')}
+              />
+            )}
+          </div>
+          <div>
+            <span className="label">Citas creadas por día</span>
+            <p className="mb-2 text-sm text-slate-500">
+              Cuántas veces puede reservar un mismo teléfono en 24 horas. Otra forma de evitar abusos, aparte de la de arriba.
+            </p>
+            <label className="mb-2 flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={form.max_daily_bookings === null}
+                onChange={(e) => set({ max_daily_bookings: e.target.checked ? null : 3 })}
+              />
+              Sin límite
+            </label>
+            {form.max_daily_bookings !== null && (
+              <CapacityStepper
+                size="sm"
+                min={1}
+                max={50}
+                value={form.max_daily_bookings}
+                onChange={(n) => set({ max_daily_bookings: n })}
+                unit={(n) => (n === 1 ? 'cita al día' : 'citas al día')}
               />
             )}
           </div>
