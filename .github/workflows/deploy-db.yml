@@ -1,0 +1,34 @@
+# Aplica supabase/schema.sql a un Supabase real, sin copiar y pegar a mano en el SQL Editor.
+# Se dispara a mano (botón "Run workflow" en la pestaña Actions de GitHub) para no arriesgar la
+# base de datos real sin que alguien lo decida ahí mismo. Hace falta guardar antes, en GitHub >
+# Settings > Secrets and variables > Actions, uno de estos (o los dos):
+#   SUPABASE_DB_URL_STAGING  - cadena de conexión del Supabase de pruebas
+#   SUPABASE_DB_URL_OFICIAL  - cadena de conexión del Supabase real (con clientes)
+# La cadena se copia de Supabase > Project Settings > Database > Connection string (URI), con la
+# contraseña puesta.
+name: Aplicar schema.sql a Supabase
+
+on:
+  workflow_dispatch:
+    inputs:
+      destino:
+        description: A cuál Supabase aplicarlo
+        required: true
+        type: choice
+        options: [staging, oficial]
+        default: staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Aplicar schema.sql
+        env:
+          PGURI: ${{ inputs.destino == 'oficial' && secrets.SUPABASE_DB_URL_OFICIAL || secrets.SUPABASE_DB_URL_STAGING }}
+        run: |
+          if [ -z "$PGURI" ]; then
+            echo "Falta el secreto para '${{ inputs.destino }}' (ver los comentarios de este archivo)."
+            exit 1
+          fi
+          psql "$PGURI" -v ON_ERROR_STOP=1 -f supabase/schema.sql

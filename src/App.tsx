@@ -15,6 +15,8 @@ const BookingFlow = lazy(() => import('./pages/public/BookingFlow'))
 const BookingPage = lazy(() => import('./pages/public/BookingPage'))
 const MyAppointments = lazy(() => import('./pages/public/MyAppointments'))
 const NotFound = lazy(() => import('./pages/NotFound'))
+const Terms = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Terms })))
+const Privacy = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Privacy })))
 
 export default function App() {
   if (!supabaseConfigured) {
@@ -37,6 +39,8 @@ export default function App() {
         <Route path="/crear" element={<Create />} />
         <Route path="/entrar" element={<Login />} />
         <Route path="/restablecer" element={<ResetPassword />} />
+        <Route path="/terminos" element={<Terms />} />
+        <Route path="/privacidad" element={<Privacy />} />
         <Route path="/panel/*" element={<Panel />} />
         <Route path="/admin/*" element={<Admin />} />
 

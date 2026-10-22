@@ -58,6 +58,9 @@ export default function BookingFlow() {
   const currency = business.currency!
   const rate = cupRate(business)
   const team = hasModule(business.plan, 'empleados') ? business.staff || [] : []
+  const chosenIds = chosen.map((s) => s.id)
+  // Solo se puede elegir a quien haga todos los servicios escogidos (si no marcó ninguno, hace todos)
+  const eligibleTeam = team.filter((s) => s.service_ids.length === 0 || chosenIds.every((id) => s.service_ids.includes(id)))
   const openDays = new Set((business.schedule || []).filter((d) => d.is_open).map((d) => d.weekday))
   const closed = new Set(business.closed_days || [])
   const isOpen = (key: string) => openDays.has(weekdayOf(key)) && !closed.has(key)
@@ -150,9 +153,12 @@ export default function BookingFlow() {
               selected={staffId === null}
               onClick={() => pickStaff(null)}
             />
-            {team.map((s) => (
-              <StaffCard key={s.id} name={s.name} hint="Ver sus horas libres" selected={staffId === s.id} onClick={() => pickStaff(s.id)} />
+            {eligibleTeam.map((s) => (
+              <StaffCard key={s.id} name={s.name} photo={s.photo_url} hint="Ver sus horas libres" selected={staffId === s.id} onClick={() => pickStaff(s.id)} />
             ))}
+            {eligibleTeam.length < team.length && (
+              <p className="text-xs text-slate-400">Algunas personas del equipo no hacen los servicios que elegiste.</p>
+            )}
           </div>
         )}
 
@@ -190,6 +196,7 @@ export default function BookingFlow() {
                   value={time}
                   onChange={setTime}
                   staff={person?.id ?? null}
+                  serviceIds={chosenIds}
                   whenFull={hasModule(business.plan, 'espera') ? <WaitlistForm slug={business.slug} date={date} name={name} phone={phone} /> : null}
                 />
               </div>
@@ -239,6 +246,14 @@ export default function BookingFlow() {
                 <p className="mt-1 text-xs text-slate-500">Se paga en el negocio. Duración aproximada: {duration(minutes)}.</p>
               </div>
             </div>
+            {business.deposit_enabled && (
+              <div className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900 ring-1 ring-amber-200">
+                <p className="font-bold">
+                  Este negocio pide un depósito{business.deposit_amount ? ` de ${money(business.deposit_amount, currency)}` : ''} para asegurar la cita.
+                </p>
+                {business.deposit_instructions && <p className="mt-1 whitespace-pre-line">{business.deposit_instructions}</p>}
+              </div>
+            )}
             {hasModule(business.plan, 'descuentos') && (
               <CouponBox slug={business.slug} serviceIds={selected} applied={coupon} onApplied={setCoupon} />
             )}
@@ -288,10 +303,10 @@ function Initial({ name, any }: { name: string; any?: boolean }) {
   )
 }
 
-function StaffCard({ name, hint, icon, selected, onClick }: { name: string; hint: string; icon?: 'any'; selected: boolean; onClick: () => void }) {
+function StaffCard({ name, hint, icon, photo, selected, onClick }: { name: string; hint: string; icon?: 'any'; photo?: string | null; selected: boolean; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick} className={`card flex w-full items-center gap-3 text-left transition hover:ring-2 hover:ring-brand ${selected ? 'ring-2 ring-brand' : ''}`}>
-      <Initial name={name} any={icon === 'any'} />
+      {photo ? <img src={photo} alt="" className="h-11 w-11 shrink-0 rounded-full object-cover" /> : <Initial name={name} any={icon === 'any'} />}
       <span className="min-w-0 flex-1">
         <span className="block font-bold">{name}</span>
         <span className="block text-sm text-slate-500">{hint}</span>

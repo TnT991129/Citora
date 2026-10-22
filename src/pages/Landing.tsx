@@ -134,6 +134,11 @@ export default function Landing() {
       <footer className="border-t border-slate-100 py-8 text-center text-sm text-slate-500">
         <CitoraLogo className="text-base text-slate-700" />
         <p className="mt-2">© {new Date().getFullYear()} Citora</p>
+        <p className="mt-1 space-x-2 text-xs">
+          <Link to="/terminos" className="underline hover:text-slate-700">Términos</Link>
+          <span>·</span>
+          <Link to="/privacidad" className="underline hover:text-slate-700">Privacidad</Link>
+        </p>
       </footer>
     </div>
   )

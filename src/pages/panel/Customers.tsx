@@ -10,7 +10,8 @@ import { waLink } from '../../lib/whatsapp'
 import { usePanel } from './context'
 import { Locked, useModule } from './Locked'
 
-type Sort = 'recientes' | 'visitas' | 'gasto' | 'nombre'
+type Sort = 'recientes' | 'visitas' | 'gasto' | 'nombre' | 'inactivos'
+const INACTIVE_DAYS = 45
 const TAGS = ['VIP', 'Frecuente', 'Nuevo', 'Puntual', 'Llega tarde', 'No viene']
 
 export default function Customers() {
@@ -46,6 +47,8 @@ export default function Customers() {
       visitas: (a, b) => b.visits - a.visits,
       gasto: (a, b) => Number(b.spent) - Number(a.spent),
       nombre: (a, b) => a.name.localeCompare(b.name, 'es'),
+      // Primero quien tiene más tiempo sin venir (sin ninguna visita, al final)
+      inactivos: (a, b) => (a.last_visit || '9999').localeCompare(b.last_visit || '9999'),
     }
     return [...out].sort(by[sort])
   }, [list, q, sort])
@@ -72,6 +75,7 @@ export default function Customers() {
           <option value="visitas">Más visitas</option>
           <option value="gasto">Más gasto</option>
           <option value="nombre">Nombre (A-Z)</option>
+          <option value="inactivos">Más tiempo sin venir</option>
         </select>
       </div>
 
@@ -82,7 +86,10 @@ export default function Customers() {
       )}
 
       <ul className="space-y-2">
-        {filtered.map((c) => (
+        {filtered.map((c) => {
+          const daysSince = c.last_visit ? Math.floor((Date.now() - new Date(c.last_visit).getTime()) / 86400000) : null
+          const inactive = !c.next_at && daysSince !== null && daysSince >= INACTIVE_DAYS
+          return (
           <li key={c.phone}>
             <button onClick={() => setOpen(c)} className="card flex w-full items-center justify-between gap-3 text-left hover:ring-slate-300">
               <div className="min-w-0">
@@ -96,11 +103,13 @@ export default function Customers() {
                   {c.no_shows > 0 && <span className="text-red-600"> · {c.no_shows} sin venir</span>}
                 </p>
                 {c.next_at && <p className="text-sm font-medium text-brand">Próxima: {shortDate(dateKey(c.next_at, business.timezone))} · {timeOf(c.next_at, business.timezone)}</p>}
+                {inactive && <p className="text-sm font-medium text-amber-700">⏰ {daysSince} días sin venir</p>}
               </div>
               <span className="shrink-0 font-semibold">{money(c.spent, business.currency)}</span>
             </button>
           </li>
-        ))}
+          )
+        })}
         {list.length > 0 && filtered.length === 0 && <p className="py-6 text-center text-slate-500">Nadie coincide con la búsqueda.</p>}
       </ul>
 

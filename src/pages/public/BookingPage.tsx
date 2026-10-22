@@ -8,6 +8,7 @@ import { setAppManifest } from '../../lib/pwa'
 import { errorMessage } from '../../lib/errors'
 import { cupRate, dateKey, duration, longDate, money, price, timeOf, todayKey, weekdayOf, dayTitle } from '../../lib/format'
 import { hasModule } from '../../lib/plans'
+import { isPushSubscribed, pushSupported, subscribeCustomerPush } from '../../lib/push'
 import { rememberBooking } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
 import type { PublicBooking, PublicBusiness } from '../../lib/types'
@@ -148,6 +149,12 @@ export default function BookingPage() {
           </p>
         )}
 
+        {booking.customer && b.loyalty_enabled && b.loyalty_every && (
+          <LoyaltyNote visits={booking.customer.visits} every={b.loyalty_every} reward={b.loyalty_reward} />
+        )}
+
+        {active && <PushReminderBox token={booking.token} />}
+
         {(booking.can_review || booking.review) && (
           <ReviewBox booking={booking} onSaved={loadBooking} />
         )}
@@ -238,6 +245,7 @@ function EditBooking({ booking, onClose, onDone }: {
   const total = same ? Number(booking.total) : chosen.reduce((a, s) => a + Number(s.price), 0)
   const rate = same ? booking.usd_rate : biz ? cupRate(biz) : null
   const team = biz && hasModule(biz.plan, 'empleados') ? biz.staff || [] : []
+  const eligibleTeam = team.filter((s) => s.service_ids.length === 0 || selected.every((id) => s.service_ids.includes(id)))
   const openDays = new Set((biz?.schedule || []).filter((d) => d.is_open).map((d) => d.weekday))
   const closed = new Set(biz?.closed_days || [])
 
@@ -291,7 +299,7 @@ function EditBooking({ booking, onClose, onDone }: {
             <div>
               <h3 className="mb-2 font-bold">¿Con quién?</h3>
               <div className="flex flex-wrap gap-2">
-                {[{ id: null, name: 'Cualquiera' }, ...team].map((s) => (
+                {[{ id: null, name: 'Cualquiera' }, ...eligibleTeam].map((s) => (
                   <button
                     key={s.id || 'any'}
                     type="button"
@@ -321,7 +329,7 @@ function EditBooking({ booking, onClose, onDone }: {
             />
             {date && (
               <div className="mt-3">
-                <SlotPicker slug={biz.slug} date={date} duration={minutes || 60} value={time} onChange={setTime} staff={staffId} excludeToken={booking.token} />
+                <SlotPicker slug={biz.slug} date={date} duration={minutes || 60} value={time} onChange={setTime} staff={staffId} serviceIds={selected} excludeToken={booking.token} />
               </div>
             )}
           </div>
@@ -341,6 +349,49 @@ function EditBooking({ booking, onClose, onDone }: {
         </div>
       )}
     </Modal>
+  )
+}
+
+function LoyaltyNote({ visits, every, reward }: { visits: number; every: number; reward: string | null }) {
+  if (visits <= 0) return null
+  const hit = visits % every === 0
+  const left = every - (visits % every)
+  return (
+    <div className={`rounded-2xl p-4 text-center text-sm ring-1 ${hit ? 'bg-amber-50 text-amber-900 ring-amber-200' : 'bg-white text-slate-600 ring-slate-200'}`}>
+      {hit
+        ? <>🎉 ¡Llegaste a tus <b>{visits} visitas</b>! {reward ? <>Pregunta por: <b>{reward}</b></> : 'Pregunta por tu premio.'}</>
+        : <>Te {left === 1 ? 'falta' : 'faltan'} <b>{left} {left === 1 ? 'visita' : 'visitas'}</b> para tu premio{reward ? <>: <b>{reward}</b></> : ''}.</>}
+    </div>
+  )
+}
+
+function PushReminderBox({ token }: { token: string }) {
+  const [on, setOn] = useState<boolean | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (pushSupported()) isPushSubscribed().then(setOn)
+  }, [])
+
+  if (!pushSupported() || on === true) return null
+
+  const activate = async () => {
+    setBusy(true)
+    const ok = await subscribeCustomerPush(token)
+    setBusy(false)
+    if (!ok) return flash('No se pudo activar. Revisa los permisos de notificaciones del navegador.')
+    setOn(true)
+    flash('Listo, te avisaremos en este dispositivo')
+  }
+
+  return (
+    <button
+      onClick={activate}
+      disabled={busy}
+      className="w-full rounded-2xl bg-white px-4 py-3 text-left text-sm ring-1 ring-slate-200"
+    >
+      🔔 <span className="font-semibold text-brand">Avisarme de esta cita</span> en este dispositivo (recordatorio, si se confirma o si cambia).
+    </button>
   )
 }
 

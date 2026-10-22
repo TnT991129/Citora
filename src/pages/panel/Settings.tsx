@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom'
-import { useRef, useState } from 'react'
-import { Alert, BusinessAvatar, Button, Field, flash } from '../../components/ui'
+import { useEffect, useRef, useState } from 'react'
+import { Alert, BusinessAvatar, Button, Field, Toggle, flash } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { CURRENCY_MODES, currencyFields, currencyMode, slugify } from '../../lib/format'
 import { imageExt, resizeImage } from '../../lib/image'
+import { isPushSubscribed, pushSupported, subscribeOwnerPush, unsubscribePush } from '../../lib/push'
 import { supabase } from '../../lib/supabase'
 import { BUSINESS_TYPES } from '../../lib/templates'
 import { panelUrl, publicUrl } from '../../lib/url'
@@ -163,11 +164,44 @@ export default function Settings() {
       {error && <Alert>{error}</Alert>}
       <Button block size="lg" onClick={save} loading={busy}>Guardar cambios</Button>
 
+      <PushSection />
+
       <section className="card">
         <h2 className="font-bold">Cuenta</h2>
         <p className="mt-1 text-sm text-slate-500">Código de tu negocio: <b>{business.code}</b> (úsalo al pagar).</p>
         <Button variant="secondary" className="mt-3" onClick={() => supabase.auth.signOut()}>Cerrar sesión</Button>
       </section>
     </div>
+  )
+}
+
+function PushSection() {
+  const [on, setOn] = useState<boolean | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (pushSupported()) isPushSubscribed().then(setOn)
+  }, [])
+
+  if (!pushSupported()) return null
+
+  const toggle = async (v: boolean) => {
+    setBusy(true)
+    const ok = v ? await subscribeOwnerPush() : await unsubscribePush().then(() => true)
+    setBusy(false)
+    if (!ok) return flash('No se pudo activar. Revisa los permisos de notificaciones del navegador.')
+    setOn(v)
+    flash(v ? 'Avisos activados en este dispositivo' : 'Avisos desactivados en este dispositivo')
+  }
+
+  return (
+    <section className="card space-y-2">
+      <h2 className="font-bold">Avisos en este dispositivo</h2>
+      <p className="text-sm text-slate-500">
+        Recibe una notificación cuando un cliente reserve, cancele o cambie una cita. Instala la app en tu móvil para no perdértelas.
+      </p>
+      {on !== null && <Toggle checked={on} onChange={toggle} label="Avisos de citas nuevas y cambios" />}
+      {busy && <p className="text-xs text-slate-400">Guardando…</p>}
+    </section>
   )
 }

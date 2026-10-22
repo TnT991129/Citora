@@ -44,6 +44,8 @@ interface Settings {
   price_plus: number
   price_ultra: number
   trial_days: number
+  push_function_url: string | null
+  push_shared_secret: string | null
 }
 
 export default function Admin() {
@@ -426,6 +428,18 @@ function SettingsForm() {
         </Field>
         <Field label="Días de prueba gratis" hint="Para los negocios nuevos.">
           <input className="input" type="number" min={0} max={60} value={s.trial_days} onChange={(e) => setS({ ...s, trial_days: Number(e.target.value) })} />
+        </Field>
+      </section>
+      <section className="card space-y-4">
+        <h2 className="font-bold">Notificaciones push</h2>
+        <p className="text-sm text-slate-500">
+          Se rellenan después de desplegar <code className="rounded bg-slate-100 px-1">supabase/functions/notify-push</code>. Mientras estén vacías, la app funciona igual pero sin avisos.
+        </p>
+        <Field label="Dirección de la función" hint="La URL que te da 'supabase functions deploy notify-push'.">
+          <input className="input" value={s.push_function_url || ''} onChange={(e) => setS({ ...s, push_function_url: e.target.value.trim() || null })} placeholder="https://xxxx.supabase.co/functions/v1/notify-push" />
+        </Field>
+        <Field label="Clave secreta" hint="La misma frase que pusiste en PUSH_SHARED_SECRET al desplegar la función.">
+          <input className="input font-mono" value={s.push_shared_secret || ''} onChange={(e) => setS({ ...s, push_shared_secret: e.target.value.trim() || null })} />
         </Field>
       </section>
       {error && <Alert>{error}</Alert>}

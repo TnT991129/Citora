@@ -408,6 +408,16 @@ insert into ctx select 'td3', create_booking('barberia-leo', array[(select v fro
   (select v from ctx where k='day')::date, '10:00', 'Dani Diario', '5355556666');
 select cancel_booking((select v from ctx where k='td3'));
 
+-- ===== Bloquear horas sueltas (Horario) =====
+insert into closed_slots (business_id, day, start_time, end_time, reason)
+  values (my_business_id(), (select v from ctx where k='day')::date, '10:00', '11:00', 'Almuerzo');
+select expect_error($$select create_booking('barberia-leo', array['$$ || (select v from ctx where k='corte') || $$'::uuid], '$$ || (select v from ctx where k='day') || $$', '10:00', 'Hora Bloqueada', '5355557777')$$, 'TURNO_INVALIDO');
+do $$ declare d date := (select v from ctx where k='day')::date; begin
+  assert not (select available from get_available_slots('barberia-leo', d, 30) where slot = '10:00'), '10:00 bloqueada por almuerzo';
+  assert (select available from get_available_slots('barberia-leo', d, 30) where slot = '11:00'), '11:00 sigue libre';
+end $$;
+delete from closed_slots where business_id = my_business_id();
+
 update businesses set max_reschedules = null, reschedule_notice_hours = 6, max_pending_bookings = 2, max_daily_bookings = 3 where id = my_business_id();
 
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
@@ -443,8 +453,36 @@ do $$ declare d date := (select v from ctx where k='day')::date; ana uuid := (se
   assert (select available from get_available_slots('spa-mar', d, 60) where slot = '11:00'), 'pero Bea sigue libre a las 11';
 end $$;
 select expect_error($$select create_booking('spa-mar', array['$$ || (select v from ctx where k='masaje') || $$'::uuid], '$$ || (select v from ctx where k='day') || $$', '11:00', 'Cliente Cuatro', '5350000004', null, null, '$$ || (select v from ctx where k='ana') || $$')$$, 'TURNO_OCUPADO');
+
+-- ===== Horario propio de un profesional (Equipo) =====
+insert into ctx select 'day2', ((select v from ctx where k='day')::date + 3)::text;
+do $$ declare d2 date := (select v from ctx where k='day2')::date; ana uuid := (select v from ctx where k='ana')::uuid; begin
+  assert (select available from get_available_slots('spa-mar', d2, 60, ana) where slot = '10:00'), 'Ana libre antes de cerrar su horario propio';
+end $$;
 reset role;
 set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+insert into staff_schedule_days (staff_id, weekday, is_open, slots)
+  select (select v from ctx where k='ana')::uuid, d, false, '{}' from generate_series(0, 6) d;
+reset role;
+set role anon;
+do $$ declare d2 date := (select v from ctx where k='day2')::date; ana uuid := (select v from ctx where k='ana')::uuid; begin
+  assert not (select available from get_available_slots('spa-mar', d2, 60, ana) where slot = '10:00'), 'Ana ya no trabaja (horario propio cerrado)';
+  assert (select available from get_available_slots('spa-mar', d2, 60) where slot = '10:00'), 'el hueco sigue libre para Bea (sin horario propio: usa el del negocio)';
+end $$;
+select expect_error($$select create_booking('spa-mar', array['$$ || (select v from ctx where k='masaje') || $$'::uuid], '$$ || (select v from ctx where k='day2') || $$', '10:00', 'Cliente Cinco', '5350000005', null, null, '$$ || (select v from ctx where k='ana') || $$')$$, 'TURNO_INVALIDO');
+
+-- ===== Notificaciones push: guardar y quitar suscripciones =====
+select save_customer_push_subscription((select v from ctx where k='s1'), 'https://fcm.example/ep1', 'p256dh-test', 'auth-test');
+select expect_error($$select save_customer_push_subscription('no-existe', 'e', 'p', 'a')$$, 'CITA_NO_EXISTE');
+do $$ begin assert (select count(*) from push_subscriptions where kind = 'customer') = 1, 'suscripción de cliente guardada'; end $$;
+select delete_push_subscription('https://fcm.example/ep1');
+do $$ begin assert (select count(*) from push_subscriptions where kind = 'customer') = 0, 'suscripción de cliente borrada'; end $$;
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select save_owner_push_subscription('https://fcm.example/ep-owner', 'p256dh-o', 'auth-o');
+do $$ begin assert (select count(*) from push_subscriptions where kind = 'owner') = 1, 'suscripción del dueño guardada'; end $$;
 set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 select admin_deactivate_business((select v from ctx where k='biz1')::uuid);
 reset role;

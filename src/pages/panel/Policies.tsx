@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { CapacityStepper } from '../../components/CapacityStepper'
-import { Alert, Button, Field, flash } from '../../components/ui'
+import { Alert, Button, Field, Toggle, flash } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { supabase } from '../../lib/supabase'
 import { usePanel } from './context'
@@ -17,6 +17,12 @@ export default function Policies() {
     cancel_notice_hours: business.cancel_notice_hours,
     reschedule_notice_hours: business.reschedule_notice_hours,
     max_reschedules: business.max_reschedules, // null = sin límite
+    deposit_enabled: business.deposit_enabled,
+    deposit_amount: business.deposit_amount != null ? String(business.deposit_amount) : '',
+    deposit_instructions: business.deposit_instructions || '',
+    loyalty_enabled: business.loyalty_enabled,
+    loyalty_every: business.loyalty_every || 5,
+    loyalty_reward: business.loyalty_reward || '',
     policies: business.policies || '',
   })
   const [busy, setBusy] = useState(false)
@@ -35,6 +41,12 @@ export default function Policies() {
       cancel_notice_hours: form.cancel_notice_hours,
       reschedule_notice_hours: form.reschedule_notice_hours,
       max_reschedules: form.max_reschedules,
+      deposit_enabled: form.deposit_enabled,
+      deposit_amount: form.deposit_enabled && Number(form.deposit_amount) > 0 ? Number(form.deposit_amount) : null,
+      deposit_instructions: form.deposit_enabled ? (form.deposit_instructions.trim() || null) : null,
+      loyalty_enabled: form.loyalty_enabled,
+      loyalty_every: form.loyalty_enabled ? form.loyalty_every : null,
+      loyalty_reward: form.loyalty_enabled ? (form.loyalty_reward.trim() || null) : null,
       policies: form.policies.trim() || null,
     }).eq('id', business.id)
     setBusy(false)
@@ -146,6 +158,58 @@ export default function Policies() {
             )}
           </div>
         </div>
+      </section>
+
+      <section className="card space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-bold">Depósito para reservar</h2>
+            <p className="text-sm text-slate-500">
+              No hay pasarela de pago para Cuba, así que es informativo: el cliente lo transfiere por su cuenta
+              (Transfermóvil/EnZona) y te manda la captura por WhatsApp. Tú confirmas la cita como siempre.
+            </p>
+          </div>
+          <Toggle checked={form.deposit_enabled} onChange={(v) => set({ deposit_enabled: v })} label="Pedir depósito" />
+        </div>
+        {form.deposit_enabled && (
+          <>
+            <Field label="Importe" hint={`En ${business.currency}.`}>
+              <input className="input" type="number" min={0} step="any" inputMode="decimal" value={form.deposit_amount} onChange={(e) => set({ deposit_amount: e.target.value })} placeholder="Ej. 500" />
+            </Field>
+            <Field label="Instrucciones para el cliente">
+              <textarea
+                className="input min-h-[90px]"
+                maxLength={500}
+                value={form.deposit_instructions}
+                onChange={(e) => set({ deposit_instructions: e.target.value })}
+                placeholder="Ej. Transfiere a la tarjeta 9200 0000 0000 0000 y manda la captura por WhatsApp para confirmar tu cita."
+              />
+            </Field>
+          </>
+        )}
+      </section>
+
+      <section className="card space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-bold">Tarjeta de cliente fiel</h2>
+            <p className="text-sm text-slate-500">
+              Un aviso para tus clientas cada cierto número de visitas. Tú entregas el premio cuando te lo mencionen (no se aplica solo).
+            </p>
+          </div>
+          <Toggle checked={form.loyalty_enabled} onChange={(v) => set({ loyalty_enabled: v })} label="Tarjeta de cliente fiel" />
+        </div>
+        {form.loyalty_enabled && (
+          <>
+            <div>
+              <span className="label">Cada</span>
+              <CapacityStepper size="sm" min={2} max={50} value={form.loyalty_every} onChange={(n) => set({ loyalty_every: n })} unit={(n) => (n === 1 ? 'visita' : 'visitas')} />
+            </div>
+            <Field label="Premio">
+              <input className="input" maxLength={160} value={form.loyalty_reward} onChange={(e) => set({ loyalty_reward: e.target.value })} placeholder="Ej. Un servicio gratis" />
+            </Field>
+          </>
+        )}
       </section>
 
       <section className="card space-y-3">

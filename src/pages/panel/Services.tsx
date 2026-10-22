@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Alert, Button, Empty, Field, Modal, Toggle } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { cupRate, duration, money, price } from '../../lib/format'
+import { imageExt, resizeImage } from '../../lib/image'
 import { supabase } from '../../lib/supabase'
 import type { Service } from '../../lib/types'
 import { usePanel } from './context'
@@ -13,7 +14,9 @@ export default function Services() {
   const { business, services, reloadServices } = usePanel()
   const [editing, setEditing] = useState<Editing | null>(null)
   const [busy, setBusy] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
   const rate = cupRate(business)
   const main = services.filter((s) => !s.is_extra)
   const extras = services.filter((s) => s.is_extra)
@@ -59,6 +62,34 @@ export default function Services() {
     reloadServices()
   }
 
+  const uploadPhoto = async (file: File) => {
+    if (!editing?.id) return
+    setUploading(true)
+    setError(null)
+    try {
+      const blob = await resizeImage(file, 480)
+      const path = `${business.id}/service-${editing.id}-${Date.now()}.${imageExt(blob)}`
+      const { error: upErr } = await supabase.storage.from('logos').upload(path, blob, { contentType: blob.type })
+      if (upErr) throw upErr
+      const { data } = supabase.storage.from('logos').getPublicUrl(path)
+      const { error } = await supabase.from('services').update({ photo_url: data.publicUrl }).eq('id', editing.id)
+      if (error) throw error
+      setEditing({ ...editing, photo_url: data.publicUrl })
+      reloadServices()
+    } catch (e) {
+      setError(errorMessage(e))
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const removePhoto = async () => {
+    if (!editing?.id) return
+    await supabase.from('services').update({ photo_url: null }).eq('id', editing.id)
+    setEditing({ ...editing, photo_url: null })
+    reloadServices()
+  }
+
   // Sube o baja dentro de su lista (principales o complementos) y deja las posiciones seguidas
   const moveItem = async (list: Service[], index: number, dir: -1 | 1) => {
     const j = index + dir
@@ -80,6 +111,7 @@ export default function Services() {
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6" /></svg>
         </button>
       </div>
+      {s.photo_url && <img src={s.photo_url} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" />}
       <button className="min-w-0 flex-1 text-left" onClick={() => open({ ...s })}>
         <p className="truncate font-semibold">{s.is_extra ? '+ ' : ''}{s.name}</p>
         <p className="text-sm text-slate-500">{price(s.price, business.currency, rate)} · {duration(s.duration_min)}</p>
@@ -126,6 +158,36 @@ export default function Services() {
           }
         >
           <div className="space-y-4">
+            {editing.id ? (
+              <div className="flex items-center gap-3">
+                {editing.photo_url ? (
+                  <img src={editing.photo_url} alt="" className="h-16 w-16 rounded-xl object-cover" />
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
+                    <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6M15.5 9.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" /></svg>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Button variant="secondary" size="sm" onClick={() => fileRef.current?.click()} loading={uploading}>
+                    {editing.photo_url ? 'Cambiar foto' : 'Subir foto'}
+                  </Button>
+                  {editing.photo_url && <Button variant="ghost" size="sm" onClick={removePhoto}>Quitar</Button>}
+                </div>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) uploadPhoto(f)
+                    e.target.value = ''
+                  }}
+                />
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400">Guarda el servicio para poder añadirle una foto.</p>
+            )}
             <Field label="Nombre"><input className="input" value={editing.name} maxLength={80} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></Field>
             <Field label="Descripción (opcional)"><input className="input" value={editing.description || ''} maxLength={160} onChange={(e) => setEditing({ ...editing, description: e.target.value })} /></Field>
             <div className="grid grid-cols-2 gap-3">
