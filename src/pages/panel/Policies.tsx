@@ -2,11 +2,10 @@ import { useState } from 'react'
 import { CapacityStepper } from '../../components/CapacityStepper'
 import { Alert, Button, Field, flash } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
-import { defaultPolicyText, POLICY_SECTIONS, type PolicySections } from '../../lib/policies'
 import { supabase } from '../../lib/supabase'
 import { usePanel } from './context'
 
-const LEGACY_MAX = 2000
+const POLICIES_MAX = 5000
 
 export default function Policies() {
   const { business, reloadBusiness } = usePanel()
@@ -17,17 +16,12 @@ export default function Policies() {
     cancel_notice_hours: business.cancel_notice_hours,
     reschedule_notice_hours: business.reschedule_notice_hours,
     max_reschedules: business.max_reschedules, // null = sin límite
-    sections: { ...business.policy_sections } as PolicySections,
-    legacy: business.policies || '',
+    policies: business.policies || '',
   })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }))
-  const setSection = (key: keyof PolicySections, value: string) =>
-    setForm((f) => ({ ...f, sections: { ...f.sections, [key]: value } }))
-
-  const rules = { cancel_notice_hours: form.cancel_notice_hours, reschedule_notice_hours: form.reschedule_notice_hours, max_reschedules: form.max_reschedules }
 
   const save = async () => {
     setBusy(true)
@@ -39,8 +33,7 @@ export default function Policies() {
       cancel_notice_hours: form.cancel_notice_hours,
       reschedule_notice_hours: form.reschedule_notice_hours,
       max_reschedules: form.max_reschedules,
-      policy_sections: form.sections,
-      policies: form.legacy.trim() || null,
+      policies: form.policies.trim() || null,
     }).eq('id', business.id)
     setBusy(false)
     if (error) return setError(errorMessage(error))
@@ -52,7 +45,7 @@ export default function Policies() {
     <div className="space-y-5 pb-10">
       <div>
         <h1 className="text-2xl font-extrabold">Políticas</h1>
-        <p className="text-sm text-slate-500">Lo que leen tus clientas antes de reservar. Si dejas un texto vacío, se muestra uno por defecto.</p>
+        <p className="text-sm text-slate-500">Reglas de reserva y lo que leen tus clientas antes de reservar.</p>
       </div>
 
       <section className="card space-y-4">
@@ -129,31 +122,20 @@ export default function Policies() {
         </div>
       </section>
 
-      {POLICY_SECTIONS.map(({ key, label, hint }) => (
-        <section key={key} className="card space-y-2">
-          <div>
-            <h2 className="font-bold">{label}</h2>
-            <p className="text-sm text-slate-500">{hint}</p>
-          </div>
-          <textarea
-            className="input min-h-[90px] resize-y"
-            maxLength={800}
-            placeholder={defaultPolicyText(key, rules)}
-            value={form.sections[key] || ''}
-            onChange={(e) => setSection(key, e.target.value)}
-          />
-        </section>
-      ))}
-
-      <section className="card space-y-2">
-        <h2 className="font-bold">Otras notas (opcional)</h2>
-        <p className="text-sm text-slate-500">Cualquier otra cosa que quieras añadir, aparte de los temas de arriba.</p>
+      <section className="card space-y-3">
+        <h2 className="font-bold">Políticas</h2>
+        <p className="text-sm text-slate-500">Lo que tus clientes aceptan al reservar: puntualidad, cancelaciones, etc.</p>
         <textarea
-          className="input min-h-[120px] resize-y"
-          maxLength={LEGACY_MAX}
-          value={form.legacy}
-          onChange={(e) => set({ legacy: e.target.value })}
+          className="input min-h-[320px] resize-y leading-relaxed"
+          rows={14}
+          value={form.policies}
+          maxLength={POLICIES_MAX}
+          placeholder={'Ej.\n• Llega 5 minutos antes de tu cita.\n• Si llegas más de 15 minutos tarde, puede que tengamos que cambiar tu cita.\n• Cancela con al menos 6 horas de antelación.'}
+          onChange={(e) => set({ policies: e.target.value })}
         />
+        <p className={`text-right text-xs ${form.policies.length > POLICIES_MAX * 0.9 ? 'text-amber-700' : 'text-slate-400'}`}>
+          {form.policies.length.toLocaleString('es-ES')} / {POLICIES_MAX.toLocaleString('es-ES')} caracteres
+        </p>
       </section>
 
       {error && <Alert>{error}</Alert>}

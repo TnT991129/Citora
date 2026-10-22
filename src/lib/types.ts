@@ -1,5 +1,4 @@
 import type { Appearance } from './appearance'
-import type { PolicySections } from './policies'
 
 export type PlanKey = 'basico' | 'plus' | 'ultra'
 export type BusinessStatus = 'prueba' | 'activo' | 'vencido'
@@ -24,7 +23,6 @@ export interface Business {
   usd_prices: boolean
   usd_rate: number | null
   policies: string | null
-  policy_sections: PolicySections
   min_notice_hours: number
   max_days_ahead: number
   cancel_notice_hours: number
@@ -173,7 +171,6 @@ export interface PublicBusiness {
   usd_prices?: boolean
   usd_rate?: number | null
   policies?: string | null
-  policy_sections?: PolicySections
   min_notice_hours?: number
   max_days_ahead?: number
   cancel_notice_hours?: number

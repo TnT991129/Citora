@@ -5,7 +5,6 @@ import { Alert, Button, Field, PageLoader } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { cupRate, duration, money, price, weekdayOf, zonedToIso, dayTitle } from '../../lib/format'
 import { hasModule } from '../../lib/plans'
-import { policyEntries } from '../../lib/policies'
 import { load, rememberBooking, save } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
 import { clientPath } from '../../lib/url'
@@ -58,11 +57,6 @@ export default function BookingFlow() {
 
   const currency = business.currency!
   const rate = cupRate(business)
-  const policies = policyEntries(business.policy_sections, {
-    cancel_notice_hours: business.cancel_notice_hours ?? 6,
-    reschedule_notice_hours: business.reschedule_notice_hours ?? 6,
-    max_reschedules: business.max_reschedules ?? null,
-  })
   const team = hasModule(business.plan, 'empleados') ? business.staff || [] : []
   const openDays = new Set((business.schedule || []).filter((d) => d.is_open).map((d) => d.weekday))
   const closed = new Set(business.closed_days || [])
@@ -251,15 +245,10 @@ export default function BookingFlow() {
             <label className="flex items-start gap-3 rounded-xl bg-white p-3 ring-1 ring-slate-200">
               <input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} className="mt-1 h-5 w-5 accent-[rgb(var(--brand-rgb))]" />
               <span className="text-sm text-slate-700">
-                Acepto las condiciones del negocio.
-                <span className="mt-2 block max-h-48 space-y-2 overflow-y-auto rounded-lg bg-slate-50 px-3 py-2 text-slate-500">
-                  {policies.map((p) => (
-                    <span key={p.key} className="block">
-                      <b className="text-slate-700">{p.label}.</b> {p.text}
-                    </span>
-                  ))}
-                  {business.policies && <span className="block"><b className="text-slate-700">Otras notas.</b> {business.policies}</span>}
-                </span>
+                Acepto las condiciones del negocio. Puedo cancelar mi cita hasta {business.cancel_notice_hours} h antes, o cambiarla hasta {business.reschedule_notice_hours} h antes.
+                {business.policies && (
+                  <span className="mt-2 block max-h-48 overflow-y-auto whitespace-pre-line rounded-lg bg-slate-50 px-3 py-2 text-slate-500">{business.policies}</span>
+                )}
               </span>
             </label>
           </div>

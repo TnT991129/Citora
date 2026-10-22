@@ -246,7 +246,7 @@ alter table public.appointments drop column if exists total_usd;
 -- Servicios complementarios: extras opcionales que el cliente añade a un servicio principal
 alter table public.services add column if not exists is_extra boolean not null default false;
 
--- Políticas: reglas y textos que personaliza el dueño (ver _clean_policy_sections)
+-- Políticas: reglas de reserva que personaliza el dueño, más un texto libre (columna "policies").
 -- reschedule_notice_hours: plazo para cambiar (puede ser distinto de cancelar). max_reschedules:
 -- veces que se puede cambiar una misma cita (null = sin límite). max_pending_bookings: citas futuras
 -- que puede tener un mismo teléfono a la vez (antes era un 2 fijo en el código).
@@ -260,9 +260,10 @@ alter table public.businesses alter column max_pending_bookings drop not null;
 alter table public.businesses drop constraint if exists businesses_max_pending_bookings_check;
 alter table public.businesses add constraint businesses_max_pending_bookings_check
   check (max_pending_bookings is null or max_pending_bookings between 1 and 50);
--- Textos propios por tema (cancelaciones, cambios, retrasos...). Sin texto propio, la app muestra
--- uno por defecto que ya usa las reglas de arriba (lo arma el propio front-end).
-alter table public.businesses add column if not exists policy_sections jsonb not null default '{}'::jsonb;
+-- Se probó a tener un texto por tema (cancelaciones, cambios...) en vez de uno libre; se volvió
+-- atrás, así que esa columna y su limpieza (_clean_policy_sections) ya no se usan.
+alter table public.businesses drop column if exists policy_sections;
+drop function if exists public._clean_policy_sections(jsonb);
 
 -- Gastos del negocio (en su moneda), para ver la ganancia en las estadísticas
 create table if not exists public.expenses (
@@ -488,25 +489,6 @@ begin
 end;
 $$;
 
--- Deja solo los temas de políticas conocidos, con el texto recortado. Lo que no cumple, se descarta.
-create or replace function public._clean_policy_sections(p jsonb)
-returns jsonb language plpgsql immutable as $$
-declare
-  r jsonb := '{}'::jsonb;
-  k text;
-  v text;
-begin
-  if p is null or jsonb_typeof(p) <> 'object' then return r; end if;
-  foreach k in array array['cancelaciones', 'cambios', 'retrasos', 'no_asistio', 'reembolsos', 'espera', 'privacidad'] loop
-    v := nullif(btrim(coalesce(p ->> k, '')), '');
-    if v is not null then
-      r := r || jsonb_build_object(k, left(v, 800));
-    end if;
-  end loop;
-  return r;
-end;
-$$;
-
 -- ---------------------------------------------------------------------
 -- 3. DISPARADORES (triggers)
 -- ---------------------------------------------------------------------
@@ -520,7 +502,6 @@ begin
     raise exception 'ENLACE_INVALIDO';
   end if;
   new.appearance := _clean_appearance(new.appearance);
-  new.policy_sections := _clean_policy_sections(new.policy_sections);
   if new.currency not in ('CUP', 'USD') then
     new.currency := 'CUP';
   end if;
@@ -819,7 +800,6 @@ begin
     'usd_prices', b.usd_prices,
     'usd_rate', case when b.usd_prices then b.usd_rate end,
     'policies', b.policies,
-    'policy_sections', b.policy_sections,
     'min_notice_hours', b.min_notice_hours,
     'max_days_ahead', b.max_days_ahead,
     'cancel_notice_hours', b.cancel_notice_hours,
@@ -1990,7 +1970,6 @@ grant execute on function public.is_valid_slug(text) to anon, authenticated;
 grant execute on function public.is_reserved_slug(text) to anon, authenticated;
 grant execute on function public._clean_phone(text) to anon, authenticated;
 grant execute on function public._clean_appearance(jsonb) to authenticated;
-grant execute on function public._clean_policy_sections(jsonb) to authenticated;
 grant execute on function public.businesses_guard() to authenticated;
 grant execute on function public.appointments_guard() to authenticated;
 grant execute on function public.schedule_days_normalize() to authenticated;

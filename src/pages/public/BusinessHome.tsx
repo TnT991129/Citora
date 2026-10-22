@@ -11,7 +11,6 @@ import type { GalleryPhoto, PublicBooking, PublicBusiness, PublicReview, PublicS
 import NotFound from '../NotFound'
 import { shows } from '../../lib/appearance'
 import { hasModule } from '../../lib/plans'
-import { policyEntries } from '../../lib/policies'
 import { Announcement, BusinessHero, Centered, Closed, PoweredBy, Stars, usePublicBusiness } from './shared'
 
 const WEEK = [1, 2, 3, 4, 5, 6, 0]
@@ -45,11 +44,6 @@ export default function BusinessHome() {
   const book = (serviceId?: string) => clientPath(business.slug, serviceId ? `reservar?s=${serviceId}` : 'reservar')
   const wa = business.whatsapp ? waLink(business.whatsapp, `Hola, tengo una pregunta sobre ${business.name}.`) : null
   const bookLabel = look.book_label || 'Reservar cita'
-  const policies = policyEntries(business.policy_sections, {
-    cancel_notice_hours: business.cancel_notice_hours ?? 6,
-    reschedule_notice_hours: business.reschedule_notice_hours ?? 6,
-    max_reschedules: business.max_reschedules ?? null,
-  })
 
   return (
     <div className="min-h-dvh pb-28">
@@ -200,23 +194,16 @@ export default function BusinessHome() {
           </section>
         )}
 
-        <section className="card">
-          <SectionTitle eyebrow="Importante" title="Antes de tu cita" inCard />
-          <div className="divide-y divide-slate-100">
-            {policies.map((p) => (
-              <div key={p.key} className="py-3 first:pt-0 last:pb-0">
-                <h3 className="font-semibold">{p.label}</h3>
-                <p className="mt-1 whitespace-pre-line text-sm text-slate-600">{p.text}</p>
-              </div>
-            ))}
-            {business.policies && (
-              <div className="py-3 last:pb-0">
-                <h3 className="font-semibold">Otras notas</h3>
-                <p className="mt-1 whitespace-pre-line text-sm text-slate-600">{business.policies}</p>
-              </div>
-            )}
-          </div>
-        </section>
+        {business.policies && (
+          <section className="card">
+            <SectionTitle eyebrow="Importante" title="Antes de tu cita" inCard />
+            <p className="whitespace-pre-line text-slate-700">{business.policies}</p>
+            <p className="mt-3 flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              <Ico name="refresh" className="mt-0.5 h-4 w-4 shrink-0" />
+              Puedes cancelar tu cita hasta {business.cancel_notice_hours} h antes, o cambiar el día o la hora hasta {business.reschedule_notice_hours} h antes, desde el enlace que recibes al reservar.
+            </p>
+          </section>
+        )}
 
         <section className="card text-center">
           <p className="text-lg font-bold">¿Tienes alguna pregunta?</p>
