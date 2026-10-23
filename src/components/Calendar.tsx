@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { addDays, MONTHS, WEEKDAYS_SHORT, weekdayOf } from '../lib/format'
+import { addDays, MONTHS, time12, WEEKDAYS_SHORT, weekdayOf } from '../lib/format'
 import { supabase } from '../lib/supabase'
 import { errorMessage } from '../lib/errors'
 import { Alert, Spinner } from './ui'
@@ -159,7 +159,7 @@ export function SlotPicker({ slug, date, duration, value, onChange, staff, servi
                 : 'bg-slate-100 text-slate-400 line-through'
           }`}
         >
-          {s.slot}
+          {time12(s.slot)}
         </button>
       ))}
     </div>

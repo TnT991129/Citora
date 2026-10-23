@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Calendar, SlotPicker } from '../../components/Calendar'
 import { Alert, Button, Field, PageLoader } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
-import { cupRate, duration, money, price, weekdayOf, zonedToIso, dayTitle } from '../../lib/format'
+import { cupRate, duration, money, price, time12, weekdayOf, zonedToIso, dayTitle } from '../../lib/format'
 import { hasModule } from '../../lib/plans'
 import { load, rememberBooking, save } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
@@ -222,7 +222,7 @@ export default function BookingFlow() {
           <div className="mt-4 space-y-4">
             <div className="card space-y-3">
               <Row label="Día" value={<span>{dayTitle(date!)}</span>} />
-              <Row label="Hora" value={time!} />
+              <Row label="Hora" value={time12(time!)} />
               {team.length > 0 && <Row label="Con" value={person?.name || 'Cualquiera disponible'} />}
               <Row label="Nombre" value={name} />
               <Row label="Teléfono" value={phone} />

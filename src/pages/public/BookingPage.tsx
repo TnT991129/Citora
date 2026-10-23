@@ -63,7 +63,7 @@ export default function BookingPage() {
   const b = booking.business
   const tz = b.timezone
   const key = dateKey(booking.starts_at, tz)
-  const time = timeOf(booking.starts_at, tz)
+  const time = timeOf(booking.starts_at, tz, true)
   const active = booking.status === 'pendiente' || booking.status === 'confirmada'
   const minutes = booking.services.reduce((a, s) => a + s.duration_min, 0)
   const link = bookingUrl(b.slug, booking.token)

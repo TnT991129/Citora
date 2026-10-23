@@ -53,10 +53,19 @@ export function dateKey(d: Date | string, tz = DEFAULT_TZ): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
 }
 
-/** HH:MM de un instante en la zona horaria indicada */
-export function timeOf(d: Date | string, tz = DEFAULT_TZ): string {
+/** Hora de un instante en la zona horaria indicada. hour12: true para "9:00 a.m." en vez de "09:00" */
+export function timeOf(d: Date | string, tz = DEFAULT_TZ, hour12 = false): string {
   const date = typeof d === 'string' ? new Date(d) : d
+  if (hour12) return time12(new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(date))
   return new Intl.DateTimeFormat('es-ES', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
+}
+
+/** Convierte "HH:MM" (24h) a 12h con a.m./p.m., para los turnos que elige el cliente al reservar */
+export function time12(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number)
+  const period = h < 12 ? 'a.m.' : 'p.m.'
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return `${h12}:${String(m).padStart(2, '0')} ${period}`
 }
 
 export function todayKey(tz = DEFAULT_TZ): string {
