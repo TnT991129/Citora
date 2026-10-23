@@ -138,8 +138,11 @@ export default function BookingFlow() {
         <h1 className="text-2xl font-bold">{STEP_TITLES[cur]}</h1>
 
         {cur === 'servicio' && (
-          <div className="mt-4">
+          <div className="mt-4 space-y-4">
             <ServicePicker services={services} selected={selected} onChange={setSelected} currency={currency} rate={rate} />
+            {hasModule(business.plan, 'descuentos') && chosen.length > 0 && (
+              <CouponBox slug={business.slug} serviceIds={selected} applied={coupon} onApplied={setCoupon} />
+            )}
           </div>
         )}
 
@@ -254,9 +257,6 @@ export default function BookingFlow() {
                 {business.deposit_instructions && <p className="mt-1 whitespace-pre-line">{business.deposit_instructions}</p>}
               </div>
             )}
-            {hasModule(business.plan, 'descuentos') && (
-              <CouponBox slug={business.slug} serviceIds={selected} applied={coupon} onApplied={setCoupon} />
-            )}
             <label className="flex items-start gap-3 rounded-xl bg-white p-3 ring-1 ring-slate-200">
               <input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} className="mt-1 h-5 w-5 accent-[rgb(var(--brand-rgb))]" />
               <span className="text-sm text-slate-700">
@@ -277,7 +277,7 @@ export default function BookingFlow() {
           {step > 0 && <Button variant="secondary" onClick={() => go(step - 1)} disabled={busy}>Atrás</Button>}
           {step < last ? (
             <Button block size="lg" onClick={next}>
-              {cur === 'servicio' && chosen.length > 0 ? `Continuar · ${price(total, currency, rate)}` : 'Continuar'}
+              {cur === 'servicio' && chosen.length > 0 ? `Continuar · ${price(coupon ? coupon.total : total, currency, rate)}` : 'Continuar'}
             </Button>
           ) : (
             <Button block size="lg" onClick={confirm} loading={busy}>Confirmar reserva</Button>
@@ -347,7 +347,14 @@ function CouponBox({ slug, serviceIds, applied, onApplied }: {
     )
   }
   if (!open) {
-    return <button onClick={() => setOpen(true)} className="text-sm font-semibold text-brand">¿Tienes un código de descuento?</button>
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="flex w-full items-center gap-2 rounded-xl border border-dashed border-brand/40 bg-brand/5 px-3 py-2.5 text-sm font-semibold text-brand"
+      >
+        🎁 ¿Tienes un código de descuento?
+      </button>
+    )
   }
 
   const apply = async () => {
