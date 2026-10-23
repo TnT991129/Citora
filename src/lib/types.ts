@@ -152,6 +152,28 @@ export interface Discount {
   created_at: string
 }
 
+export interface Package {
+  id: string
+  business_id: string
+  name: string
+  sessions: number
+  price: number
+  active: boolean
+  created_at: string
+}
+
+export interface CustomerPackage {
+  id: string
+  business_id: string
+  package_id: string | null
+  customer_phone: string
+  package_name: string
+  sessions_total: number
+  sessions_left: number
+  note: string | null
+  sold_at: string
+}
+
 export interface Expense {
   id: string
   business_id: string

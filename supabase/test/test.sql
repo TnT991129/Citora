@@ -272,6 +272,18 @@ do $$ declare j jsonb; begin
 end $$;
 insert into gallery_photos (business_id, url, caption) values (my_business_id(), 'https://x.supabase.co/storage/v1/object/public/logos/a.jpg', 'Degradado');
 select expect_error($$insert into gallery_photos (business_id, url) values (my_business_id(), 'javascript:alert(1)')$$, 'check');
+
+-- ===== Bonos =====
+insert into packages (business_id, name, sessions, price) values (my_business_id(), '5 cortes', 5, 2000);
+insert into ctx select 'pkg1', id::text from packages where business_id = my_business_id() limit 1;
+insert into customer_packages (business_id, package_id, customer_phone, package_name, sessions_total, sessions_left)
+  values (my_business_id(), (select v from ctx where k='pkg1')::uuid, '5351112222', '5 cortes', 5, 5);
+update customer_packages set sessions_left = sessions_left - 1
+  where business_id = my_business_id() and customer_phone = '5351112222';
+do $$ begin
+  assert (select sessions_left from customer_packages where customer_phone = '5351112222') = 4, 'se descontó una sesión del bono';
+end $$;
+select expect_error($$insert into customer_packages (business_id, customer_phone, package_name, sessions_total, sessions_left) values (my_business_id(), '5351112222', 'x', 3, 5)$$, 'check');
 -- Un solo plan: cualquier negocio pagando tiene también las estadísticas
 do $$ begin assert owner_stats(current_date - 30, current_date) is not null; end $$;
 select expect_error('select admin_stats()', 'NO_AUTORIZADO');
@@ -281,6 +293,8 @@ do $$ begin
   assert (select count(*) from reviews) = 0, 'dueño 2 no ve opiniones ajenas';
   assert (select count(*) from customer_notes) = 0;
   assert (select count(*) from gallery_photos) = 0;
+  assert (select count(*) from packages) = 0, 'ni los bonos ajenos';
+  assert (select count(*) from customer_packages) = 0;
 end $$;
 select expect_error($$insert into gallery_photos (business_id, url) values ('$$ || (select v from ctx where k='biz1') || $$', 'https://x.com/a.jpg')$$, 'row-level security');
 

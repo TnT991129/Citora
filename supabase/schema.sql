@@ -352,6 +352,35 @@ create table if not exists public.discounts (
   unique (business_id, code)
 );
 
+-- Bonos (paquetes de sesiones prepagadas, ej. "5 cortes por el precio de 4"). No hay pasarela de
+-- pago, así que es como el depósito: el dueño vende el bono a mano (cobra por su cuenta) y lo
+-- registra aquí; cuando el cliente viene, el dueño descuenta una sesión él mismo.
+create table if not exists public.packages (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  name text not null check (char_length(btrim(name)) between 2 and 60),
+  sessions int not null check (sessions between 2 and 100),
+  price numeric(10, 2) not null default 0 check (price >= 0),
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+create index if not exists packages_business_idx on public.packages (business_id);
+
+-- Un bono vendido a un cliente concreto. Guarda su propio nombre/total (independiente de
+-- "packages", por si el dueño cambia o borra el tipo de bono después de venderlo).
+create table if not exists public.customer_packages (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  package_id uuid references public.packages(id) on delete set null,
+  customer_phone text not null,
+  package_name text not null,
+  sessions_total int not null check (sessions_total > 0),
+  sessions_left int not null check (sessions_left >= 0 and sessions_left <= sessions_total),
+  note text check (char_length(note) <= 200),
+  sold_at timestamptz not null default now()
+);
+create index if not exists customer_packages_idx on public.customer_packages (business_id, customer_phone);
+
 -- Fase 3 en las citas: cupón aplicado y recordatorio enviado
 alter table public.appointments add column if not exists discount_code text;
 alter table public.appointments add column if not exists discount numeric(10, 2) not null default 0;
@@ -616,6 +645,15 @@ begin
 end;
 $$;
 
+-- Marca sola "No vino" en las citas que ya pasaron hace rato y el dueño nunca confirmó que el
+-- cliente vino (ni la canceló). Así las estadísticas de ausencias no dependen de que el dueño se
+-- acuerde de tocar el botón. Se llama una vez por hora (ver tarea programada en la sección 3).
+create or replace function public._auto_mark_no_shows()
+returns void language sql security definer set search_path = public as $$
+  update appointments set status = 'no_asistio'
+  where status in ('pendiente', 'confirmada') and ends_at < now() - interval '3 hours';
+$$;
+
 -- ---------------------------------------------------------------------
 -- 3. DISPARADORES (triggers)
 -- ---------------------------------------------------------------------
@@ -867,6 +905,18 @@ drop policy if exists discounts_owner_delete on public.discounts;
 create policy discounts_owner_delete on public.discounts for delete to authenticated
   using (business_id = my_business_id());
 
+-- packages / customer_packages: el dueño los gestiona (igual que las notas de clientes)
+alter table public.packages enable row level security;
+drop policy if exists packages_owner_all on public.packages;
+create policy packages_owner_all on public.packages for all to authenticated
+  using (business_id = my_business_id()) with check (business_id = my_business_id());
+
+alter table public.customer_packages enable row level security;
+drop policy if exists customer_packages_owner_all on public.customer_packages;
+create policy customer_packages_owner_all on public.customer_packages for all to authenticated
+  using (business_id = my_business_id() and my_plan_has('clientes'))
+  with check (business_id = my_business_id() and my_plan_has('clientes'));
+
 -- Código en mayúsculas; el dueño no puede tocar el contador de usos
 create or replace function public.discounts_guard()
 returns trigger language plpgsql as $$
@@ -990,6 +1040,10 @@ begin
   end if;
   -- 23:00 UTC ≈ 18:00-19:00 en Cuba (hora aproximada; se puede ajustar aquí si hace falta)
   perform cron.schedule('citora-recordatorios', '0 23 * * *', $cron$select public._send_daily_reminders();$cron$);
+  if exists (select 1 from cron.job where jobname = 'citora-no-asistio') then
+    perform cron.unschedule('citora-no-asistio');
+  end if;
+  perform cron.schedule('citora-no-asistio', '0 * * * *', $cron$select public._auto_mark_no_shows();$cron$);
 exception when others then
   null;
 end;
@@ -2321,6 +2375,7 @@ revoke execute on function public._owner_business(text) from anon, authenticated
 revoke execute on function public._discount_for(uuid, text, numeric, boolean) from anon, authenticated;
 revoke execute on function public._notify_push(uuid, text, uuid, text, text) from anon, authenticated;
 revoke execute on function public._send_daily_reminders() from anon, authenticated;
+revoke execute on function public._auto_mark_no_shows() from anon, authenticated;
 revoke execute on function public._appointments_notify() from anon;
 revoke execute on function public.staff_services_guard() from anon;
 revoke execute on function public.staff_schedule_days_normalize() from anon;
