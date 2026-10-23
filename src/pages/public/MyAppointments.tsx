@@ -113,7 +113,7 @@ function BookingList({ items, slug, tz, currency }: { items: PublicBooking[]; sl
           <Link to={clientPath(slug, `cita/${b.token}`)} className="flex items-center justify-between gap-3 py-3">
             <span className="min-w-0">
               <span className="block font-semibold">
-                {dayTitle(dateKey(b.starts_at, tz))} <span className="font-normal text-slate-500">· {timeOf(b.starts_at, tz)}</span>
+                {dayTitle(dateKey(b.starts_at, tz))} <span className="font-normal text-slate-500">· {timeOf(b.starts_at, tz, true)}</span>
               </span>
               <span className="block truncate text-sm text-slate-500">
                 {b.services.map((s) => s.name).join(', ') || 'Cita'} · {money(b.total, currency)}
