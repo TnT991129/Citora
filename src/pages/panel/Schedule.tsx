@@ -6,7 +6,7 @@ import { Alert, Button, PageLoader, Toggle, flash } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { normalizeSlot, todayKey, WEEKDAYS, dayTitle } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
-import type { ClosedDay, ScheduleDay } from '../../lib/types'
+import type { ClosedDay, ClosedSlot, ScheduleDay } from '../../lib/types'
 import { usePanel } from './context'
 
 const ORDER = [1, 2, 3, 4, 5, 6, 0]
@@ -18,6 +18,11 @@ export default function Schedule() {
   const [closed, setClosed] = useState<ClosedDay[]>([])
   const [newClosed, setNewClosed] = useState('')
   const [reason, setReason] = useState('')
+  const [slots, setSlots] = useState<ClosedSlot[]>([])
+  const [slotDay, setSlotDay] = useState('')
+  const [slotStart, setSlotStart] = useState('13:00')
+  const [slotEnd, setSlotEnd] = useState('14:00')
+  const [slotReason, setSlotReason] = useState('')
   const [capacity, setCapacity] = useState(business.slot_capacity || 1)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -25,9 +30,10 @@ export default function Schedule() {
 
   useEffect(() => {
     ;(async () => {
-      const [{ data: d }, { data: c }] = await Promise.all([
+      const [{ data: d }, { data: c }, { data: cs }] = await Promise.all([
         supabase.from('schedule_days').select('*'),
         supabase.from('closed_days').select('*').gte('day', todayKey(business.timezone)).order('day'),
+        supabase.from('closed_slots').select('*').gte('day', todayKey(business.timezone)).order('day').order('start_time'),
       ])
       const map = new Map((d as ScheduleDay[] | null || []).map((x) => [x.weekday, x]))
       setDays(ORDER.map((w) => {
@@ -35,6 +41,8 @@ export default function Schedule() {
         return { business_id: business.id, weekday: w, is_open: x?.is_open ?? false, slots: (x?.slots || []).map(normalizeSlot) }
       }))
       setClosed((c as ClosedDay[]) || [])
+      setSlots((cs as ClosedSlot[]) || [])
+      setSlotDay(todayKey(business.timezone))
     })()
   }, [business.id, business.timezone])
 
@@ -73,6 +81,21 @@ export default function Schedule() {
   const removeClosed = async (day: string) => {
     await supabase.from('closed_days').delete().eq('business_id', business.id).eq('day', day)
     setClosed((c) => c.filter((x) => x.day !== day))
+  }
+
+  const addSlot = async () => {
+    if (!slotDay || slotEnd <= slotStart) return setError('Elige un día y un rango de horas válido.')
+    const { data, error } = await supabase.from('closed_slots')
+      .insert({ business_id: business.id, day: slotDay, start_time: slotStart, end_time: slotEnd, reason: slotReason.trim() || null })
+      .select().single()
+    if (error) return setError(errorMessage(error))
+    setSlots((s) => [...s, data as ClosedSlot].sort((a, b) => a.day.localeCompare(b.day) || a.start_time.localeCompare(b.start_time)))
+    setSlotReason('')
+  }
+
+  const removeSlot = async (id: string) => {
+    await supabase.from('closed_slots').delete().eq('id', id)
+    setSlots((s) => s.filter((x) => x.id !== id))
   }
 
   if (!days) return <PageLoader />
@@ -140,6 +163,30 @@ export default function Schedule() {
             </li>
           ))}
           {closed.length === 0 && <li className="py-2 text-sm text-slate-400">Ninguno</li>}
+        </ul>
+      </section>
+
+      <section className="card space-y-3">
+        <h2 className="font-bold">Bloquear horas</h2>
+        <p className="text-sm text-slate-500">
+          Para un rato dentro de un día abierto (ej. el almuerzo, o si sales antes). El resto del día sigue abierto.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <input type="date" className="input w-auto" min={todayKey(business.timezone)} value={slotDay} onChange={(e) => setSlotDay(e.target.value)} />
+          <input type="time" className="input w-auto" value={slotStart} onChange={(e) => setSlotStart(e.target.value)} />
+          <span className="self-center text-slate-500">a</span>
+          <input type="time" className="input w-auto" value={slotEnd} onChange={(e) => setSlotEnd(e.target.value)} />
+          <input className="input w-auto flex-1" placeholder="Motivo (opcional)" value={slotReason} onChange={(e) => setSlotReason(e.target.value)} />
+          <Button variant="secondary" onClick={addSlot} disabled={!slotDay}>Añadir</Button>
+        </div>
+        <ul className="divide-y divide-slate-100">
+          {slots.map((s) => (
+            <li key={s.id} className="flex items-center justify-between py-2">
+              <span>{dayTitle(s.day)} · {s.start_time.slice(0, 5)}-{s.end_time.slice(0, 5)}{s.reason && <span className="normal-case text-slate-500"> · {s.reason}</span>}</span>
+              <button onClick={() => removeSlot(s.id)} className="text-sm font-semibold text-red-600">Quitar</button>
+            </li>
+          ))}
+          {slots.length === 0 && <li className="py-2 text-sm text-slate-400">Ninguna</li>}
         </ul>
       </section>
 

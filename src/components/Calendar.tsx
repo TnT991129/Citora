@@ -99,6 +99,8 @@ interface SlotPickerProps {
   onChange: (slot: string) => void
   /** Solo los huecos de este profesional (sin él: cualquiera libre) */
   staff?: string | null
+  /** Solo se cuenta libre quien pueda hacer estos servicios (ver Equipo) */
+  serviceIds?: string[]
   /** Se muestra debajo del aviso cuando el día está lleno (ej. lista de espera) */
   whenFull?: ReactNode
   /** Al editar una cita: su propio hueco no cuenta como ocupado */
@@ -106,7 +108,7 @@ interface SlotPickerProps {
 }
 
 /** Turnos de un día, con los ocupados bloqueados */
-export function SlotPicker({ slug, date, duration, value, onChange, staff, whenFull, excludeToken }: SlotPickerProps) {
+export function SlotPicker({ slug, date, duration, value, onChange, staff, serviceIds, whenFull, excludeToken }: SlotPickerProps) {
   const [slots, setSlots] = useState<{ slot: string; available: boolean }[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -117,6 +119,7 @@ export function SlotPicker({ slug, date, duration, value, onChange, staff, whenF
     supabase
       .rpc('get_available_slots', {
         p_slug: slug, p_date: date, p_duration: duration, p_staff: staff || null,
+        p_service_ids: serviceIds && serviceIds.length > 0 ? serviceIds : null,
         ...(excludeToken ? { p_exclude_token: excludeToken } : {}),
       })
       .then(({ data, error }) => {
@@ -127,7 +130,8 @@ export function SlotPicker({ slug, date, duration, value, onChange, staff, whenF
     return () => {
       alive = false
     }
-  }, [slug, date, duration, staff, excludeToken])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- serviceIds se compara por contenido, no por referencia
+  }, [slug, date, duration, staff, serviceIds?.join(','), excludeToken])
 
   if (error) return <Alert>{error}</Alert>
   if (!slots) return <div className="flex justify-center py-6 text-slate-400"><Spinner /></div>

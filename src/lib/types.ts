@@ -30,6 +30,12 @@ export interface Business {
   max_reschedules: number | null
   max_pending_bookings: number | null
   max_daily_bookings: number | null
+  deposit_enabled: boolean
+  deposit_amount: number | null
+  deposit_instructions: string | null
+  loyalty_enabled: boolean
+  loyalty_every: number | null
+  loyalty_reward: string | null
   slot_capacity: number
   plan: PlanKey | null
   trial_ends_at: string
@@ -42,6 +48,7 @@ export interface Service {
   business_id: string
   name: string
   description: string | null
+  photo_url: string | null
   price: number
   duration_min: number
   position: number
@@ -59,6 +66,15 @@ export interface ScheduleDay {
 export interface ClosedDay {
   business_id: string
   day: string
+  reason: string | null
+}
+
+export interface ClosedSlot {
+  id: string
+  business_id: string
+  day: string
+  start_time: string
+  end_time: string
   reason: string | null
 }
 
@@ -97,9 +113,30 @@ export interface Staff {
   id: string
   business_id: string
   name: string
+  photo_url: string | null
   active: boolean
   position: number
   created_at: string
+}
+
+export interface StaffScheduleDay {
+  staff_id: string
+  weekday: number
+  is_open: boolean
+  slots: string[]
+}
+
+export interface StaffService {
+  staff_id: string
+  service_id: string
+}
+
+export interface PublicStaff {
+  id: string
+  name: string
+  photo_url: string | null
+  /** Vacío = puede con todos los servicios */
+  service_ids: string[]
 }
 
 export interface Discount {
@@ -113,6 +150,28 @@ export interface Discount {
   max_uses: number | null
   uses: number
   created_at: string
+}
+
+export interface Package {
+  id: string
+  business_id: string
+  name: string
+  sessions: number
+  price: number
+  active: boolean
+  created_at: string
+}
+
+export interface CustomerPackage {
+  id: string
+  business_id: string
+  package_id: string | null
+  customer_phone: string
+  package_name: string
+  sessions_total: number
+  sessions_left: number
+  note: string | null
+  sold_at: string
 }
 
 export interface Expense {
@@ -149,6 +208,7 @@ export interface PublicService {
   id: string
   name: string
   description: string | null
+  photo_url: string | null
   price: number
   duration_min: number
   is_extra?: boolean
@@ -177,13 +237,16 @@ export interface PublicBusiness {
   cancel_notice_hours?: number
   reschedule_notice_hours?: number
   max_reschedules?: number | null
+  deposit_enabled?: boolean
+  deposit_amount?: number | null
+  deposit_instructions?: string | null
   plan?: PlanKey
   today?: string
   services?: PublicService[]
   schedule?: { weekday: number; is_open: boolean }[]
   closed_days?: string[]
   rating?: { avg: number | null; count: number } | null
-  staff?: { id: string; name: string }[]
+  staff?: PublicStaff[]
   reviews?: PublicReview[]
   gallery?: GalleryPhoto[]
 }
@@ -285,6 +348,9 @@ export interface PublicBooking {
     cancel_notice_hours: number
     reschedule_notice_hours: number
     max_reschedules: number | null
+    loyalty_enabled: boolean
+    loyalty_every: number | null
+    loyalty_reward: string | null
     appearance?: Appearance
   }
 }

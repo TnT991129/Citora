@@ -169,8 +169,12 @@ export function Announcement({ text }: { text?: string }) {
 
 export function PoweredBy() {
   return (
-    <p className="py-8 text-center text-xs text-slate-400">
-      Reservas con <Link to="/" className="font-semibold text-slate-500">Citora</Link>
+    <p className="space-x-2 py-8 text-center text-xs text-slate-400">
+      <span>Reservas con <Link to="/" className="font-semibold text-slate-500">Citora</Link></span>
+      <span>·</span>
+      <Link to="/terminos" className="underline hover:text-slate-600">Términos</Link>
+      <span>·</span>
+      <Link to="/privacidad" className="underline hover:text-slate-600">Privacidad</Link>
     </p>
   )
 }

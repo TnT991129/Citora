@@ -20,6 +20,7 @@ import Discounts from './Discounts'
 import Expenses from './Expenses'
 import Gallery from './Gallery'
 import More from './More'
+import Packages from './Packages'
 import PlanPage from './PlanPage'
 import Policies from './Policies'
 import Reminders from './Reminders'
@@ -200,6 +201,7 @@ export default function Panel() {
               <Route path="recordatorios" element={<Reminders />} />
               <Route path="espera" element={<Waitlist />} />
               <Route path="cupones" element={<Discounts />} />
+              <Route path="bonos" element={<Packages />} />
               <Route path="respaldo" element={<Backup />} />
               <Route path="mas" element={<More />} />
               <Route path="politicas" element={<Policies />} />
@@ -228,7 +230,7 @@ const NAV = [
 ] as const
 
 // Secciones a las que se llega desde "Más": la pestaña "Más" queda marcada en ellas
-const MORE_SUBS = ['mas', 'apariencia', 'equipo', 'estadisticas', 'gastos', 'opiniones', 'galeria', 'recordatorios', 'espera', 'cupones', 'respaldo', 'horario', 'politicas', 'ajustes', 'plan']
+const MORE_SUBS = ['mas', 'apariencia', 'equipo', 'estadisticas', 'gastos', 'opiniones', 'galeria', 'recordatorios', 'espera', 'cupones', 'bonos', 'respaldo', 'horario', 'politicas', 'ajustes', 'plan']
 
 function useIsActive(to: string, base: string): boolean {
   const { pathname } = useLocation()

@@ -23,6 +23,7 @@ export function ServicePicker({ services, selected, onChange, currency, rate }: 
         <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 ${on ? 'border-brand bg-brand text-white' : 'border-slate-300'}`}>
           {on && <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12l5 5 9-10" /></svg>}
         </span>
+        {s.photo_url && <img src={s.photo_url} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" />}
         <span className="min-w-0 flex-1">
           <span className="block font-semibold">{s.is_extra ? '+ ' : ''}{s.name}</span>
           <span className="block text-sm text-slate-500">{s.is_extra ? `+${duration(s.duration_min)}` : duration(s.duration_min)}</span>

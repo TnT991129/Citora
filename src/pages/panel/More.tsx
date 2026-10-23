@@ -12,6 +12,7 @@ const ITEMS: { to: string; label: string; desc: string; emoji: string; module?: 
   { to: 'gastos', label: 'Gastos', desc: 'Apunta tus gastos y mira tu ganancia', emoji: '🧾', module: 'finanzas' },
   { to: 'espera', label: 'Lista de espera', desc: 'Clientes que quieren un hueco', emoji: '⏳', module: 'espera' },
   { to: 'cupones', label: 'Cupones', desc: 'Códigos de descuento', emoji: '🎁', module: 'descuentos' },
+  { to: 'bonos', label: 'Bonos', desc: 'Paquetes de sesiones prepagadas', emoji: '🎟️', module: 'clientes' },
   { to: 'opiniones', label: 'Opiniones', desc: 'Lo que dicen tus clientes', emoji: '⭐', module: 'opiniones' },
   { to: 'galeria', label: 'Galería', desc: 'Fotos de tus trabajos', emoji: '📷', module: 'galeria' },
   { to: 'respaldo', label: 'Respaldo', desc: 'Descarga tus datos en Excel', emoji: '💾', module: 'respaldo' },

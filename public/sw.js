@@ -66,3 +66,33 @@ self.addEventListener('fetch', (event) => {
     )
   }
 })
+
+// Notificaciones push (ver supabase/functions/notify-push)
+self.addEventListener('push', (event) => {
+  let data = { title: 'Citora', body: '' }
+  try {
+    if (event.data) data = { ...data, ...event.data.json() }
+  } catch {
+    /* si no viene JSON, se muestra el título por defecto */
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: `${SHELL}favicon.svg`,
+      badge: `${SHELL}favicon.svg`,
+      data: { url: SHELL },
+    }),
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const url = event.notification.data?.url || SHELL
+  event.waitUntil(
+    clients.matchAll({ type: 'window' }).then((list) => {
+      const existing = list.find((c) => c.url.includes(url))
+      if (existing) return existing.focus()
+      return clients.openWindow(url)
+    }),
+  )
+})

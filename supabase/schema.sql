@@ -7,6 +7,8 @@
 
 create schema if not exists extensions;
 create extension if not exists btree_gist with schema extensions;
+-- Para avisar a la función de notificaciones push desde la base de datos (ver sección 2 y 3)
+create extension if not exists pg_net with schema extensions;
 
 -- ---------------------------------------------------------------------
 -- 1. TABLAS
@@ -31,6 +33,12 @@ create table if not exists public.platform_settings (
   updated_at timestamptz not null default now()
 );
 insert into public.platform_settings (id) values (1) on conflict (id) do nothing;
+
+-- Notificaciones push: dirección y clave de la función (Edge Function) que las envía.
+-- Se configuran una sola vez (panel de administrador) después de desplegar la función; mientras
+-- estén vacías, la app sigue funcionando igual mas sin avisos push.
+alter table public.platform_settings add column if not exists push_function_url text;
+alter table public.platform_settings add column if not exists push_shared_secret text;
 
 -- Un solo plan de 1.500 CUP/mes. Al pasar de tres planes a uno se unifica el precio una vez
 -- (después el panel de administrador guarda siempre los tres iguales).
@@ -109,6 +117,21 @@ create table if not exists public.closed_days (
   reason text,
   primary key (business_id, day)
 );
+
+-- Horas sueltas bloqueadas dentro de un día abierto (ej. "hoy de 13:00 a 14:00, almuerzo" o
+-- "el jueves salgo a las 16:00"). A diferencia de closed_days, el día sigue abierto para el resto
+-- de las horas.
+create table if not exists public.closed_slots (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  day date not null,
+  start_time time not null,
+  end_time time not null,
+  reason text check (char_length(reason) <= 120),
+  created_at timestamptz not null default now(),
+  check (end_time > start_time)
+);
+create index if not exists closed_slots_business_day_idx on public.closed_slots (business_id, day);
 
 -- Citas
 create table if not exists public.appointments (
@@ -246,6 +269,22 @@ alter table public.appointments drop column if exists total_usd;
 -- Servicios complementarios: extras opcionales que el cliente añade a un servicio principal
 alter table public.services add column if not exists is_extra boolean not null default false;
 
+-- Foto de cada servicio (mismo almacén "logos", carpeta del negocio): ayuda a vender en la web
+alter table public.services add column if not exists photo_url text;
+
+-- Depósito opcional al reservar (protege de quienes no asisten). No hay pasarela de pago para
+-- Cuba, así que es informativo: el cliente transfiere por su cuenta (Transfermóvil/EnZona) y manda
+-- la captura por WhatsApp; el dueño confirma la cita como siempre (sigue quedando "pendiente").
+alter table public.businesses add column if not exists deposit_enabled boolean not null default false;
+alter table public.businesses add column if not exists deposit_amount numeric(10, 2) check (deposit_amount is null or deposit_amount >= 0);
+alter table public.businesses add column if not exists deposit_instructions text check (char_length(deposit_instructions) <= 500);
+
+-- Tarjeta de cliente fiel: mensaje informativo cada N visitas (el dueño cumple el premio a mano,
+-- como con el depósito: no hay forma de aplicar descuentos automáticos a este nivel).
+alter table public.businesses add column if not exists loyalty_enabled boolean not null default false;
+alter table public.businesses add column if not exists loyalty_every int check (loyalty_every is null or loyalty_every between 2 and 50);
+alter table public.businesses add column if not exists loyalty_reward text check (char_length(loyalty_reward) <= 160);
+
 -- Políticas: reglas de reserva que personaliza el dueño, más un texto libre (columna "policies").
 -- reschedule_notice_hours: plazo para cambiar (puede ser distinto de cancelar). max_reschedules:
 -- veces que se puede cambiar una misma cita (null = sin límite). max_pending_bookings: citas futuras
@@ -313,6 +352,35 @@ create table if not exists public.discounts (
   unique (business_id, code)
 );
 
+-- Bonos (paquetes de sesiones prepagadas, ej. "5 cortes por el precio de 4"). No hay pasarela de
+-- pago, así que es como el depósito: el dueño vende el bono a mano (cobra por su cuenta) y lo
+-- registra aquí; cuando el cliente viene, el dueño descuenta una sesión él mismo.
+create table if not exists public.packages (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  name text not null check (char_length(btrim(name)) between 2 and 60),
+  sessions int not null check (sessions between 2 and 100),
+  price numeric(10, 2) not null default 0 check (price >= 0),
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+create index if not exists packages_business_idx on public.packages (business_id);
+
+-- Un bono vendido a un cliente concreto. Guarda su propio nombre/total (independiente de
+-- "packages", por si el dueño cambia o borra el tipo de bono después de venderlo).
+create table if not exists public.customer_packages (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  package_id uuid references public.packages(id) on delete set null,
+  customer_phone text not null,
+  package_name text not null,
+  sessions_total int not null check (sessions_total > 0),
+  sessions_left int not null check (sessions_left >= 0 and sessions_left <= sessions_total),
+  note text check (char_length(note) <= 200),
+  sold_at timestamptz not null default now()
+);
+create index if not exists customer_packages_idx on public.customer_packages (business_id, customer_phone);
+
 -- Fase 3 en las citas: cupón aplicado y recordatorio enviado
 alter table public.appointments add column if not exists discount_code text;
 alter table public.appointments add column if not exists discount numeric(10, 2) not null default 0;
@@ -328,6 +396,27 @@ create table if not exists public.staff (
   created_at timestamptz not null default now()
 );
 create index if not exists staff_business_idx on public.staff (business_id, position);
+
+-- Foto de cada profesional (se guarda en el mismo almacén "logos", carpeta del negocio)
+alter table public.staff add column if not exists photo_url text;
+
+-- Horario propio de un profesional (si no tiene ninguna fila aquí, usa el horario del negocio:
+-- ver _staff_slot_valid). Misma forma que schedule_days, pero por profesional.
+create table if not exists public.staff_schedule_days (
+  staff_id uuid not null references public.staff(id) on delete cascade,
+  weekday smallint not null check (weekday between 0 and 6),
+  is_open boolean not null default true,
+  slots time[] not null default '{}',
+  primary key (staff_id, weekday)
+);
+
+-- Qué servicios hace cada profesional (si no tiene ninguna fila aquí, puede con todos: ver
+-- _staff_can_do). Así no se puede reservar, por ejemplo, uñas con el barbero.
+create table if not exists public.staff_services (
+  staff_id uuid not null references public.staff(id) on delete cascade,
+  service_id uuid not null references public.services(id) on delete cascade,
+  primary key (staff_id, service_id)
+);
 
 -- Con quién es cada cita (null = negocio sin profesionales)
 alter table public.appointments add column if not exists staff_id uuid references public.staff(id) on delete set null;
@@ -356,6 +445,25 @@ begin
   end if;
 end;
 $$;
+
+-- Suscripciones a notificaciones push (Web Push): una fila por dispositivo/navegador.
+-- kind = 'owner' (dueño del negocio, para citas nuevas/canceladas/cambiadas por el cliente) o
+-- 'customer' (cliente de una cita concreta, para avisos de esa cita y recordatorios).
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  kind text not null check (kind in ('owner', 'customer')),
+  appointment_id uuid references public.appointments(id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists push_subscriptions_owner_idx on public.push_subscriptions (business_id) where kind = 'owner';
+create index if not exists push_subscriptions_appt_idx on public.push_subscriptions (appointment_id) where kind = 'customer';
+alter table public.push_subscriptions enable row level security;
+-- Sin políticas para anon/authenticated: solo se gestiona por las funciones de abajo (con sus propios
+-- controles) y la función de notificaciones las lee con la clave de servicio, sin pasar por RLS.
 
 -- ---------------------------------------------------------------------
 -- 2. FUNCIONES DE APOYO
@@ -496,6 +604,56 @@ begin
 end;
 $$;
 
+-- Manda un aviso push (si está configurada la función: ver platform_settings e instrucciones de
+-- despliegue). Nunca lanza error: un fallo al avisar no debe romper una reserva.
+create or replace function public._notify_push(p_business uuid, p_kind text, p_appointment uuid, p_title text, p_body text)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_url text;
+  v_secret text;
+begin
+  select push_function_url, push_shared_secret into v_url, v_secret from platform_settings where id = 1;
+  if v_url is null or btrim(v_url) = '' then return; end if;
+  perform net.http_post(
+    url := v_url,
+    body := jsonb_build_object('business_id', p_business, 'kind', p_kind, 'appointment_id', p_appointment,
+                                'title', p_title, 'body', p_body),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-push-secret', coalesce(v_secret, '')),
+    timeout_milliseconds := 5000
+  );
+exception when others then
+  null;
+end;
+$$;
+
+-- Aviso a los clientes con cita mañana (misma hora de negocio) que hayan aceptado notificaciones.
+-- Se llama una vez al día (ver tarea programada en la sección 3).
+create or replace function public._send_daily_reminders()
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  a record;
+begin
+  for a in
+    select ap.id, ap.business_id, ap.customer_name, b.name, to_char(ap.starts_at at time zone b.timezone, 'HH24:MI') as hora
+    from appointments ap join businesses b on b.id = ap.business_id
+    where ap.status in ('pendiente', 'confirmada')
+      and (ap.starts_at at time zone b.timezone)::date = ((now() at time zone b.timezone)::date + 1)
+      and exists (select 1 from push_subscriptions ps where ps.kind = 'customer' and ps.appointment_id = ap.id)
+  loop
+    perform _notify_push(a.business_id, 'customer', a.id, 'Recuerda tu cita mañana', a.name || ' te espera a las ' || a.hora);
+  end loop;
+end;
+$$;
+
+-- Marca sola "No vino" en las citas que ya pasaron hace rato y el dueño nunca confirmó que el
+-- cliente vino (ni la canceló). Así las estadísticas de ausencias no dependen de que el dueño se
+-- acuerde de tocar el botón. Se llama una vez por hora (ver tarea programada en la sección 3).
+create or replace function public._auto_mark_no_shows()
+returns void language sql security definer set search_path = public as $$
+  update appointments set status = 'no_asistio'
+  where status in ('pendiente', 'confirmada') and ends_at < now() - interval '3 hours';
+$$;
+
 -- ---------------------------------------------------------------------
 -- 3. DISPARADORES (triggers)
 -- ---------------------------------------------------------------------
@@ -545,6 +703,33 @@ drop trigger if exists schedule_days_normalize on public.schedule_days;
 create trigger schedule_days_normalize before insert or update on public.schedule_days
   for each row execute function public.schedule_days_normalize();
 
+-- Igual que arriba, pero para el horario de cada profesional
+create or replace function public.staff_schedule_days_normalize()
+returns trigger language plpgsql as $$
+begin
+  new.slots := coalesce((select array_agg(distinct s order by s) from unnest(new.slots) s), '{}');
+  return new;
+end;
+$$;
+drop trigger if exists staff_schedule_days_normalize on public.staff_schedule_days;
+create trigger staff_schedule_days_normalize before insert or update on public.staff_schedule_days
+  for each row execute function public.staff_schedule_days_normalize();
+
+-- El profesional y el servicio deben ser del mismo negocio (la RLS de arriba solo exige que el
+-- profesional sea tuyo; esto evita enlazar un servicio de otro negocio).
+create or replace function public.staff_services_guard()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if (select business_id from staff where id = new.staff_id) <> (select business_id from services where id = new.service_id) then
+    raise exception 'SERVICIOS_INVALIDOS';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists staff_services_guard on public.staff_services;
+create trigger staff_services_guard before insert or update on public.staff_services
+  for each row execute function public.staff_services_guard();
+
 -- ---------------------------------------------------------------------
 -- 4. SEGURIDAD (RLS)
 -- ---------------------------------------------------------------------
@@ -589,6 +774,11 @@ create policy schedule_owner_all on public.schedule_days for all to authenticate
 
 drop policy if exists closed_owner_all on public.closed_days;
 create policy closed_owner_all on public.closed_days for all to authenticated
+  using (business_id = my_business_id()) with check (business_id = my_business_id());
+
+alter table public.closed_slots enable row level security;
+drop policy if exists closed_slots_owner_all on public.closed_slots;
+create policy closed_slots_owner_all on public.closed_slots for all to authenticated
   using (business_id = my_business_id()) with check (business_id = my_business_id());
 
 -- appointments: el dueño solo las ve si su app está activa (prueba o pagada)
@@ -674,6 +864,20 @@ drop policy if exists staff_owner_delete on public.staff;
 create policy staff_owner_delete on public.staff for delete to authenticated
   using (business_id = my_business_id());
 
+-- staff_schedule_days / staff_services: el dueño los gestiona a través del profesional (el
+-- profesional ya exige el plan "empleados" para crearse; editar su horario o servicios no vuelve
+-- a pedirlo).
+alter table public.staff_schedule_days enable row level security;
+alter table public.staff_services enable row level security;
+drop policy if exists staff_schedule_owner_all on public.staff_schedule_days;
+create policy staff_schedule_owner_all on public.staff_schedule_days for all to authenticated
+  using (exists (select 1 from staff st where st.id = staff_id and st.business_id = my_business_id()))
+  with check (exists (select 1 from staff st where st.id = staff_id and st.business_id = my_business_id()));
+drop policy if exists staff_services_owner_all on public.staff_services;
+create policy staff_services_owner_all on public.staff_services for all to authenticated
+  using (exists (select 1 from staff st where st.id = staff_id and st.business_id = my_business_id()))
+  with check (exists (select 1 from staff st where st.id = staff_id and st.business_id = my_business_id()));
+
 -- waitlist: el dueño ve y gestiona la suya (los clientes se apuntan con join_waitlist)
 drop policy if exists waitlist_owner_select on public.waitlist;
 create policy waitlist_owner_select on public.waitlist for select to authenticated
@@ -700,6 +904,18 @@ create policy discounts_owner_update on public.discounts for update to authentic
 drop policy if exists discounts_owner_delete on public.discounts;
 create policy discounts_owner_delete on public.discounts for delete to authenticated
   using (business_id = my_business_id());
+
+-- packages / customer_packages: el dueño los gestiona (igual que las notas de clientes)
+alter table public.packages enable row level security;
+drop policy if exists packages_owner_all on public.packages;
+create policy packages_owner_all on public.packages for all to authenticated
+  using (business_id = my_business_id()) with check (business_id = my_business_id());
+
+alter table public.customer_packages enable row level security;
+drop policy if exists customer_packages_owner_all on public.customer_packages;
+create policy customer_packages_owner_all on public.customer_packages for all to authenticated
+  using (business_id = my_business_id() and my_plan_has('clientes'))
+  with check (business_id = my_business_id() and my_plan_has('clientes'));
 
 -- Código en mayúsculas; el dueño no puede tocar el contador de usos
 create or replace function public.discounts_guard()
@@ -762,6 +978,77 @@ drop trigger if exists appointments_guard on public.appointments;
 create trigger appointments_guard before update on public.appointments
   for each row execute function public.appointments_guard();
 
+-- Avisos push automáticos. Se apoya en columnas que ya existen para saber quién hizo cada cambio,
+-- sin tocar las funciones de reserva: "source" (web = cliente, manual = dueño), "cancelled_by"
+-- ('cliente' o 'negocio', puestos por cancel_booking/appointments_guard) y "reschedule_count"
+-- (solo lo suben reschedule_booking/edit_booking, nunca el dueño).
+create or replace function public._appointments_notify()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  b businesses;
+  v_when text;
+  v_wait int;
+begin
+  select * into b from businesses where id = new.business_id;
+  if not found then return new; end if;
+  v_when := to_char(new.starts_at at time zone b.timezone, 'DD/MM HH24:MI');
+
+  if tg_op = 'INSERT' then
+    if new.source = 'web' then
+      perform _notify_push(new.business_id, 'owner', null, 'Nueva cita: ' || new.customer_name, v_when);
+    end if;
+    return new;
+  end if;
+
+  if new.status = 'cancelada' and old.status <> 'cancelada' then
+    if new.cancelled_by = 'cliente' then
+      perform _notify_push(new.business_id, 'owner', null, 'Cita cancelada: ' || new.customer_name, v_when);
+      select count(*) into v_wait from waitlist
+        where business_id = new.business_id and status = 'esperando'
+          and day = (new.starts_at at time zone b.timezone)::date;
+      if v_wait > 0 then
+        perform _notify_push(new.business_id, 'owner', null, 'Se liberó un hueco',
+          'El ' || to_char(new.starts_at at time zone b.timezone, 'DD/MM') || ': tienes ' || v_wait ||
+          case when v_wait = 1 then ' cliente' else ' clientes' end || ' en lista de espera.');
+      end if;
+    else
+      perform _notify_push(new.business_id, 'customer', new.id, 'Tu cita fue cancelada', b.name || ' canceló tu cita del ' || v_when);
+    end if;
+  elsif new.status = 'confirmada' and old.status = 'pendiente' then
+    perform _notify_push(new.business_id, 'customer', new.id, 'Cita confirmada', b.name || ' confirmó tu cita del ' || v_when);
+  elsif new.starts_at <> old.starts_at then
+    if new.reschedule_count <> old.reschedule_count then
+      perform _notify_push(new.business_id, 'owner', null, 'Cambio de cita: ' || new.customer_name, 'Nuevo horario: ' || v_when);
+    else
+      perform _notify_push(new.business_id, 'customer', new.id, 'Tu cita cambió de horario', b.name || ' movió tu cita al ' || v_when);
+    end if;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists appointments_notify on public.appointments;
+create trigger appointments_notify after insert or update on public.appointments
+  for each row execute function public._appointments_notify();
+
+-- Tarea diaria: recordatorios push a clientes con cita mañana (ver _send_daily_reminders). Si el
+-- plan de Supabase no admite pg_cron, no pasa nada: solo faltarán los recordatorios automáticos.
+do $$
+begin
+  create extension if not exists pg_cron with schema extensions;
+  if exists (select 1 from cron.job where jobname = 'citora-recordatorios') then
+    perform cron.unschedule('citora-recordatorios');
+  end if;
+  -- 23:00 UTC ≈ 18:00-19:00 en Cuba (hora aproximada; se puede ajustar aquí si hace falta)
+  perform cron.schedule('citora-recordatorios', '0 23 * * *', $cron$select public._send_daily_reminders();$cron$);
+  if exists (select 1 from cron.job where jobname = 'citora-no-asistio') then
+    perform cron.unschedule('citora-no-asistio');
+  end if;
+  perform cron.schedule('citora-no-asistio', '0 * * * *', $cron$select public._auto_mark_no_shows();$cron$);
+exception when others then
+  null;
+end;
+$$;
+
 -- ---------------------------------------------------------------------
 -- 5. FUNCIONES PÚBLICAS (para la web de reservas, sin sesión)
 -- ---------------------------------------------------------------------
@@ -812,12 +1099,15 @@ begin
     'cancel_notice_hours', b.cancel_notice_hours,
     'reschedule_notice_hours', b.reschedule_notice_hours,
     'max_reschedules', b.max_reschedules,
+    'deposit_enabled', b.deposit_enabled,
+    'deposit_amount', case when b.deposit_enabled then b.deposit_amount end,
+    'deposit_instructions', case when b.deposit_enabled then b.deposit_instructions end,
     'plan', v_plan,
     'accepting', true,
     'today', (now() at time zone b.timezone)::date,
     'services', coalesce((
       select jsonb_agg(jsonb_build_object(
-        'id', s.id, 'name', s.name, 'description', s.description,
+        'id', s.id, 'name', s.name, 'description', s.description, 'photo_url', s.photo_url,
         'price', s.price, 'duration_min', s.duration_min, 'is_extra', s.is_extra)
         order by s.position, s.created_at)
       from services s where s.business_id = b.id and s.active), '[]'::jsonb),
@@ -841,7 +1131,11 @@ begin
             order by (comment is not null) desc, created_at desc limit 12) r), '[]'::jsonb)
       else '[]'::jsonb end,
     'staff', case when plan_has(v_plan, 'empleados') then coalesce((
-      select jsonb_agg(jsonb_build_object('id', st.id, 'name', st.name) order by st.position, st.created_at)
+      select jsonb_agg(jsonb_build_object(
+        'id', st.id, 'name', st.name, 'photo_url', st.photo_url,
+        -- Lista vacía = puede con todos los servicios (no ha configurado restricción)
+        'service_ids', coalesce((select jsonb_agg(ss.service_id) from staff_services ss where ss.staff_id = st.id), '[]'::jsonb))
+        order by st.position, st.created_at)
       from staff st where st.business_id = b.id and st.active), '[]'::jsonb)
       else '[]'::jsonb end,
     'gallery', case when plan_has(v_plan, 'galeria') then coalesce((
@@ -899,13 +1193,50 @@ returns boolean language sql stable security definer set search_path = public as
   select _free_lane(p_business, p_staff, p_start, p_end, p_exclude) is not null;
 $$;
 
+-- ¿Trabaja este profesional ese día y esa hora? Sin profesional, o si no configuró su propia
+-- agenda (ver Equipo), se mira el horario del negocio en su lugar (como siempre).
+create or replace function public._staff_slot_valid(p_business uuid, p_staff uuid, p_date date, p_time time)
+returns boolean language sql stable security definer set search_path = public as $$
+  select case
+    when p_staff is null or not exists (select 1 from staff_schedule_days where staff_id = p_staff) then
+      exists (select 1 from schedule_days
+              where business_id = p_business and weekday = extract(dow from p_date)::int and is_open and p_time = any (slots))
+    else
+      exists (select 1 from staff_schedule_days
+              where staff_id = p_staff and weekday = extract(dow from p_date)::int and is_open and p_time = any (slots))
+  end;
+$$;
+
+-- ¿Cae este turno dentro de una hora bloqueada (almuerzo, salida temprano...)? Se mira el negocio
+-- entero, no por profesional: ver closed_slots en Horario.
+create or replace function public._slot_blocked(p_business uuid, p_date date, p_start time, p_duration int)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from closed_slots
+    where business_id = p_business and day = p_date
+      and (p_start, p_start + make_interval(mins => greatest(p_duration, 5))) overlaps (start_time, end_time)
+  );
+$$;
+
+-- ¿Puede este profesional hacer estos servicios? Si no configuró servicios (ver Equipo), puede
+-- con todos (igual que antes de tener esta opción).
+create or replace function public._staff_can_do(p_staff uuid, p_service_ids uuid[])
+returns boolean language sql stable security definer set search_path = public as $$
+  select p_staff is null or p_service_ids is null or not exists (select 1 from staff_services where staff_id = p_staff)
+      or p_service_ids <@ coalesce((select array_agg(service_id) from staff_services where staff_id = p_staff), '{}'::uuid[]);
+$$;
+
 -- Busca quién puede atender un hueco. Sin profesionales: la agenda común.
--- Con p_staff: solo ese profesional. Sin p_staff: el que esté libre y tenga menos citas ese día.
+-- Con p_staff: solo ese profesional. Sin p_staff: el que esté libre, pueda con esos servicios
+-- (p_service_ids), trabaje a esa hora y tenga menos citas ese día.
+drop function if exists public._free_staff(uuid, timestamptz, timestamptz, uuid, uuid);
 create or replace function public._free_staff(p_business uuid, p_start timestamptz, p_end timestamptz,
-                                              p_staff uuid default null, p_exclude uuid default null)
+                                              p_staff uuid default null, p_exclude uuid default null,
+                                              p_service_ids uuid[] default null)
 returns table (ok boolean, staff_id uuid)
 language plpgsql stable security definer set search_path = public as $$
 declare
+  v_tz text;
   s record;
 begin
   if not exists (select 1 from staff x where x.business_id = p_business and x.active) then
@@ -914,9 +1245,12 @@ begin
     return next;
     return;
   end if;
+  select timezone into v_tz from businesses where id = p_business;
   for s in
     select st.id from staff st
     where st.business_id = p_business and st.active and (p_staff is null or st.id = p_staff)
+      and _staff_can_do(st.id, p_service_ids)
+      and _staff_slot_valid(p_business, st.id, (p_start at time zone v_tz)::date, (p_start at time zone v_tz)::time)
     order by (select count(*) from appointments a
               where a.staff_id = st.id and a.status <> 'cancelada'
                 and a.starts_at >= date_trunc('day', p_start) and a.starts_at < date_trunc('day', p_start) + interval '1 day'),
@@ -936,9 +1270,10 @@ end;
 $$;
 
 -- Comprueba un turno concreto. Devuelve 'ok', 'invalido' u 'ocupado'.
-drop function if exists public._check_slot(uuid, date, text, int, uuid);
+drop function if exists public._check_slot(uuid, date, text, int, uuid, uuid);
 create or replace function public._check_slot(p_business uuid, p_date date, p_time text, p_duration int,
-                                              p_exclude uuid default null, p_staff uuid default null)
+                                              p_exclude uuid default null, p_staff uuid default null,
+                                              p_service_ids uuid[] default null)
 returns text language plpgsql stable security definer set search_path = public as $$
 declare
   b businesses;
@@ -956,16 +1291,13 @@ begin
   v_today := (now() at time zone b.timezone)::date;
   if p_date < v_today or p_date > v_today + b.max_days_ahead then return 'invalido'; end if;
   if exists (select 1 from closed_days where business_id = b.id and day = p_date) then return 'invalido'; end if;
-  if not exists (
-    select 1 from schedule_days
-    where business_id = b.id and weekday = extract(dow from p_date)::int and is_open and v_time = any (slots)
-  ) then
-    return 'invalido';
-  end if;
+  if not _staff_slot_valid(b.id, p_staff, p_date, v_time) then return 'invalido'; end if;
+  if not _staff_can_do(p_staff, p_service_ids) then return 'invalido'; end if;
+  if _slot_blocked(b.id, p_date, v_time, p_duration) then return 'invalido'; end if;
   v_start := (p_date + v_time) at time zone b.timezone;
   if v_start < now() + make_interval(hours => b.min_notice_hours) then return 'invalido'; end if;
   if not (select f.ok from _free_staff(b.id, v_start, v_start + make_interval(mins => greatest(p_duration, 5)),
-                                      p_staff, p_exclude) f) then
+                                      p_staff, p_exclude, p_service_ids) f) then
     return 'ocupado';
   end if;
   return 'ok';
@@ -976,8 +1308,9 @@ $$;
 -- Con p_exclude_token (el cliente editando su cita), su propia cita no cuenta como ocupada.
 drop function if exists public.get_available_slots(text, date, int);
 drop function if exists public.get_available_slots(text, date, int, uuid);
+drop function if exists public.get_available_slots(text, date, int, uuid, text);
 create or replace function public.get_available_slots(p_slug text, p_date date, p_duration int, p_staff uuid default null,
-                                                      p_exclude_token text default null)
+                                                      p_exclude_token text default null, p_service_ids uuid[] default null)
 returns table (slot text, available boolean)
 language plpgsql stable security definer set search_path = public as $$
 declare
@@ -1006,8 +1339,9 @@ begin
     v_start := (p_date + t) at time zone b.timezone;
     slot := to_char(t, 'HH24:MI');
     available := v_start >= now() + make_interval(hours => b.min_notice_hours)
+      and not _slot_blocked(b.id, p_date, t, coalesce(p_duration, 60))
       and (select f.ok from _free_staff(b.id, v_start, v_start + make_interval(mins => greatest(coalesce(p_duration, 60), 5)),
-                                        p_staff, v_exclude) f);
+                                        p_staff, v_exclude, p_service_ids) f);
     return next;
   end loop;
 end;
@@ -1130,7 +1464,7 @@ begin
     raise exception 'LIMITE_DIARIO';
   end if;
 
-  v_check := _check_slot(b.id, p_date, p_time, v_dur, null, p_staff);
+  v_check := _check_slot(b.id, p_date, p_time, v_dur, null, p_staff, p_service_ids);
   if v_check = 'invalido' then raise exception 'TURNO_INVALIDO'; end if;
   if v_check = 'ocupado' then raise exception 'TURNO_OCUPADO'; end if;
 
@@ -1142,7 +1476,7 @@ begin
 
   v_start := (p_date + p_time::time) at time zone b.timezone;
   v_token := replace(gen_random_uuid()::text, '-', '');
-  select f.staff_id into v_staff from _free_staff(b.id, v_start, v_start + make_interval(mins => v_dur), p_staff) f;
+  select f.staff_id into v_staff from _free_staff(b.id, v_start, v_start + make_interval(mins => v_dur), p_staff, null, p_service_ids) f;
   v_lane := _free_lane(b.id, v_staff, v_start, v_start + make_interval(mins => v_dur));
   if v_lane is null then raise exception 'TURNO_OCUPADO'; end if;
   begin
@@ -1207,6 +1541,7 @@ returns jsonb language sql stable security definer set search_path = public as $
       'logo_url', b.logo_url, 'color_primary', b.color_primary, 'timezone', b.timezone,
       'currency', b.currency, 'cancel_notice_hours', b.cancel_notice_hours,
       'reschedule_notice_hours', b.reschedule_notice_hours, 'max_reschedules', b.max_reschedules,
+      'loyalty_enabled', b.loyalty_enabled, 'loyalty_every', b.loyalty_every, 'loyalty_reward', b.loyalty_reward,
       'appearance', b.appearance)
   )
   from appointments a join businesses b on b.id = a.business_id
@@ -1348,10 +1683,10 @@ begin
   end if;
   v_changed := not v_same or v_start <> a.starts_at or p_staff is distinct from a.staff_id;
   if v_changed then
-    v_check := _check_slot(b.id, p_date, p_time, v_dur, a.id, p_staff);
+    v_check := _check_slot(b.id, p_date, p_time, v_dur, a.id, p_staff, p_service_ids);
     if v_check = 'invalido' then raise exception 'TURNO_INVALIDO'; end if;
     if v_check = 'ocupado' then raise exception 'TURNO_OCUPADO'; end if;
-    v_staff := (select f.staff_id from _free_staff(b.id, v_start, v_start + make_interval(mins => v_dur), p_staff, a.id) f);
+    v_staff := (select f.staff_id from _free_staff(b.id, v_start, v_start + make_interval(mins => v_dur), p_staff, a.id, p_service_ids) f);
     v_lane := _free_lane(b.id, v_staff, v_start, v_start + make_interval(mins => v_dur), a.id);
     if v_lane is null then raise exception 'TURNO_OCUPADO'; end if;
   end if;
@@ -1439,6 +1774,30 @@ begin
   insert into waitlist (business_id, day, customer_name, customer_phone, note)
   values (b.id, p_date, btrim(p_name), v_phone, nullif(left(btrim(coalesce(p_note, '')), 300), ''));
 end;
+$$;
+
+-- El cliente acepta recibir avisos push de su cita (recordatorio, confirmación, cancelación o
+-- cambio por parte del negocio). Un mismo dispositivo/navegador solo guarda una suscripción
+-- (la última cita para la que se activó), por eso el "on conflict" por endpoint.
+create or replace function public.save_customer_push_subscription(p_token text, p_endpoint text, p_p256dh text, p_auth text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  a appointments;
+begin
+  select * into a from appointments where token = p_token;
+  if not found then raise exception 'CITA_NO_EXISTE'; end if;
+  insert into push_subscriptions (business_id, kind, appointment_id, endpoint, p256dh, auth)
+  values (a.business_id, 'customer', a.id, p_endpoint, p_p256dh, p_auth)
+  on conflict (endpoint) do update set
+    business_id = excluded.business_id, kind = excluded.kind, appointment_id = excluded.appointment_id,
+    p256dh = excluded.p256dh, auth = excluded.auth;
+end;
+$$;
+
+-- Quita un dispositivo de los avisos push (cliente o dueño: el endpoint ya identifica la fila).
+create or replace function public.delete_push_subscription(p_endpoint text)
+returns void language sql volatile security definer set search_path = public as $$
+  delete from push_subscriptions where endpoint = p_endpoint;
 $$;
 
 -- ---------------------------------------------------------------------
@@ -1533,6 +1892,22 @@ begin
     'card_number', card_number, 'card_holder', card_holder, 'admin_whatsapp', admin_whatsapp,
     'basico', price_basico, 'plus', price_plus, 'ultra', price_ultra)
     from platform_settings where id = 1);
+end;
+$$;
+
+-- El dueño acepta recibir avisos push en este dispositivo (citas nuevas, canceladas o cambiadas
+-- por un cliente). Igual que con el cliente, un dispositivo guarda una sola suscripción.
+create or replace function public.save_owner_push_subscription(p_endpoint text, p_p256dh text, p_auth text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_business uuid := my_business_id();
+begin
+  if v_business is null then raise exception 'SIN_NEGOCIO'; end if;
+  insert into push_subscriptions (business_id, kind, appointment_id, endpoint, p256dh, auth)
+  values (v_business, 'owner', null, p_endpoint, p_p256dh, p_auth)
+  on conflict (endpoint) do update set
+    business_id = excluded.business_id, kind = excluded.kind, appointment_id = null,
+    p256dh = excluded.p256dh, auth = excluded.auth;
 end;
 $$;
 
@@ -1936,10 +2311,12 @@ revoke execute on all functions in schema public from public;
 
 grant execute on function public.get_public_prices() to anon, authenticated;
 grant execute on function public.get_public_business(text) to anon, authenticated;
-grant execute on function public.get_available_slots(text, date, int, uuid, text) to anon, authenticated;
+grant execute on function public.get_available_slots(text, date, int, uuid, text, uuid[]) to anon, authenticated;
 grant execute on function public.create_booking(text, uuid[], date, text, text, text, text, text, uuid) to anon, authenticated;
 grant execute on function public.check_discount(text, text, uuid[]) to anon, authenticated;
 grant execute on function public.join_waitlist(text, date, text, text, text) to anon, authenticated;
+grant execute on function public.save_customer_push_subscription(text, text, text, text) to anon, authenticated;
+grant execute on function public.delete_push_subscription(text) to anon, authenticated;
 grant execute on function public.get_booking(text) to anon, authenticated;
 grant execute on function public.cancel_booking(text) to anon, authenticated;
 grant execute on function public.reschedule_booking(text, date, text) to anon, authenticated;
@@ -1949,6 +2326,7 @@ grant execute on function public.check_slug_available(text) to anon, authenticat
 grant execute on function public.create_business(text, text, text, text, text, text, jsonb, jsonb, text, boolean, numeric) to authenticated;
 grant execute on function public.get_my_business_status() to authenticated;
 grant execute on function public.get_payment_info() to authenticated;
+grant execute on function public.save_owner_push_subscription(text, text, text) to authenticated;
 grant execute on function public.owner_create_appointment(uuid[], date, text, text, text, text, uuid) to authenticated;
 grant execute on function public.owner_reschedule_appointment(uuid, date, text) to authenticated;
 grant execute on function public.is_platform_admin() to authenticated;
@@ -1979,16 +2357,28 @@ grant execute on function public._clean_phone(text) to anon, authenticated;
 grant execute on function public._clean_appearance(jsonb) to authenticated;
 grant execute on function public.businesses_guard() to authenticated;
 grant execute on function public.appointments_guard() to authenticated;
+grant execute on function public._appointments_notify() to authenticated;
 grant execute on function public.schedule_days_normalize() to authenticated;
+grant execute on function public.staff_schedule_days_normalize() to authenticated;
+grant execute on function public.staff_services_guard() to authenticated;
 
 -- Funciones internas: nadie las llama desde fuera
 revoke execute on function public._is_range_free(uuid, timestamptz, timestamptz, uuid) from anon, authenticated;
-revoke execute on function public._check_slot(uuid, date, text, int, uuid, uuid) from anon, authenticated;
+revoke execute on function public._check_slot(uuid, date, text, int, uuid, uuid, uuid[]) from anon, authenticated;
 revoke execute on function public._lane_free(uuid, uuid, timestamptz, timestamptz, uuid) from anon, authenticated;
+revoke execute on function public._staff_slot_valid(uuid, uuid, date, time) from anon, authenticated;
+revoke execute on function public._staff_can_do(uuid, uuid[]) from anon, authenticated;
+revoke execute on function public._slot_blocked(uuid, date, time, int) from anon, authenticated;
 revoke execute on function public._free_lane(uuid, uuid, timestamptz, timestamptz, uuid) from anon, authenticated;
-revoke execute on function public._free_staff(uuid, timestamptz, timestamptz, uuid, uuid) from anon, authenticated;
+revoke execute on function public._free_staff(uuid, timestamptz, timestamptz, uuid, uuid, uuid[]) from anon, authenticated;
 revoke execute on function public._owner_business(text) from anon, authenticated;
 revoke execute on function public._discount_for(uuid, text, numeric, boolean) from anon, authenticated;
+revoke execute on function public._notify_push(uuid, text, uuid, text, text) from anon, authenticated;
+revoke execute on function public._send_daily_reminders() from anon, authenticated;
+revoke execute on function public._auto_mark_no_shows() from anon, authenticated;
+revoke execute on function public._appointments_notify() from anon;
+revoke execute on function public.staff_services_guard() from anon;
+revoke execute on function public.staff_schedule_days_normalize() from anon;
 
 -- Las tablas: sin acceso directo para visitantes anónimos
 revoke all on all tables in schema public from anon;

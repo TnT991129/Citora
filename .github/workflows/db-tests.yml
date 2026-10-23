@@ -1,0 +1,39 @@
+# Antes de cada subida (y en cada cambio a este archivo o a los de la base de datos), levanta un
+# Supabase local de prueba, le aplica supabase/schema.sql tal cual, y corre supabase/test/test.sql.
+# Si algo rompe, esta Acción falla en rojo en GitHub ANTES de que el error llegue a producción.
+# No necesita ninguna clave ni cuenta: todo corre en una base de datos de usar y tirar.
+name: Pruebas de la base de datos
+
+on:
+  push:
+    branches: [main, staging]
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/db-tests.yml'
+  pull_request:
+    paths:
+      - 'supabase/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Levantar Supabase local
+        run: supabase start --ignore-health-check
+
+      - name: Aplicar schema.sql y correr las pruebas
+        env:
+          PGURI: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: |
+          psql "$PGURI" -v ON_ERROR_STOP=1 -f supabase/schema.sql
+          psql "$PGURI" -v ON_ERROR_STOP=1 -f supabase/test/test.sql
+
+      - name: Apagar Supabase local
+        if: always()
+        run: supabase stop
