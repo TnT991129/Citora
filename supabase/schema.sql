@@ -2382,6 +2382,7 @@ end;
 $$;
 
 -- El dueño declara que pagó (ver payment_claims): sube su captura y los datos desde su panel.
+drop function if exists public.submit_payment_claim(int, numeric, text, text);
 create or replace function public.submit_payment_claim(p_months int, p_amount numeric default null, p_note text default null, p_proof_path text default null)
 returns uuid language plpgsql volatile security definer set search_path = public as $$
 declare
