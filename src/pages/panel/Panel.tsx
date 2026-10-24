@@ -231,6 +231,7 @@ const OWNER_TOUR = [
   { emoji: '👥', title: 'Clientes', text: 'La ficha de cada clienta: cuántas veces ha venido, cuánto ha gastado, notas privadas tuyas y sus bonos (si les vendes paquetes de sesiones).' },
   { emoji: '✂️', title: 'Servicios', text: 'Lo que ofreces, con precio, duración y foto. Lo primero que ve un cliente al entrar a reservar.' },
   { emoji: '⋯', title: 'Más', text: 'Aquí está todo lo demás: Equipo, Horario, Políticas, Bonos, Cupones, Estadísticas y Ajustes — incluidos los avisos push de citas nuevas.' },
+  { emoji: '📱', title: 'Instálala y activa los avisos', text: 'Instala esta web en la pantalla de inicio de tu teléfono como una app. Y lo más importante: activa "Avisos en este dispositivo" en Más → Ajustes — sin eso, no te va a llegar ningún aviso cuando un cliente reserve.' },
 ]
 
 const NAV = [

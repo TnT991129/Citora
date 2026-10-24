@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { InstallButton } from '../../components/InstallButton'
+import { InstallReminder } from '../../components/InstallReminder'
 import { Tour, useTour } from '../../components/Tour'
 import { LinkButton, PageLoader, StatusBadge, WhatsAppIcon } from '../../components/ui'
 import { cupRate, dateKey, duration, money, price, timeOf, WEEKDAYS, WEEKDAYS_SHORT, weekdayOf, dayTitle } from '../../lib/format'
@@ -207,17 +207,16 @@ export default function BusinessHome() {
           </section>
         )}
 
+        <InstallReminder appName={business.name} />
+
         <section className="card text-center">
           <p className="text-lg font-bold">¿Tienes alguna pregunta?</p>
           <p className="text-sm text-slate-500">Escríbenos y te respondemos.</p>
-          <div className="mt-4 space-y-2">
-            {wa && (
-              <LinkButton href={wa} variant="whatsapp" block newTab>
-                <WhatsAppIcon /> Escribir por WhatsApp
-              </LinkButton>
-            )}
-            <InstallButton appName={business.name} label={`Instalar la app de ${business.name}`} block />
-          </div>
+          {wa && (
+            <LinkButton href={wa} variant="whatsapp" block newTab className="mt-4">
+              <WhatsAppIcon /> Escribir por WhatsApp
+            </LinkButton>
+          )}
         </section>
         <button onClick={tour.relaunch} className="mx-auto block text-sm font-semibold text-brand">🧭 ¿Cómo reservar? Ver guía rápida</button>
         <PoweredBy />
@@ -253,6 +252,7 @@ const CLIENT_TOUR = (name: string) => [
   { emoji: '🗓️', title: 'Día y hora', text: 'Solo vas a ver los horarios realmente libres. Si el negocio tiene varias personas, puedes elegir con quién prefieres tu cita.' },
   { emoji: '🔗', title: 'Guarda tu enlace', text: 'Al reservar te damos un enlace único para VER, CAMBIAR o CANCELAR tu cita cuando quieras — sin necesidad de cuenta ni contraseña.' },
   { emoji: '🔔', title: 'Avisos', text: 'Si quieres, desde tu cita puedes activar un aviso en tu teléfono para que te recordemos la cita el día antes.' },
+  { emoji: '📱', title: 'Instálala en tu teléfono', text: 'Si vas a reservar seguido, instala esta web en la pantalla de inicio de tu teléfono: se abre como una app, sin buscarla en el navegador.' },
 ]
 
 /** "Lunes a sábado", "Lun, Mié y Vie"... */

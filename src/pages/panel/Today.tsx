@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { InstallReminder } from '../../components/InstallReminder'
 import { Alert, Button, CopyButton, Empty, LinkButton, PageLoader, WhatsAppIcon } from '../../components/ui'
 import { buildMessage, fetchAppointments, isActive } from '../../lib/appointments'
 import { errorMessage } from '../../lib/errors'
@@ -52,6 +53,8 @@ export default function Today() {
 
   return (
     <div className="space-y-5">
+      <InstallReminder appName={business.name} pushLink={link('ajustes')} />
+
       <div className="flex items-end justify-between gap-3">
         <div>
           <p className="text-sm text-slate-500">Hoy</p>
