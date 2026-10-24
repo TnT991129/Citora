@@ -32,6 +32,7 @@ interface AdminOwner {
   trial_ends_at: string | null
   paid_until: string | null
   created_at: string | null
+  comped: boolean
   status: BusinessStatus | 'sin_negocio'
 }
 
@@ -177,13 +178,14 @@ function Owners() {
   if (!list) return <PageLoader />
 
   const count = (f: Filter) => (f === 'todos' ? list.length : list.filter((o) => o.status === f).length)
+  const paying = list.filter((o) => o.status === 'activo' && !o.comped).length
   const monthly = list
-    .filter((o) => o.status === 'activo' && o.plan)
+    .filter((o) => o.status === 'activo' && o.plan && !o.comped)
     .reduce((s) => s + prices.basico, 0)
   const thisMonth = new Date().toISOString().slice(0, 7)
   const newThisMonth = list.filter((o) => o.signed_up_at.slice(0, 7) === thisMonth).length
 
-  const act = async (fn: 'admin_extend_trial' | 'admin_deactivate_business', o: AdminOwner, msg: string) => {
+  const act = async (fn: 'admin_extend_trial' | 'admin_deactivate_business' | 'admin_grant_free', o: AdminOwner, msg: string) => {
     const { error } = await supabase.rpc(fn, fn === 'admin_extend_trial' ? { p_business: o.id, p_days: 3 } : { p_business: o.id })
     if (error) setError(errorMessage(error))
     else {
@@ -196,7 +198,7 @@ function Owners() {
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Dueños registrados" value={String(list.length)} hint={`${newThisMonth} nuevos este mes`} />
-        <Stat label="Pagando" value={String(count('activo'))} />
+        <Stat label="Pagando" value={String(paying)} />
         <Stat label="En prueba gratis" value={String(count('prueba'))} />
         <Stat label="Ingreso mensual" value={money(monthly, 'CUP')} />
       </div>
@@ -235,26 +237,31 @@ function Owners() {
                   <p className="mt-1 text-sm text-amber-700">Se registró pero no terminó de crear su negocio.</p>
                 )}
               </div>
-              {o.status === 'sin_negocio' ? <span className="chip bg-slate-100 text-xs text-slate-600">Sin negocio</span> : <StatusBadge status={o.status} />}
+              {o.comped ? <span className="chip bg-violet-100 text-xs text-violet-700">🎁 Cortesía</span> :
+                o.status === 'sin_negocio' ? <span className="chip bg-slate-100 text-xs text-slate-600">Sin negocio</span> : <StatusBadge status={o.status} />}
             </div>
 
             {o.id && (
               <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-sm">
-                {o.status === 'activo' && <>💳 Pagando · próximo pago el <b>{fullDateFromIso(o.paid_until!, TZ)}</b> ({daysLeft(o.paid_until!)} días) · {money(prices.basico, 'CUP')}/mes</>}
-                {o.status === 'prueba' && <>🎁 Prueba gratis · termina el <b>{fullDateFromIso(o.trial_ends_at!, TZ)}</b> ({daysLeft(o.trial_ends_at!)} días)</>}
-                {o.status === 'vencido' && <>⛔ Sin pagar{o.paid_until ? <> desde el {fullDateFromIso(o.paid_until, TZ)}</> : <> desde que terminó la prueba</>}</>}
+                {o.comped && <>🎁 Cortesía para siempre, no paga</>}
+                {!o.comped && o.status === 'activo' && <>💳 Pagando · próximo pago el <b>{fullDateFromIso(o.paid_until!, TZ)}</b> ({daysLeft(o.paid_until!)} días) · {money(prices.basico, 'CUP')}/mes</>}
+                {!o.comped && o.status === 'prueba' && <>🎁 Prueba gratis · termina el <b>{fullDateFromIso(o.trial_ends_at!, TZ)}</b> ({daysLeft(o.trial_ends_at!)} días)</>}
+                {!o.comped && o.status === 'vencido' && <>⛔ Sin pagar{o.paid_until ? <> desde el {fullDateFromIso(o.paid_until, TZ)}</> : <> desde que terminó la prueba</>}</>}
               </p>
             )}
 
             <div className="mt-3 flex flex-wrap gap-2">
-              {o.id && <Button size="sm" onClick={() => setActivating(o as OwnerWithBusiness)}>Registrar pago</Button>}
+              {o.id && !o.comped && <Button size="sm" onClick={() => setActivating(o as OwnerWithBusiness)}>Registrar pago</Button>}
               {o.whatsapp && (
                 <LinkButton href={waLink(o.whatsapp, `Hola, te escribo de Citora sobre ${o.name}.`)} variant="whatsapp" size="sm" newTab>
                   <WhatsAppIcon className="h-4 w-4" /> WhatsApp
                 </LinkButton>
               )}
               {o.slug && <LinkButton href={publicUrl(o.slug)} variant="secondary" size="sm" newTab>Ver su web</LinkButton>}
-              {o.id && <Button size="sm" variant="ghost" onClick={() => act('admin_extend_trial', o, '3 días más de prueba')}>+3 días prueba</Button>}
+              {o.id && !o.comped && <Button size="sm" variant="ghost" onClick={() => act('admin_extend_trial', o, '3 días más de prueba')}>+3 días prueba</Button>}
+              {o.id && !o.comped && (
+                <Button size="sm" variant="ghost" onClick={() => act('admin_grant_free', o, 'Regalado para siempre')}>🎁 Regalar para siempre</Button>
+              )}
               {o.id && o.status !== 'vencido' && (
                 <Button size="sm" variant="ghost" className="text-red-600" onClick={() => act('admin_deactivate_business', o, 'Inhabilitado')}>Inhabilitar</Button>
               )}

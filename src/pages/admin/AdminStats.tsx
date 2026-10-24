@@ -19,7 +19,7 @@ interface AdminStatsData {
     ended_trials: number
     converted: number
   }
-  by_plan: Record<PlanKey | 'prueba' | 'vencido', number>
+  by_plan: Record<PlanKey | 'prueba' | 'vencido' | 'cortesia', number>
   by_type: { type: string; count: number }[]
   top_businesses: { name: string; slug: string; code: string; count: number }[]
   expiring: { id: string; name: string; code: string; whatsapp: string; kind: 'activo' | 'prueba'; ends_at: string }[]
@@ -117,6 +117,7 @@ export default function AdminStats() {
                 { label: 'Pagando', value: paying },
                 { label: 'En prueba', value: s.by_plan.prueba },
                 { label: 'Vencidos', value: s.by_plan.vencido },
+                { label: 'Cortesía', value: s.by_plan.cortesia },
               ]}
             />
           </div>

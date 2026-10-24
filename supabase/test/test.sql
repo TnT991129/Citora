@@ -233,6 +233,36 @@ end $$;
 select expect_error($$select admin_approve_payment_claim('$$ || :'claim2' || $$')$$, 'NO_DISPONIBLE');
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 do $$ begin assert (select count(*) from payment_claims) = 0, 'dueño 2 no ve las declaraciones ajenas'; end $$;
+
+-- ===== El administrador regala la app para siempre: su pago deja de contar en las estadísticas =====
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+select admin_activate_plan((select id from businesses where slug='spa-mar'), 'basico', 1, 500, 'Pago de prueba');
+select (admin_stats()->'totals'->>'revenue')::numeric as revenue_antes \gset
+do $$ begin assert (select comped from businesses where slug='spa-mar') = false; end $$;
+select admin_grant_free((select id from businesses where slug='spa-mar'));
+do $$ begin
+  assert (select comped from businesses where slug='spa-mar'), 'queda marcado como cortesía';
+  assert (select plan from businesses where slug='spa-mar') = 'ultra';
+  assert (select paid_until from businesses where slug='spa-mar') > now() + interval '99 years', 'vencimiento muy lejano';
+  assert business_effective_plan(
+    (select plan from businesses where slug='spa-mar'),
+    (select trial_ends_at from businesses where slug='spa-mar'),
+    (select paid_until from businesses where slug='spa-mar')) = 'ultra', 'sigue con acceso completo';
+end $$;
+select (admin_stats()->'totals'->>'revenue')::numeric as revenue_despues \gset
+do $$ begin
+  assert :'revenue_despues'::numeric = :'revenue_antes'::numeric - 500, 'el pago de la cortesía deja de contar en los ingresos';
+  assert (admin_stats()->'by_plan'->>'cortesia')::int = 1;
+  assert not exists (
+    select 1 from jsonb_array_elements(admin_stats()->'recent_payments') x where x->>'code' = (select code from businesses where slug='spa-mar')
+  ), 'sus pagos ya no aparecen en los últimos pagos';
+end $$;
+-- Un pago real posterior le quita la cortesía (ya no sería gratis)
+select admin_activate_plan((select id from businesses where slug='spa-mar'), 'basico', 1, 500, 'Pago real después de la cortesía');
+do $$ begin assert (select comped from businesses where slug='spa-mar') = false, 'pagar de verdad quita la cortesía'; end $$;
+select expect_error($$select admin_grant_free('00000000-0000-0000-0000-000000000000')$$, 'NEGOCIO_NO_EXISTE');
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select expect_error($$select admin_grant_free((select id from businesses where slug='spa-mar'))$$, 'NO_AUTORIZADO');
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 
 reset role;

@@ -317,6 +317,10 @@ alter table public.businesses add column if not exists loyalty_enabled boolean n
 alter table public.businesses add column if not exists loyalty_every int check (loyalty_every is null or loyalty_every between 2 and 50);
 alter table public.businesses add column if not exists loyalty_reward text check (char_length(loyalty_reward) <= 160);
 
+-- Negocios de cortesía: el administrador les regaló la app para siempre (ver admin_grant_free).
+-- No cuentan como "pagando" ni sus pagos (si tuvieron alguno antes) se suman en las estadísticas.
+alter table public.businesses add column if not exists comped boolean not null default false;
+
 -- Políticas: reglas de reserva que personaliza el dueño, más un texto libre (columna "policies").
 -- reschedule_notice_hours: plazo para cambiar (puede ser distinto de cancelar). max_reschedules:
 -- veces que se puede cambiar una misma cita (null = sin límite). max_pending_bookings: citas futuras
@@ -2235,7 +2239,7 @@ begin
       'user_id', u.id, 'email', u.email, 'signed_up_at', u.created_at, 'last_sign_in_at', u.last_sign_in_at,
       'id', b.id, 'name', b.name, 'slug', b.slug, 'code', b.code, 'business_type', b.business_type,
       'whatsapp', b.whatsapp, 'plan', b.plan, 'trial_ends_at', b.trial_ends_at,
-      'paid_until', b.paid_until, 'created_at', b.created_at,
+      'paid_until', b.paid_until, 'created_at', b.created_at, 'comped', coalesce(b.comped, false),
       'status', case when b.id is null then 'sin_negocio'
                      else business_status(b.plan, b.trial_ends_at, b.paid_until) end
     ) order by u.created_at desc)
@@ -2260,10 +2264,24 @@ begin
 
   -- Si aún tiene meses pagados, se suman al final; si no, empiezan hoy
   v_until := greatest(now(), coalesce(b.paid_until, now())) + make_interval(months => p_months);
-  update businesses set plan = p_plan, paid_until = v_until where id = b.id;
+  -- Un pago real ya no es cortesía, aunque antes se le haya regalado la app
+  update businesses set plan = p_plan, paid_until = v_until, comped = false where id = b.id;
   insert into payments (business_id, plan, months, amount, note, paid_until, created_by, business_name, business_code)
   values (b.id, p_plan, p_months, p_amount, nullif(btrim(coalesce(p_note, '')), ''), v_until, auth.uid(), b.name, b.code);
   return v_until;
+end;
+$$;
+
+-- El administrador regala la app para siempre (sin pasar por caja): activa el plan único con un
+-- vencimiento muy lejano y marca el negocio como cortesía, para que ni este regalo ni ningún pago
+-- anterior suyo se sumen a los ingresos ni aparezcan en "Últimos pagos" (ver admin_stats).
+create or replace function public.admin_grant_free(p_business uuid)
+returns void language plpgsql volatile security definer set search_path = public as $$
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  update businesses set plan = 'ultra', paid_until = now() + interval '100 years', comped = true
+   where id = p_business;
+  if not found then raise exception 'NEGOCIO_NO_EXISTE'; end if;
 end;
 $$;
 
@@ -2374,29 +2392,34 @@ begin
         'month', to_char(m, 'YYYY-MM'),
         'signups', (select count(*) from businesses b
                     where b.created_at >= m at time zone v_tz and b.created_at < (m + interval '1 month') at time zone v_tz),
-        'revenue', (select coalesce(sum(p.amount), 0) from payments p
-                    where p.created_at >= m at time zone v_tz and p.created_at < (m + interval '1 month') at time zone v_tz),
-        'payments', (select count(*) from payments p
-                     where p.created_at >= m at time zone v_tz and p.created_at < (m + interval '1 month') at time zone v_tz),
+        'revenue', (select coalesce(sum(p.amount), 0) from payments p left join businesses b2 on b2.id = p.business_id
+                    where p.created_at >= m at time zone v_tz and p.created_at < (m + interval '1 month') at time zone v_tz
+                      and not coalesce(b2.comped, false)),
+        'payments', (select count(*) from payments p left join businesses b2 on b2.id = p.business_id
+                     where p.created_at >= m at time zone v_tz and p.created_at < (m + interval '1 month') at time zone v_tz
+                       and not coalesce(b2.comped, false)),
         'appointments', (select count(*) from appointments a
                          where a.created_at >= m at time zone v_tz and a.created_at < (m + interval '1 month') at time zone v_tz)
       ) order by m)
       from generate_series(v_first, date_trunc('month', now() at time zone v_tz), interval '1 month') m),
     'totals', (select jsonb_build_object(
         'businesses', (select count(*) from businesses),
-        'revenue', (select coalesce(sum(amount), 0) from payments),
+        'revenue', (select coalesce(sum(p.amount), 0) from payments p left join businesses b2 on b2.id = p.business_id
+                    where not coalesce(b2.comped, false)),
         'appointments', (select count(*) from appointments),
         'appointments_30d', (select count(*) from appointments where created_at > now() - interval '30 days'),
         'active_30d', (select count(distinct business_id) from appointments where created_at > now() - interval '30 days'),
         'ended_trials', (select count(*) from businesses where trial_ends_at < now()),
         'converted', (select count(*) from businesses b
-                      where b.trial_ends_at < now() and exists (select 1 from payments p where p.business_id = b.id)))),
+                      where b.trial_ends_at < now() and not b.comped
+                        and exists (select 1 from payments p where p.business_id = b.id)))),
     'by_plan', (select jsonb_build_object(
-        'basico', count(*) filter (where business_status(plan, trial_ends_at, paid_until) = 'activo' and plan = 'basico'),
-        'plus', count(*) filter (where business_status(plan, trial_ends_at, paid_until) = 'activo' and plan = 'plus'),
-        'ultra', count(*) filter (where business_status(plan, trial_ends_at, paid_until) = 'activo' and plan = 'ultra'),
+        'basico', count(*) filter (where business_status(plan, trial_ends_at, paid_until) = 'activo' and plan = 'basico' and not comped),
+        'plus', count(*) filter (where business_status(plan, trial_ends_at, paid_until) = 'activo' and plan = 'plus' and not comped),
+        'ultra', count(*) filter (where business_status(plan, trial_ends_at, paid_until) = 'activo' and plan = 'ultra' and not comped),
         'prueba', count(*) filter (where business_status(plan, trial_ends_at, paid_until) = 'prueba'),
-        'vencido', count(*) filter (where business_status(plan, trial_ends_at, paid_until) = 'vencido'))
+        'vencido', count(*) filter (where business_status(plan, trial_ends_at, paid_until) = 'vencido'),
+        'cortesia', count(*) filter (where comped))
       from businesses),
     'by_type', (select coalesce(jsonb_agg(jsonb_build_object('type', t.business_type, 'count', t.n) order by t.n desc), '[]'::jsonb)
       from (select business_type, count(*) as n from businesses group by 1) t),
@@ -2423,6 +2446,7 @@ begin
       from (select coalesce(b.name, p.business_name || ' (eliminado)') as name, coalesce(b.code, p.business_code) as code,
                    p.plan, p.months, p.amount, p.note, p.created_at
             from payments p left join businesses b on b.id = p.business_id
+            where not coalesce(b.comped, false)
             order by p.created_at desc limit 15) t)
   );
 end;
@@ -2459,6 +2483,7 @@ grant execute on function public.is_platform_admin() to authenticated;
 grant execute on function public.admin_list_businesses() to authenticated;
 grant execute on function public.admin_list_owners() to authenticated;
 grant execute on function public.admin_activate_plan(uuid, text, int, numeric, text) to authenticated;
+grant execute on function public.admin_grant_free(uuid) to authenticated;
 grant execute on function public.admin_approve_payment_claim(uuid, numeric, text) to authenticated;
 grant execute on function public.admin_reject_payment_claim(uuid, text) to authenticated;
 grant execute on function public.admin_deactivate_business(uuid) to authenticated;
