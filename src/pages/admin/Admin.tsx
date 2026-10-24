@@ -14,6 +14,7 @@ import type { BusinessStatus, PaymentClaimStatus, PlanKey } from '../../lib/type
 import { publicUrl } from '../../lib/url'
 import { waLink } from '../../lib/whatsapp'
 import AdminStats from './AdminStats'
+import { Icon } from '../panel/Panel'
 
 // Una cuenta de dueño. Los campos del negocio son null si se registró pero no terminó de crearlo.
 interface AdminOwner {
@@ -81,19 +82,21 @@ export default function Admin() {
   }
 
   return (
-    <div className="min-h-dvh">
+    <div className="min-h-dvh pb-20 md:pb-0">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-2">
             <CitoraLogo className="text-lg" />
             <span className="chip bg-slate-900 text-white">Admin</span>
           </div>
-          <div className="flex items-center gap-1">
-            {(['duenos', 'pagos', 'estadisticas', 'ajustes'] as const).map((t) => (
-              <button key={t} onClick={() => setTab(t)} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${tab === t ? 'bg-citora-100 text-citora-700' : 'text-slate-600 hover:bg-slate-100'}`}>
-                {t === 'duenos' ? 'Dueños' : t === 'pagos' ? 'Pagos' : t === 'estadisticas' ? 'Estadísticas' : 'Ajustes'}
+          <nav className="hidden items-center gap-1 md:flex">
+            {TABS.map((t) => (
+              <button key={t.key} onClick={() => setTab(t.key)} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${tab === t.key ? 'bg-citora-100 text-citora-700' : 'text-slate-600 hover:bg-slate-100'}`}>
+                {t.label}
               </button>
             ))}
+          </nav>
+          <div className="flex items-center gap-1">
             <ThemeToggle />
             <button onClick={() => supabase.auth.signOut()} className="ml-1 rounded-lg px-2 py-1.5 text-sm text-slate-500 hover:bg-slate-100">Salir</button>
           </div>
@@ -102,9 +105,28 @@ export default function Admin() {
       <main className="mx-auto max-w-5xl px-4 py-5">
         {tab === 'duenos' ? <Owners /> : tab === 'pagos' ? <PaymentClaims /> : tab === 'estadisticas' ? <AdminStats /> : <SettingsForm />}
       </main>
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-slate-200 bg-white safe-bottom md:hidden">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`flex flex-col items-center gap-0.5 py-2 text-[11px] font-semibold ${tab === t.key ? 'text-brand' : 'text-slate-500'}`}
+          >
+            <Icon name={t.icon} />
+            {t.label}
+          </button>
+        ))}
+      </nav>
     </div>
   )
 }
+
+const TABS = [
+  { key: 'duenos', label: 'Dueños', icon: 'users' },
+  { key: 'pagos', label: 'Pagos', icon: 'card' },
+  { key: 'estadisticas', label: 'Estadísticas', icon: 'chart' },
+  { key: 'ajustes', label: 'Ajustes', icon: 'gear' },
+] as const
 
 type Filter = 'todos' | BusinessStatus | 'sin_negocio'
 type Sort = 'recientes' | 'pago'
