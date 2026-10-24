@@ -39,6 +39,7 @@ type OwnerWithBusiness = AdminOwner & { id: string; name: string; code: string }
 interface Settings {
   card_number: string
   card_holder: string
+  card_phone: string
   admin_whatsapp: string
   price_basico: number
   price_plus: number
@@ -553,6 +554,9 @@ function SettingsForm() {
         </Field>
         <Field label="Titular (opcional)">
           <input className="input" value={s.card_holder} onChange={(e) => setS({ ...s, card_holder: e.target.value })} />
+        </Field>
+        <Field label="Teléfono para confirmar (opcional)" hint="Algunas apps (ej. Transfermóvil en Android) piden un teléfono además de la tarjeta, para confirmar que el destino es correcto.">
+          <input className="input" value={s.card_phone} onChange={(e) => setS({ ...s, card_phone: e.target.value })} placeholder="+53 5xxxxxxx" />
         </Field>
         <Field label="Tu WhatsApp" hint="Aquí te mandan las capturas. Con código de país.">
           <input className="input" value={s.admin_whatsapp} onChange={(e) => setS({ ...s, admin_whatsapp: e.target.value.replace(/[^\d]/g, '') })} placeholder="5355555555" />

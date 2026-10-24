@@ -12,6 +12,7 @@ import { usePanel } from './context'
 interface PaymentInfo {
   card_number: string
   card_holder: string
+  card_phone: string
   admin_whatsapp: string
   basico: number
   plus: number
@@ -148,6 +149,15 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
           </div>
         ) : (
           <Alert kind="warning">Todavía no hay tarjeta configurada. Escribe por WhatsApp para pagar.</Alert>
+        )}
+        {info.card_phone && (
+          <div className="rounded-xl bg-amber-50 p-3 ring-1 ring-amber-200">
+            <p className="text-sm text-amber-800">Si tu app pide un <b>teléfono para confirmar</b> la transferencia, usa este:</p>
+            <div className="mt-1 flex items-center gap-2">
+              <p className="font-mono text-lg font-bold tracking-wider">{info.card_phone}</p>
+              <CopyButton text={info.card_phone.replace(/\s/g, '')} label="Copiar" />
+            </div>
+          </div>
         )}
         <p className="text-sm text-slate-500">Por Transfermóvil o EnZona. Haz una captura de pantalla del comprobante.</p>
       </section>

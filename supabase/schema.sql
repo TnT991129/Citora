@@ -40,6 +40,10 @@ insert into public.platform_settings (id) values (1) on conflict (id) do nothing
 alter table public.platform_settings add column if not exists push_function_url text;
 alter table public.platform_settings add column if not exists push_shared_secret text;
 
+-- Teléfono para confirmar la transferencia: algunos bancos (ej. Transfermóvil desde Android)
+-- piden un número de teléfono además de la tarjeta, para confirmar que el destino es correcto.
+alter table public.platform_settings add column if not exists card_phone text not null default '';
+
 -- Un solo plan de 1.500 CUP/mes. Al pasar de tres planes a uno se unifica el precio una vez
 -- (después el panel de administrador guarda siempre los tres iguales).
 update public.platform_settings
@@ -1955,7 +1959,7 @@ returns jsonb language plpgsql stable security definer set search_path = public 
 begin
   if auth.uid() is null then raise exception 'SIN_SESION'; end if;
   return (select jsonb_build_object(
-    'card_number', card_number, 'card_holder', card_holder, 'admin_whatsapp', admin_whatsapp,
+    'card_number', card_number, 'card_holder', card_holder, 'card_phone', card_phone, 'admin_whatsapp', admin_whatsapp,
     'basico', price_basico, 'plus', price_plus, 'ultra', price_ultra)
     from platform_settings where id = 1);
 end;
