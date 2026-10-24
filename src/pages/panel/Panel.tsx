@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ThemeToggle } from '../../components/ThemeToggle'
+import { Tour, useTour } from '../../components/Tour'
 import { Alert, BusinessAvatar, Button, CitoraLogo, PageLoader } from '../../components/ui'
 import { useSession } from '../../lib/auth'
 import { setBrandColor } from '../../lib/brand'
@@ -44,6 +45,7 @@ export default function Panel() {
   const [services, setServices] = useState<Service[]>([])
   const [staff, setStaff] = useState<Staff[]>([])
   const [error, setError] = useState<string | null>(null)
+  const tour = useTour('panel')
 
   const reloadBusiness = useCallback(async () => {
     const [{ data: b, error: e1 }, { data: st, error: e2 }] = await Promise.all([
@@ -160,7 +162,7 @@ export default function Panel() {
   const link = (sub = '') => panelPath(business.slug, sub)
 
   return (
-    <PanelContext.Provider value={{ business, status, services, staff, reloadStaff, reloadBusiness, reloadServices, base, link, slugChanged }}>
+    <PanelContext.Provider value={{ business, status, services, staff, reloadStaff, reloadBusiness, reloadServices, base, link, slugChanged, showTour: tour.relaunch }}>
       <div className="min-h-dvh pb-24 md:pb-8">
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
           <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-2.5">
@@ -217,9 +219,19 @@ export default function Panel() {
           </nav>
         )}
       </div>
+      {!blocked && <Tour steps={OWNER_TOUR} open={tour.open} onClose={tour.close} />}
     </PanelContext.Provider>
   )
 }
+
+const OWNER_TOUR = [
+  { emoji: '👋', title: '¡Bienvenido a tu panel!', text: 'Aquí llevas tu negocio: tus citas, tus clientas, lo que ofreces y cómo trabajas. Un recorrido rápido de 6 pasos para ubicarte.' },
+  { emoji: '🏠', title: 'Hoy', text: 'La pantalla de inicio: tus citas de hoy, la próxima que tienes y las que aún esperan que las confirmes.' },
+  { emoji: '📅', title: 'Agenda', text: 'Todas tus citas, por día, semana o mes. Toca una cita para confirmarla, moverla, cancelarla o escribir al cliente por WhatsApp.' },
+  { emoji: '👥', title: 'Clientes', text: 'La ficha de cada clienta: cuántas veces ha venido, cuánto ha gastado, notas privadas tuyas y sus bonos (si les vendes paquetes de sesiones).' },
+  { emoji: '✂️', title: 'Servicios', text: 'Lo que ofreces, con precio, duración y foto. Lo primero que ve un cliente al entrar a reservar.' },
+  { emoji: '⋯', title: 'Más', text: 'Aquí está todo lo demás: Equipo, Horario, Políticas, Bonos, Cupones, Estadísticas y Ajustes — incluidos los avisos push de citas nuevas.' },
+]
 
 const NAV = [
   { sub: '', label: 'Hoy', icon: 'home' },

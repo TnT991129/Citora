@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { InstallButton } from '../../components/InstallButton'
+import { Tour, useTour } from '../../components/Tour'
 import { LinkButton, PageLoader, StatusBadge, WhatsAppIcon } from '../../components/ui'
 import { cupRate, dateKey, duration, money, price, timeOf, WEEKDAYS, WEEKDAYS_SHORT, weekdayOf, dayTitle } from '../../lib/format'
 import { savedBookings, type SavedBooking } from '../../lib/storage'
@@ -18,6 +19,7 @@ const WEEK = [1, 2, 3, 4, 5, 6, 0]
 export default function BusinessHome() {
   const { slug } = useParams()
   const { business, error } = usePublicBusiness(slug)
+  const tour = useTour('client')
 
   if (error) return <Centered><p className="text-slate-600">{error}</p></Centered>
   if (business === undefined) return <PageLoader />
@@ -217,6 +219,7 @@ export default function BusinessHome() {
             <InstallButton appName={business.name} label={`Instalar la app de ${business.name}`} block />
           </div>
         </section>
+        <button onClick={tour.relaunch} className="mx-auto block text-sm font-semibold text-brand">🧭 ¿Cómo reservar? Ver guía rápida</button>
         <PoweredBy />
       </main>
 
@@ -239,9 +242,18 @@ export default function BusinessHome() {
           </div>
         </div>
       )}
+      <Tour steps={CLIENT_TOUR(business.name)} open={tour.open} onClose={tour.close} />
     </div>
   )
 }
+
+const CLIENT_TOUR = (name: string) => [
+  { emoji: '👋', title: '¡Bienvenido!', text: `Así reservas una cita con ${name} (y con cualquier negocio que use Citora): elige el servicio, el día y la hora, pones tus datos y listo.` },
+  { emoji: '✂️', title: 'Elige tu servicio', text: 'Toca "Reservar cita" y marca lo que quieras — puedes elegir varios servicios a la vez.' },
+  { emoji: '🗓️', title: 'Día y hora', text: 'Solo vas a ver los horarios realmente libres. Si el negocio tiene varias personas, puedes elegir con quién prefieres tu cita.' },
+  { emoji: '🔗', title: 'Guarda tu enlace', text: 'Al reservar te damos un enlace único para VER, CAMBIAR o CANCELAR tu cita cuando quieras — sin necesidad de cuenta ni contraseña.' },
+  { emoji: '🔔', title: 'Avisos', text: 'Si quieres, desde tu cita puedes activar un aviso en tu teléfono para que te recordemos la cita el día antes.' },
+]
 
 /** "Lunes a sábado", "Lun, Mié y Vie"... */
 function daysSummary(days: number[]): string {

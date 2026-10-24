@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { HelpTip } from '../../components/HelpTip'
 import { Alert, Button, Field, LinkButton, Modal, StatusBadge, WhatsAppIcon } from '../../components/ui'
 import { buildMessage, MESSAGE_LABELS, type MessageKind } from '../../lib/appointments'
 import { errorMessage } from '../../lib/errors'
@@ -71,7 +72,13 @@ export function AppointmentModal({ appointment, onClose, onChanged }: {
               <p className="text-sm text-slate-600">Con <b>{staff.find((s) => s.id === a.staff_id)!.name}</b></p>
             )}
           </div>
-          <StatusBadge status={a.status} />
+          <span className="flex items-center gap-1.5">
+            <StatusBadge status={a.status} />
+            <HelpTip
+              align="right"
+              text="Pendiente: reservada por el cliente, falta confirmar. Confirmada: ya la aceptaste. Completada/No vino: después de la cita. Cancelada: ya no va."
+            />
+          </span>
         </div>
 
         <div className="rounded-xl bg-slate-50 p-3">

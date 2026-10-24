@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { HelpTip } from '../../components/HelpTip'
 import { Alert, Button, Field, LinkButton, Modal, PageLoader, StatusBadge, WhatsAppIcon, flash } from '../../components/ui'
 import { servicesText } from '../../lib/appointments'
 import { dateKey, fullDateFromIso, money, shortDate, timeOf } from '../../lib/format'
@@ -269,7 +270,10 @@ function BonosSection({ phone, business }: { phone: string; business: Business }
   return (
     <div>
       <div className="mb-1 flex items-center justify-between">
-        <p className="text-sm font-semibold text-slate-700">Bonos</p>
+        <span className="flex items-center gap-1.5">
+          <p className="text-sm font-semibold text-slate-700">Bonos</p>
+          <HelpTip text="Paquetes de sesiones prepagadas (ej. 5 cortes). Tú cobras por tu cuenta y descuentas una sesión aquí cada vez que la clienta viene." />
+        </span>
         <button onClick={() => setSelling(true)} className="text-sm font-semibold text-brand">Vender bono</button>
       </div>
       {!list ? null : list.length === 0 ? (

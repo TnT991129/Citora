@@ -24,10 +24,17 @@ const ITEMS: { to: string; label: string; desc: string; emoji: string; module?: 
 ]
 
 export default function More() {
-  const { business, status, link } = usePanel()
+  const { business, status, link, showTour } = usePanel()
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-extrabold">Más</h1>
+      <button onClick={showTour} className="card flex w-full items-center gap-3 text-left hover:ring-slate-300">
+        <span className="text-2xl" aria-hidden>🧭</span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold">¿Cómo funciona tu panel?</span>
+          <span className="block truncate text-sm text-slate-500">Un recorrido rápido por las secciones principales</span>
+        </span>
+      </button>
       <ul className="grid gap-3 sm:grid-cols-2">
         {ITEMS.map((it) => {
           const locked = it.module && !hasModule(status.effective_plan, it.module)

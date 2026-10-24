@@ -16,6 +16,8 @@ export interface PanelCtx {
   link: (sub?: string) => string
   /** El dueño cambió su enlace: se actualiza la dirección del panel */
   slugChanged: (slug: string) => void
+  /** Vuelve a mostrar el recorrido guiado del panel */
+  showTour: () => void
 }
 
 export const PanelContext = createContext<PanelCtx | null>(null)

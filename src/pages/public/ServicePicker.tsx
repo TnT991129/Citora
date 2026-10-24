@@ -1,3 +1,4 @@
+import { HelpTip } from '../../components/HelpTip'
 import { duration, price } from '../../lib/format'
 import type { PublicService } from '../../lib/types'
 
@@ -38,7 +39,10 @@ export function ServicePicker({ services, selected, onChange, currency, rate }: 
       {main.map(item)}
       {extras.length > 0 && (
         <>
-          <h2 className="pt-3 font-bold">Complementos <span className="font-normal text-slate-500">(opcional)</span></h2>
+          <h2 className="flex items-center gap-1.5 pt-3 font-bold">
+            Complementos <span className="font-normal text-slate-500">(opcional)</span>
+            <HelpTip text="Se añaden a un servicio principal (ej. un diseño junto con la manicura). No se pueden reservar solos." />
+          </h2>
           {extras.map(item)}
         </>
       )}
