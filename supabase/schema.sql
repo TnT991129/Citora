@@ -219,7 +219,11 @@ create table if not exists public.payment_claims (
 create index if not exists payment_claims_business_idx on public.payment_claims (business_id, created_at desc);
 create index if not exists payment_claims_status_idx on public.payment_claims (status, created_at);
 
--- Sin captura no hay declaración válida (evita declarar "a ciegas", sin comprobante que revisar)
+-- Sin captura no hay declaración válida (evita declarar "a ciegas", sin comprobante que revisar).
+-- Las declaraciones de prueba de antes de esta regla (sin captura) se marcan para no romper la
+-- restricción al añadirla.
+update public.payment_claims set proof_url = 'sin-comprobante (declarada antes de exigirlo)'
+ where proof_url is null or btrim(proof_url) = '';
 alter table public.payment_claims drop constraint if exists payment_claims_proof_required;
 alter table public.payment_claims add constraint payment_claims_proof_required
   check (proof_url is not null and btrim(proof_url) <> '');
