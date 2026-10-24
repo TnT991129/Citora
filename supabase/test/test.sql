@@ -329,6 +329,18 @@ do $$ declare j jsonb; begin
 end $$;
 insert into gallery_photos (business_id, url, caption) values (my_business_id(), 'https://x.supabase.co/storage/v1/object/public/logos/a.jpg', 'Degradado');
 select expect_error($$insert into gallery_photos (business_id, url) values (my_business_id(), 'javascript:alert(1)')$$, 'check');
+do $$ begin
+  assert (select moderation_status from gallery_photos where business_id = my_business_id()) = 'pendiente', 'empieza sin revisar';
+  assert (select count(*) from gallery_photos where business_id = my_business_id()) = 1;
+end $$;
+update gallery_photos set moderation_status = 'aprobada' where business_id = my_business_id();
+do $$ begin
+  assert (select moderation_status from gallery_photos where business_id = my_business_id()) = 'pendiente', 'el dueño no puede autoaprobarse';
+end $$;
+-- Simula lo que hace moderate-photo (con la clave de servicio, no como "authenticated")
+reset role;
+update gallery_photos set moderation_status = 'aprobada' where business_id = (select id from businesses where slug = 'barberia-leo');
+set role authenticated;
 
 -- ===== Bonos =====
 insert into packages (business_id, name, sessions, price) values (my_business_id(), '5 cortes', 5, 2000);

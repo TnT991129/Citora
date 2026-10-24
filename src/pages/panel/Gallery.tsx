@@ -19,7 +19,7 @@ export default function Gallery() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from('gallery_photos').select('id, url, caption, position').order('position').order('created_at')
+    const { data, error } = await supabase.from('gallery_photos').select('id, url, caption, position, moderation_status, moderation_note').order('position').order('created_at')
     if (error) setError(errorMessage(error))
     else setList(data as GalleryPhoto[])
   }, [])
@@ -92,6 +92,7 @@ export default function Gallery() {
         <div>
           <h1 className="text-2xl font-extrabold">Galería</h1>
           <p className="text-slate-600">Fotos de tus trabajos. Se ven en tu web. {list.length}/{MAX}</p>
+          <p className="text-sm text-slate-500">Cada foto pasa por una revisión automática antes de verse en tu web (puede tardar un momento).</p>
         </div>
         <Button onClick={() => fileRef.current?.click()} loading={Boolean(uploading)} disabled={list.length >= MAX}>
           Añadir fotos
@@ -121,7 +122,18 @@ export default function Gallery() {
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {list.map((p, i) => (
             <li key={p.id} className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-              <img src={p.url} alt={p.caption || 'Trabajo'} loading="lazy" className="aspect-square w-full object-cover" />
+              <div className="relative">
+                <img src={p.url} alt={p.caption || 'Trabajo'} loading="lazy" className="aspect-square w-full object-cover" />
+                {p.moderation_status === 'pendiente' && (
+                  <span className="absolute left-1.5 top-1.5 chip bg-amber-100 text-xs text-amber-700">En revisión</span>
+                )}
+                {p.moderation_status === 'rechazada' && (
+                  <span className="absolute left-1.5 top-1.5 chip bg-red-100 text-xs text-red-700">Rechazada</span>
+                )}
+              </div>
+              {p.moderation_status === 'rechazada' && p.moderation_note && (
+                <p className="px-2 pt-2 text-xs text-red-600">{p.moderation_note}</p>
+              )}
               <div className="space-y-2 p-2">
                 <input
                   className="input py-1.5 text-sm"

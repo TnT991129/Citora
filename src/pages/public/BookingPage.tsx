@@ -7,6 +7,7 @@ import { setBrandColor } from '../../lib/brand'
 import { setAppManifest } from '../../lib/pwa'
 import { errorMessage } from '../../lib/errors'
 import { cupRate, dateKey, duration, longDate, money, price, timeOf, todayKey, weekdayOf, dayTitle } from '../../lib/format'
+import { buildAppointmentIcs, downloadIcs } from '../../lib/ics'
 import { hasModule } from '../../lib/plans'
 import { isPushSubscribed, pushSupported, subscribeCustomerPush } from '../../lib/push'
 import { rememberBooking } from '../../lib/storage'
@@ -76,6 +77,17 @@ export default function BookingPage() {
     booking.customer_note ? `📝 ${booking.customer_note}` : '',
     `Mi cita: ${link}`,
   ].filter(Boolean).join('\n')
+
+  const addToCalendar = () => {
+    downloadIcs(`cita-${b.slug}.ics`, buildAppointmentIcs({
+      token: booking.token,
+      startsAt: booking.starts_at,
+      endsAt: booking.ends_at,
+      title: `${booking.services.map((s) => s.name).join(', ')} · ${b.name}`,
+      location: b.address,
+      description: booking.customer_note,
+    }))
+  }
 
   const cancel = async () => {
     setBusy(true)
@@ -166,6 +178,7 @@ export default function BookingPage() {
             <WhatsAppIcon /> Avisar al negocio por WhatsApp
           </LinkButton>
         )}
+        {active && <Button variant="secondary" block onClick={addToCalendar}>📅 Agregar al calendario</Button>}
 
         {active && (booking.can_cancel || booking.can_edit) && (
           <div className={`grid gap-3 ${booking.can_edit && booking.can_cancel ? 'grid-cols-2' : 'grid-cols-1'}`}>

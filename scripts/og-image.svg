@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5243e5"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <g transform="translate(120,205)">
+    <rect width="140" height="140" rx="34" fill="#ffffff" fill-opacity="0.16"/>
+    <circle cx="70" cy="70" r="40" fill="none" stroke="#ffffff" stroke-width="10"/>
+    <path d="M70 46v24l16 11" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="300" y="300" font-family="Arial, Helvetica, sans-serif" font-size="108" font-weight="700" fill="#ffffff">Citora</text>
+  <text x="300" y="365" font-family="Arial, Helvetica, sans-serif" font-size="34" fill="#e9e5ff">Crea la app de reservas de tu negocio en minutos</text>
+  <text x="300" y="410" font-family="Arial, Helvetica, sans-serif" font-size="34" fill="#e9e5ff">Tus clientes reservan solos, tú llevas la agenda.</text>
+</svg>

@@ -49,6 +49,7 @@ interface Settings {
   trial_days: number
   push_function_url: string | null
   push_shared_secret: string | null
+  moderate_function_url: string | null
 }
 
 export default function Admin() {
@@ -620,6 +621,16 @@ function SettingsForm() {
         <Field label="Clave secreta" hint="La misma frase que pusiste en PUSH_SHARED_SECRET al desplegar la función.">
           <input className="input font-mono" value={s.push_shared_secret || ''} onChange={(e) => setS({ ...s, push_shared_secret: e.target.value.trim() || null })} />
         </Field>
+      </section>
+      <section className="card space-y-4">
+        <h2 className="font-bold">Moderación de fotos</h2>
+        <p className="text-sm text-slate-500">
+          Revisa con IA (Sightengine) cada foto nueva de galería antes de publicarla. Se rellena después de desplegar <code className="rounded bg-slate-100 px-1">supabase/functions/moderate-photo</code> y configurar sus claves. Mientras esté vacía, las fotos se aprueban solas, sin revisión.
+        </p>
+        <Field label="Dirección de la función" hint="La URL que te da 'supabase functions deploy moderate-photo'.">
+          <input className="input" value={s.moderate_function_url || ''} onChange={(e) => setS({ ...s, moderate_function_url: e.target.value.trim() || null })} placeholder="https://xxxx.supabase.co/functions/v1/moderate-photo" />
+        </Field>
+        <p className="text-xs text-slate-500">Usa la misma clave secreta de arriba (PUSH_SHARED_SECRET).</p>
       </section>
       {error && <Alert>{error}</Alert>}
       <Button block size="lg" onClick={save} loading={busy}>Guardar</Button>

@@ -1,0 +1,44 @@
+# Respaldo semanal de la base de datos. El repositorio es público, así que el volcado (con datos
+# reales de clientes) se cifra antes de subirlo como archivo adjunto del flujo de trabajo; sin la
+# frase secreta (BACKUP_ENCRYPTION_KEY) nadie puede leerlo, aunque lo descargue.
+#
+# Para restaurar un respaldo:
+#   1. Entra a Actions > Respaldo de la base de datos > el run que quieras > descarga el archivo.
+#   2. openssl enc -d -aes-256-cbc -pbkdf2 -in respaldo.sql.enc -out respaldo.sql -k "LA_FRASE_SECRETA"
+#   3. psql "LA_CADENA_DE_CONEXION" -f respaldo.sql   (o pégalo en el SQL Editor de Supabase si es pequeño)
+#
+# Secretos que hay que crear en GitHub (Settings > Secrets and variables > Actions):
+#   SUPABASE_DB_URL        La cadena de conexión directa a Postgres (Supabase > Project Settings >
+#                          Database > Connection string > URI). Incluye la contraseña de la base.
+#   BACKUP_ENCRYPTION_KEY  Una frase larga inventada por ti, guardada aparte (ej. en un gestor de
+#                          contraseñas). Si la pierdes, los respaldos ya hechos quedan ilegibles.
+name: Respaldo de la base de datos
+
+on:
+  schedule:
+    - cron: '0 9 * * 0' # domingo 09:00 UTC ≈ 04:00-05:00 en Cuba
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Volcar la base de datos
+        run: supabase db dump --db-url "${{ secrets.SUPABASE_DB_URL }}" -f respaldo.sql
+      - name: Cifrar el respaldo
+        run: |
+          openssl enc -aes-256-cbc -pbkdf2 -salt \
+            -in respaldo.sql -out respaldo.sql.enc \
+            -k "${{ secrets.BACKUP_ENCRYPTION_KEY }}"
+          rm respaldo.sql
+      - uses: actions/upload-artifact@v4
+        with:
+          name: respaldo-citora-${{ github.run_id }}
+          path: respaldo.sql.enc
+          retention-days: 90

@@ -274,11 +274,15 @@ export interface PublicReview {
   created_at: string
 }
 
+export type ModerationStatus = 'pendiente' | 'aprobada' | 'rechazada'
+
 export interface GalleryPhoto {
   id: string
   url: string
   caption: string | null
   position?: number
+  moderation_status?: ModerationStatus
+  moderation_note?: string | null
 }
 
 export interface Review {

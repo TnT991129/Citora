@@ -44,6 +44,10 @@ alter table public.platform_settings add column if not exists push_shared_secret
 -- piden un número de teléfono además de la tarjeta, para confirmar que el destino es correcto.
 alter table public.platform_settings add column if not exists card_phone text not null default '';
 
+-- Moderación de fotos (ver moderate-photo). Mientras esté vacía, las fotos se aprueban solas sin
+-- revisión (igual que con push_function_url vacío: la app sigue funcionando, solo sin ese aviso).
+alter table public.platform_settings add column if not exists moderate_function_url text;
+
 -- Un solo plan de 1.500 CUP/mes. Al pasar de tres planes a uno se unifica el precio una vez
 -- (después el panel de administrador guarda siempre los tres iguales).
 update public.platform_settings
@@ -253,6 +257,12 @@ create table if not exists public.gallery_photos (
   created_at timestamptz not null default now()
 );
 create index if not exists gallery_business_idx on public.gallery_photos (business_id, position);
+
+-- Moderación automática (ver _notify_moderation y moderate-photo): mientras no se revise, la foto
+-- no sale en la web pública; solo el dueño la ve (con el estado) en su panel.
+alter table public.gallery_photos add column if not exists moderation_status text not null default 'pendiente'
+  check (moderation_status in ('pendiente', 'aprobada', 'rechazada'));
+alter table public.gallery_photos add column if not exists moderation_note text check (char_length(moderation_note) <= 300);
 
 -- Notas privadas del dueño sobre cada cliente (el cliente se identifica por su teléfono)
 create table if not exists public.customer_notes (
@@ -662,6 +672,37 @@ exception when others then
 end;
 $$;
 
+-- Avisa a la función de moderación de fotos (ver moderate-photo) de que hay una foto nueva que
+-- revisar. Igual que _notify_push: si no está configurada, no pasa nada (la foto queda pendiente;
+-- ver _approve_unmoderated_photos para el respaldo si la función nunca llega a avisar).
+create or replace function public._notify_moderation(p_photo uuid, p_url text)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_url text;
+  v_secret text;
+begin
+  select moderate_function_url, push_shared_secret into v_url, v_secret from platform_settings where id = 1;
+  if v_url is null or btrim(v_url) = '' then return; end if;
+  perform net.http_post(
+    url := v_url,
+    body := jsonb_build_object('photo_id', p_photo, 'url', p_url),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-push-secret', coalesce(v_secret, '')),
+    timeout_milliseconds := 5000
+  );
+exception when others then
+  null;
+end;
+$$;
+
+-- Respaldo si moderate-photo no está configurada o nunca respondió: aprueba sola cualquier foto
+-- que lleve más de un día "pendiente", para que una galería no se quede rota para siempre.
+-- Se llama una vez por hora (ver tarea programada en la sección 3).
+create or replace function public._approve_unmoderated_photos()
+returns void language sql security definer set search_path = public as $$
+  update gallery_photos set moderation_status = 'aprobada'
+  where moderation_status = 'pendiente' and created_at < now() - interval '1 day';
+$$;
+
 -- Aviso a los clientes con cita mañana (misma hora de negocio) que hayan aceptado notificaciones.
 -- Se llama una vez al día (ver tarea programada en la sección 3).
 create or replace function public._send_daily_reminders()
@@ -1028,6 +1069,27 @@ drop trigger if exists reviews_guard on public.reviews;
 create trigger reviews_guard before update on public.reviews
   for each row execute function public.reviews_guard();
 
+-- El dueño no puede aprobar o rechazar sus propias fotos: solo moderate-photo (con la clave de
+-- servicio, no como "authenticated") puede tocar moderation_status/moderation_note.
+create or replace function public.gallery_photos_guard()
+returns trigger language plpgsql as $$
+begin
+  if current_user in ('authenticated', 'anon') then
+    if tg_op = 'INSERT' then
+      new.moderation_status := 'pendiente';
+      new.moderation_note := null;
+    else
+      new.moderation_status := old.moderation_status;
+      new.moderation_note := old.moderation_note;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists gallery_photos_guard on public.gallery_photos;
+create trigger gallery_photos_guard before insert or update on public.gallery_photos
+  for each row execute function public.gallery_photos_guard();
+
 -- Evita que alguien cambie el token o el negocio de una cita
 create or replace function public.appointments_guard()
 returns trigger language plpgsql as $$
@@ -1098,6 +1160,18 @@ drop trigger if exists appointments_notify on public.appointments;
 create trigger appointments_notify after insert or update on public.appointments
   for each row execute function public._appointments_notify();
 
+-- Manda cada foto nueva de galería a revisión automática (ver _notify_moderation)
+create or replace function public._gallery_photos_notify()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  perform _notify_moderation(new.id, new.url);
+  return new;
+end;
+$$;
+drop trigger if exists gallery_photos_notify on public.gallery_photos;
+create trigger gallery_photos_notify after insert on public.gallery_photos
+  for each row execute function public._gallery_photos_notify();
+
 -- Tarea diaria: recordatorios push a clientes con cita mañana (ver _send_daily_reminders). Si el
 -- plan de Supabase no admite pg_cron, no pasa nada: solo faltarán los recordatorios automáticos.
 do $$
@@ -1112,6 +1186,10 @@ begin
     perform cron.unschedule('citora-no-asistio');
   end if;
   perform cron.schedule('citora-no-asistio', '0 * * * *', $cron$select public._auto_mark_no_shows();$cron$);
+  if exists (select 1 from cron.job where jobname = 'citora-fotos-pendientes') then
+    perform cron.unschedule('citora-fotos-pendientes');
+  end if;
+  perform cron.schedule('citora-fotos-pendientes', '30 * * * *', $cron$select public._approve_unmoderated_photos();$cron$);
   if exists (select 1 from cron.job where jobname = 'citora-vencimiento') then
     perform cron.unschedule('citora-vencimiento');
   end if;
@@ -1214,7 +1292,7 @@ begin
     'gallery', case when plan_has(v_plan, 'galeria') then coalesce((
       select jsonb_agg(jsonb_build_object('id', g.id, 'url', g.url, 'caption', g.caption)
                        order by g.position, g.created_at)
-      from gallery_photos g where g.business_id = b.id), '[]'::jsonb)
+      from gallery_photos g where g.business_id = b.id and g.moderation_status = 'aprobada'), '[]'::jsonb)
       else '[]'::jsonb end
   );
 end;
@@ -2497,6 +2575,7 @@ grant execute on function public.my_plan_has(text) to authenticated;
 grant execute on function public.plan_has(text, text) to anon, authenticated;
 grant execute on function public._appt_done(text, timestamptz) to anon, authenticated;
 grant execute on function public.reviews_guard() to authenticated;
+grant execute on function public.gallery_photos_guard() to authenticated;
 grant execute on function public.discounts_guard() to authenticated;
 
 -- Funciones usadas dentro de las reglas RLS y disparadores
@@ -2511,6 +2590,7 @@ grant execute on function public._clean_appearance(jsonb) to authenticated;
 grant execute on function public.businesses_guard() to authenticated;
 grant execute on function public.appointments_guard() to authenticated;
 grant execute on function public._appointments_notify() to authenticated;
+grant execute on function public._gallery_photos_notify() to authenticated;
 grant execute on function public.schedule_days_normalize() to authenticated;
 grant execute on function public.staff_schedule_days_normalize() to authenticated;
 grant execute on function public.staff_services_guard() to authenticated;
@@ -2530,6 +2610,8 @@ revoke execute on function public._notify_push(uuid, text, uuid, text, text) fro
 revoke execute on function public._send_daily_reminders() from anon, authenticated;
 revoke execute on function public._auto_mark_no_shows() from anon, authenticated;
 revoke execute on function public._send_expiry_reminders() from anon, authenticated;
+revoke execute on function public._notify_moderation(uuid, text) from anon, authenticated;
+revoke execute on function public._approve_unmoderated_photos() from anon, authenticated;
 revoke execute on function public._appointments_notify() from anon;
 revoke execute on function public.staff_services_guard() from anon;
 revoke execute on function public.staff_schedule_days_normalize() from anon;
