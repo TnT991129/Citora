@@ -212,7 +212,7 @@ export interface PaymentClaim {
   months: number
   amount: number | null
   note: string | null
-  proof_url: string | null
+  proof_path: string | null
   status: PaymentClaimStatus
   admin_note: string | null
   created_at: string

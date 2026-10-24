@@ -35,7 +35,8 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
   const [claims, setClaims] = useState<PaymentClaim[]>([])
   const [months, setMonths] = useState(1)
   const [error, setError] = useState<string | null>(null)
-  const [proofUrl, setProofUrl] = useState<string | null>(null)
+  const [proofPath, setProofPath] = useState<string | null>(null)
+  const [proofPreview, setProofPreview] = useState<string | null>(null)
   const [note, setNote] = useState('')
   const [uploading, setUploading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -69,10 +70,11 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
     try {
       const blob = await shrinkImage(file, 1000)
       const path = `${business.id}/pago-${Date.now()}.${imageExt(blob)}`
-      const { error: upErr } = await supabase.storage.from('logos').upload(path, blob, { contentType: blob.type })
+      const { error: upErr } = await supabase.storage.from('payment-proofs').upload(path, blob, { contentType: blob.type })
       if (upErr) throw upErr
-      const { data } = supabase.storage.from('logos').getPublicUrl(path)
-      setProofUrl(data.publicUrl)
+      if (proofPreview) URL.revokeObjectURL(proofPreview)
+      setProofPath(path)
+      setProofPreview(URL.createObjectURL(blob))
     } catch (e) {
       setError(errorMessage(e))
     } finally {
@@ -80,17 +82,23 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
     }
   }
 
+  const removeProof = () => {
+    if (proofPreview) URL.revokeObjectURL(proofPreview)
+    setProofPath(null)
+    setProofPreview(null)
+  }
+
   const submitClaim = async () => {
-    if (!proofUrl) return
+    if (!proofPath) return
     setSubmitting(true)
     setError(null)
     const { error } = await supabase.rpc('submit_payment_claim', {
-      p_months: months, p_amount: amount, p_note: note.trim() || null, p_proof_url: proofUrl,
+      p_months: months, p_amount: amount, p_note: note.trim() || null, p_proof_path: proofPath,
     })
     setSubmitting(false)
     if (error) return setError(errorMessage(error))
     flash('Pago declarado, lo revisamos pronto')
-    setProofUrl(null)
+    removeProof()
     setNote('')
     loadClaims()
   }
@@ -166,10 +174,10 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
       <section className="card space-y-3">
         <h2 className="font-bold">3. Declara tu pago</h2>
         <p className="text-sm text-slate-500">Sube la captura de la transferencia. La revisamos y activamos tu mes en cuanto la confirmemos — normalmente más rápido que por WhatsApp.</p>
-        {proofUrl ? (
+        {proofPreview ? (
           <div className="flex items-center gap-3">
-            <img src={proofUrl} alt="" className="h-20 w-20 rounded-xl object-cover ring-1 ring-slate-200" />
-            <Button variant="ghost" size="sm" onClick={() => setProofUrl(null)}>Quitar</Button>
+            <img src={proofPreview} alt="" className="h-20 w-20 rounded-xl object-cover ring-1 ring-slate-200" />
+            <Button variant="ghost" size="sm" onClick={removeProof}>Quitar</Button>
           </div>
         ) : (
           <Button variant="secondary" onClick={() => fileRef.current?.click()} loading={uploading}>Subir captura</Button>
@@ -186,8 +194,8 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
           }}
         />
         <input className="input" placeholder="Nota (opcional, ej. últimos dígitos de la tarjeta)" value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} />
-        {!proofUrl && <p className="text-sm text-amber-700">Sube la captura para poder declarar el pago.</p>}
-        <Button block size="lg" onClick={submitClaim} loading={submitting} disabled={!proofUrl}>Declarar pago de {money(amount, 'CUP')}</Button>
+        {!proofPath && <p className="text-sm text-amber-700">Sube la captura para poder declarar el pago.</p>}
+        <Button block size="lg" onClick={submitClaim} loading={submitting} disabled={!proofPath}>Declarar pago de {money(amount, 'CUP')}</Button>
         {info.admin_whatsapp && (
           <LinkButton href={waLink(info.admin_whatsapp, message)} variant="ghost" size="sm" newTab>
             <WhatsAppIcon className="h-4 w-4" /> O avísanos por WhatsApp

@@ -416,7 +416,7 @@ interface AdminClaim {
   months: number
   amount: number | null
   note: string | null
-  proof_url: string | null
+  proof_path: string | null
   status: PaymentClaimStatus
   admin_note: string | null
   created_at: string
@@ -425,6 +425,7 @@ interface AdminClaim {
 
 function PaymentClaims() {
   const [list, setList] = useState<AdminClaim[] | null>(null)
+  const [proofUrls, setProofUrls] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<PaymentClaimStatus | 'todos'>('pendiente')
   const [busy, setBusy] = useState<string | null>(null)
@@ -436,8 +437,16 @@ function PaymentClaims() {
       .select('*, businesses(name, code, whatsapp)')
       .order('created_at', { ascending: false })
       .limit(200)
-    if (error) setError(errorMessage(error))
-    else setList(data as unknown as AdminClaim[])
+    if (error) return setError(errorMessage(error))
+    const claims = data as unknown as AdminClaim[]
+    setList(claims)
+    const paths = claims.map((c) => c.proof_path).filter((p): p is string => !!p && !p.startsWith('sin-comprobante'))
+    if (paths.length) {
+      const { data: signed } = await supabase.storage.from('payment-proofs').createSignedUrls(paths, 3600)
+      const urls: Record<string, string> = {}
+      signed?.forEach((s) => { if (s.signedUrl && s.path) urls[s.path] = s.signedUrl })
+      setProofUrls(urls)
+    }
   }, [])
 
   useEffect(() => {
@@ -484,9 +493,9 @@ function PaymentClaims() {
         {filtered.length === 0 && <p className="py-6 text-center text-slate-500">No hay declaraciones con ese filtro.</p>}
         {filtered.map((c) => (
           <div key={c.id} className="card flex flex-wrap gap-3">
-            {c.proof_url && (
-              <a href={c.proof_url} target="_blank" rel="noreferrer" className="shrink-0">
-                <img src={c.proof_url} alt="Comprobante" className="h-24 w-24 rounded-xl object-cover ring-1 ring-slate-200" />
+            {c.proof_path && proofUrls[c.proof_path] && (
+              <a href={proofUrls[c.proof_path]} target="_blank" rel="noreferrer" className="shrink-0">
+                <img src={proofUrls[c.proof_path]} alt="Comprobante" className="h-24 w-24 rounded-xl object-cover ring-1 ring-slate-200" />
               </a>
             )}
             <div className="min-w-0 flex-1">

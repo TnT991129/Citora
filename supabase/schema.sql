@@ -213,7 +213,7 @@ create table if not exists public.payment_claims (
   months int not null check (months between 1 and 24),
   amount numeric(10, 2) check (amount is null or amount >= 0),
   note text check (char_length(note) <= 300),
-  proof_url text,
+  proof_path text,
   status text not null default 'pendiente' check (status in ('pendiente', 'aprobado', 'rechazado')),
   admin_note text check (char_length(admin_note) <= 300),
   created_at timestamptz not null default now(),
@@ -223,14 +223,32 @@ create table if not exists public.payment_claims (
 create index if not exists payment_claims_business_idx on public.payment_claims (business_id, created_at desc);
 create index if not exists payment_claims_status_idx on public.payment_claims (status, created_at);
 
+-- La captura se guarda en el almacén privado "payment-proofs" (ver sección 9): esta columna pasa
+-- de "proof_url" (URL pública completa) a "proof_path" (solo la ruta dentro del almacén; la URL
+-- para verla se genera al vuelo, firmada y de corta duración, en vez de quedar fija y pública).
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_name = 'payment_claims' and column_name = 'proof_url')
+     and not exists (select 1 from information_schema.columns where table_name = 'payment_claims' and column_name = 'proof_path') then
+    alter table public.payment_claims rename column proof_url to proof_path;
+  end if;
+end;
+$$;
+-- Las declaraciones de antes de este cambio guardaban la URL pública completa del almacén
+-- "logos" (donde vivían antes las capturas); se recorta a solo la ruta, que es donde quedó el
+-- archivo ya movido al nuevo almacén.
+update public.payment_claims
+   set proof_path = regexp_replace(proof_path, '^https?://[^/]+/storage/v1/object/public/logos/', '')
+ where proof_path ~ '^https?://[^/]+/storage/v1/object/public/logos/';
+
 -- Sin captura no hay declaración válida (evita declarar "a ciegas", sin comprobante que revisar).
 -- Las declaraciones de prueba de antes de esta regla (sin captura) se marcan para no romper la
 -- restricción al añadirla.
-update public.payment_claims set proof_url = 'sin-comprobante (declarada antes de exigirlo)'
- where proof_url is null or btrim(proof_url) = '';
+update public.payment_claims set proof_path = 'sin-comprobante (declarada antes de exigirlo)'
+ where proof_path is null or btrim(proof_path) = '';
 alter table public.payment_claims drop constraint if exists payment_claims_proof_required;
 alter table public.payment_claims add constraint payment_claims_proof_required
-  check (proof_url is not null and btrim(proof_url) <> '');
+  check (proof_path is not null and btrim(proof_path) <> '');
 
 -- Opiniones de los clientes (una por cita). El dueño puede ocultarlas o responder.
 create table if not exists public.reviews (
@@ -2364,7 +2382,7 @@ end;
 $$;
 
 -- El dueño declara que pagó (ver payment_claims): sube su captura y los datos desde su panel.
-create or replace function public.submit_payment_claim(p_months int, p_amount numeric default null, p_note text default null, p_proof_url text default null)
+create or replace function public.submit_payment_claim(p_months int, p_amount numeric default null, p_note text default null, p_proof_path text default null)
 returns uuid language plpgsql volatile security definer set search_path = public as $$
 declare
   v_business uuid := my_business_id();
@@ -2372,9 +2390,9 @@ declare
 begin
   if v_business is null then raise exception 'SIN_NEGOCIO'; end if;
   if p_months is null or p_months not between 1 and 24 then raise exception 'MESES_INVALIDOS'; end if;
-  if nullif(btrim(coalesce(p_proof_url, '')), '') is null then raise exception 'FALTA_COMPROBANTE'; end if;
-  insert into payment_claims (business_id, months, amount, note, proof_url)
-  values (v_business, p_months, p_amount, nullif(btrim(coalesce(p_note, '')), ''), p_proof_url)
+  if nullif(btrim(coalesce(p_proof_path, '')), '') is null then raise exception 'FALTA_COMPROBANTE'; end if;
+  insert into payment_claims (business_id, months, amount, note, proof_path)
+  values (v_business, p_months, p_amount, nullif(btrim(coalesce(p_note, '')), ''), p_proof_path)
   returning id into v_id;
   return v_id;
 end;
@@ -2642,6 +2660,26 @@ begin
       using (bucket_id = 'logos' and (storage.foldername(name))[1] = public.my_business_id()::text)$p$;
     execute $p$create policy "logos_owner_delete" on storage.objects for delete to authenticated
       using (bucket_id = 'logos' and (storage.foldername(name))[1] = public.my_business_id()::text)$p$;
+  end if;
+end;
+$$;
+
+-- Comprobantes de pago: a diferencia de "logos", este almacén es privado. Solo el negocio que
+-- subió su captura y el administrador (que es quien las revisa) pueden verla; para mostrarla se
+-- genera una URL firmada de corta duración, nunca un enlace público fijo.
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_schema = 'storage' and table_name = 'buckets') then
+    insert into storage.buckets (id, name, public) values ('payment-proofs', 'payment-proofs', false)
+      on conflict (id) do update set public = false;
+
+    execute 'drop policy if exists "payment_proofs_select" on storage.objects';
+    execute 'drop policy if exists "payment_proofs_insert" on storage.objects';
+    execute $p$create policy "payment_proofs_select" on storage.objects for select to authenticated
+      using (bucket_id = 'payment-proofs'
+             and ((storage.foldername(name))[1] = public.my_business_id()::text or public.is_platform_admin()))$p$;
+    execute $p$create policy "payment_proofs_insert" on storage.objects for insert to authenticated
+      with check (bucket_id = 'payment-proofs' and (storage.foldername(name))[1] = public.my_business_id()::text)$p$;
   end if;
 end;
 $$;
