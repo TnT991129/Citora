@@ -204,6 +204,21 @@ export interface MyStatus {
   code: string
 }
 
+export type PaymentClaimStatus = 'pendiente' | 'aprobado' | 'rechazado'
+
+export interface PaymentClaim {
+  id: string
+  business_id: string
+  months: number
+  amount: number | null
+  note: string | null
+  proof_url: string | null
+  status: PaymentClaimStatus
+  admin_note: string | null
+  created_at: string
+  resolved_at: string | null
+}
+
 export interface PublicService {
   id: string
   name: string

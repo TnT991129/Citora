@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
-import { Alert, Button, CopyButton, LinkButton, PageLoader, StatusBadge, WhatsAppIcon } from '../../components/ui'
+import { useEffect, useRef, useState } from 'react'
+import { Alert, Button, CopyButton, LinkButton, PageLoader, StatusBadge, WhatsAppIcon, flash } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { daysLeft, fullDateFromIso, money } from '../../lib/format'
+import { shrinkImage, imageExt } from '../../lib/image'
 import { INCLUDED, MODULES, PLAN_LABEL } from '../../lib/plans'
 import { supabase } from '../../lib/supabase'
-import type { PlanKey } from '../../lib/types'
+import type { PaymentClaim, PlanKey } from '../../lib/types'
 import { waLink } from '../../lib/whatsapp'
 import { usePanel } from './context'
 
@@ -30,12 +31,22 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
   const { business, status } = usePanel()
   const [info, setInfo] = useState<PaymentInfo | null>(null)
   const [history, setHistory] = useState<PaymentRow[]>([])
+  const [claims, setClaims] = useState<PaymentClaim[]>([])
   const [months, setMonths] = useState(1)
   const [error, setError] = useState<string | null>(null)
+  const [proofUrl, setProofUrl] = useState<string | null>(null)
+  const [note, setNote] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const loadClaims = () =>
+    supabase.from('payment_claims').select('*').order('created_at', { ascending: false }).limit(10).then(({ data }) => setClaims((data as PaymentClaim[]) || []))
 
   useEffect(() => {
     supabase.rpc('get_payment_info').then(({ data, error }) => (error ? setError(errorMessage(error)) : setInfo(data as PaymentInfo)))
     supabase.from('payments').select('*').order('created_at', { ascending: false }).limit(12).then(({ data }) => setHistory((data as PaymentRow[]) || []))
+    loadClaims()
   }, [])
 
   if (error) return <Alert>{error}</Alert>
@@ -50,6 +61,37 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
     `Importe: *${money(amount, 'CUP')}*`,
     'Te adjunto la captura del pago.',
   ].join('\n')
+
+  const uploadProof = async (file: File) => {
+    setUploading(true)
+    setError(null)
+    try {
+      const blob = await shrinkImage(file, 1000)
+      const path = `${business.id}/pago-${Date.now()}.${imageExt(blob)}`
+      const { error: upErr } = await supabase.storage.from('logos').upload(path, blob, { contentType: blob.type })
+      if (upErr) throw upErr
+      const { data } = supabase.storage.from('logos').getPublicUrl(path)
+      setProofUrl(data.publicUrl)
+    } catch (e) {
+      setError(errorMessage(e))
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const submitClaim = async () => {
+    setSubmitting(true)
+    setError(null)
+    const { error } = await supabase.rpc('submit_payment_claim', {
+      p_months: months, p_amount: amount, p_note: note.trim() || null, p_proof_url: proofUrl,
+    })
+    setSubmitting(false)
+    if (error) return setError(errorMessage(error))
+    flash('Pago declarado, lo revisamos pronto')
+    setProofUrl(null)
+    setNote('')
+    loadClaims()
+  }
 
   return (
     <div className="space-y-5">
@@ -111,16 +153,57 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
       </section>
 
       <section className="card space-y-3">
-        <h2 className="font-bold">3. Envía la captura por WhatsApp</h2>
-        <p className="text-sm text-slate-500">Se abre WhatsApp con el mensaje escrito. Solo adjunta la captura. Activamos tu mes en cuanto confirmemos el pago.</p>
-        {info.admin_whatsapp ? (
-          <LinkButton href={waLink(info.admin_whatsapp, message)} variant="whatsapp" size="lg" block newTab>
-            <WhatsAppIcon /> Enviar comprobante
-          </LinkButton>
+        <h2 className="font-bold">3. Declara tu pago</h2>
+        <p className="text-sm text-slate-500">Sube la captura de la transferencia. La revisamos y activamos tu mes en cuanto la confirmemos — normalmente más rápido que por WhatsApp.</p>
+        {proofUrl ? (
+          <div className="flex items-center gap-3">
+            <img src={proofUrl} alt="" className="h-20 w-20 rounded-xl object-cover ring-1 ring-slate-200" />
+            <Button variant="ghost" size="sm" onClick={() => setProofUrl(null)}>Quitar</Button>
+          </div>
         ) : (
-          <Alert kind="warning">Falta configurar el WhatsApp de Citora.</Alert>
+          <Button variant="secondary" onClick={() => fileRef.current?.click()} loading={uploading}>Subir captura</Button>
+        )}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            if (f) uploadProof(f)
+            e.target.value = ''
+          }}
+        />
+        <input className="input" placeholder="Nota (opcional, ej. últimos dígitos de la tarjeta)" value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} />
+        <Button block size="lg" onClick={submitClaim} loading={submitting}>Declarar pago de {money(amount, 'CUP')}</Button>
+        {info.admin_whatsapp && (
+          <LinkButton href={waLink(info.admin_whatsapp, message)} variant="ghost" size="sm" newTab>
+            <WhatsAppIcon className="h-4 w-4" /> O avísanos por WhatsApp
+          </LinkButton>
         )}
       </section>
+
+      {claims.length > 0 && (
+        <section className="card">
+          <h2 className="font-bold">Tus declaraciones</h2>
+          <ul className="mt-2 divide-y divide-slate-100 text-sm">
+            {claims.map((c) => (
+              <li key={c.id} className="flex items-center justify-between gap-2 py-2">
+                <span>
+                  {fullDateFromIso(c.created_at, business.timezone)} · {c.months} {c.months === 1 ? 'mes' : 'meses'}
+                  {c.amount != null && <> · {money(c.amount, 'CUP')}</>}
+                  {c.status === 'rechazado' && c.admin_note && <span className="block text-xs text-red-600">{c.admin_note}</span>}
+                </span>
+                <span className={`chip text-xs ${
+                  c.status === 'aprobado' ? 'bg-emerald-100 text-emerald-700' : c.status === 'rechazado' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                }`}>
+                  {c.status === 'aprobado' ? 'Aprobado' : c.status === 'rechazado' ? 'Rechazado' : 'Pendiente'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {history.length > 0 && (
         <section className="card">

@@ -10,7 +10,7 @@ import { daysLeft, fullDateFromIso, money } from '../../lib/format'
 import { PLAN_LABEL, SINGLE_PLAN } from '../../lib/plans'
 import { supabase } from '../../lib/supabase'
 import { businessType } from '../../lib/templates'
-import type { BusinessStatus, PlanKey } from '../../lib/types'
+import type { BusinessStatus, PaymentClaimStatus, PlanKey } from '../../lib/types'
 import { publicUrl } from '../../lib/url'
 import { waLink } from '../../lib/whatsapp'
 import AdminStats from './AdminStats'
@@ -51,7 +51,7 @@ interface Settings {
 export default function Admin() {
   const session = useSession()
   const [isAdmin, setIsAdmin] = useState<boolean | undefined>(undefined)
-  const [tab, setTab] = useState<'duenos' | 'estadisticas' | 'ajustes'>('duenos')
+  const [tab, setTab] = useState<'duenos' | 'pagos' | 'estadisticas' | 'ajustes'>('duenos')
 
   useEffect(() => {
     setBrandColor(null)
@@ -88,9 +88,9 @@ export default function Admin() {
             <span className="chip bg-slate-900 text-white">Admin</span>
           </div>
           <div className="flex items-center gap-1">
-            {(['duenos', 'estadisticas', 'ajustes'] as const).map((t) => (
+            {(['duenos', 'pagos', 'estadisticas', 'ajustes'] as const).map((t) => (
               <button key={t} onClick={() => setTab(t)} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${tab === t ? 'bg-citora-100 text-citora-700' : 'text-slate-600 hover:bg-slate-100'}`}>
-                {t === 'duenos' ? 'Dueños' : t === 'estadisticas' ? 'Estadísticas' : 'Ajustes'}
+                {t === 'duenos' ? 'Dueños' : t === 'pagos' ? 'Pagos' : t === 'estadisticas' ? 'Estadísticas' : 'Ajustes'}
               </button>
             ))}
             <ThemeToggle />
@@ -98,7 +98,9 @@ export default function Admin() {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-5">{tab === 'duenos' ? <Owners /> : tab === 'estadisticas' ? <AdminStats /> : <SettingsForm />}</main>
+      <main className="mx-auto max-w-5xl px-4 py-5">
+        {tab === 'duenos' ? <Owners /> : tab === 'pagos' ? <PaymentClaims /> : tab === 'estadisticas' ? <AdminStats /> : <SettingsForm />}
+      </main>
     </div>
   )
 }
@@ -373,6 +375,150 @@ function ActivateModal({ business, prices, onClose, onDone }: {
         <p className="text-xs text-slate-500">Si todavía tiene meses pagados, los nuevos se suman al final.</p>
         {error && <Alert>{error}</Alert>}
       </div>
+    </Modal>
+  )
+}
+
+interface AdminClaim {
+  id: string
+  business_id: string
+  months: number
+  amount: number | null
+  note: string | null
+  proof_url: string | null
+  status: PaymentClaimStatus
+  admin_note: string | null
+  created_at: string
+  businesses: { name: string; code: string; whatsapp: string } | null
+}
+
+function PaymentClaims() {
+  const [list, setList] = useState<AdminClaim[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [filter, setFilter] = useState<PaymentClaimStatus | 'todos'>('pendiente')
+  const [busy, setBusy] = useState<string | null>(null)
+  const [rejecting, setRejecting] = useState<AdminClaim | null>(null)
+
+  const load = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('payment_claims')
+      .select('*, businesses(name, code, whatsapp)')
+      .order('created_at', { ascending: false })
+      .limit(200)
+    if (error) setError(errorMessage(error))
+    else setList(data as unknown as AdminClaim[])
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  if (error) return <Alert>{error}</Alert>
+  if (!list) return <PageLoader />
+
+  const count = (f: PaymentClaimStatus) => list.filter((c) => c.status === f).length
+  const filtered = filter === 'todos' ? list : list.filter((c) => c.status === filter)
+
+  const approve = async (c: AdminClaim) => {
+    setBusy(c.id)
+    const { data, error } = await supabase.rpc('admin_approve_payment_claim', { p_claim_id: c.id })
+    setBusy(null)
+    if (error) return setError(errorMessage(error))
+    flash(`Activo hasta el ${fullDateFromIso(data as string, TZ)}`)
+    load()
+  }
+
+  const reject = async (c: AdminClaim, note: string) => {
+    setBusy(c.id)
+    const { error } = await supabase.rpc('admin_reject_payment_claim', { p_claim_id: c.id, p_note: note || null })
+    setBusy(null)
+    if (error) return setError(errorMessage(error))
+    flash('Declaración rechazada')
+    setRejecting(null)
+    load()
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-1">
+        {(['pendiente', 'aprobado', 'rechazado', 'todos'] as const).map((f) => (
+          <button key={f} onClick={() => setFilter(f)} className={`rounded-full px-3 py-1.5 text-sm font-semibold ${filter === f ? 'bg-slate-900 text-white' : 'bg-white ring-1 ring-slate-300'}`}>
+            {f === 'pendiente' ? 'Pendientes' : f === 'aprobado' ? 'Aprobados' : f === 'rechazado' ? 'Rechazados' : 'Todos'}
+            {f !== 'todos' && ` (${count(f)})`}
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-2">
+        {filtered.length === 0 && <p className="py-6 text-center text-slate-500">No hay declaraciones con ese filtro.</p>}
+        {filtered.map((c) => (
+          <div key={c.id} className="card flex flex-wrap gap-3">
+            {c.proof_url && (
+              <a href={c.proof_url} target="_blank" rel="noreferrer" className="shrink-0">
+                <img src={c.proof_url} alt="Comprobante" className="h-24 w-24 rounded-xl object-cover ring-1 ring-slate-200" />
+              </a>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate font-bold">
+                    {c.businesses?.name || 'Negocio eliminado'} {c.businesses?.code && <span className="font-mono text-sm text-slate-500">{c.businesses.code}</span>}
+                  </p>
+                  <p className="text-sm text-slate-500">
+                    {fullDateFromIso(c.created_at, TZ)} · {c.months} {c.months === 1 ? 'mes' : 'meses'}
+                    {c.amount != null && <> · {money(c.amount, 'CUP')}</>}
+                  </p>
+                  {c.note && <p className="mt-1 text-sm text-slate-600">"{c.note}"</p>}
+                  {c.status === 'rechazado' && c.admin_note && <p className="mt-1 text-sm text-red-600">Motivo: {c.admin_note}</p>}
+                </div>
+                <span className={`chip text-xs ${
+                  c.status === 'aprobado' ? 'bg-emerald-100 text-emerald-700' : c.status === 'rechazado' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                }`}>
+                  {c.status === 'aprobado' ? 'Aprobado' : c.status === 'rechazado' ? 'Rechazado' : 'Pendiente'}
+                </span>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {c.status === 'pendiente' && (
+                  <>
+                    <Button size="sm" onClick={() => approve(c)} loading={busy === c.id}>Aprobar y activar</Button>
+                    <Button size="sm" variant="ghost" className="text-red-600" onClick={() => setRejecting(c)}>Rechazar</Button>
+                  </>
+                )}
+                {c.businesses?.whatsapp && (
+                  <LinkButton href={waLink(c.businesses.whatsapp, 'Hola, te escribo de Citora sobre tu pago declarado.')} variant="whatsapp" size="sm" newTab>
+                    <WhatsAppIcon className="h-4 w-4" /> WhatsApp
+                  </LinkButton>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {rejecting && (
+        <RejectModal
+          claim={rejecting}
+          busy={busy === rejecting.id}
+          onClose={() => setRejecting(null)}
+          onConfirm={(note) => reject(rejecting, note)}
+        />
+      )}
+    </div>
+  )
+}
+
+function RejectModal({ claim, busy, onClose, onConfirm }: { claim: AdminClaim; busy: boolean; onClose: () => void; onConfirm: (note: string) => void }) {
+  const [note, setNote] = useState('')
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Rechazar · ${claim.businesses?.name || 'declaración'}`}
+      footer={<Button block variant="danger" onClick={() => onConfirm(note)} loading={busy}>Rechazar declaración</Button>}
+    >
+      <Field label="Motivo (se lo muestra al dueño)">
+        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. No coincide el comprobante" />
+      </Field>
     </Modal>
   )
 }

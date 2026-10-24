@@ -208,6 +208,32 @@ do $$ begin
   assert (select count(*) from appointments) = 3, 'vuelve a ver sus citas';
   assert (select count(*) from payments) = 2, 've sus pagos';
 end $$;
+
+-- ===== El dueño declara un pago; el administrador lo aprueba o lo rechaza =====
+select submit_payment_claim(1, 1500, 'Transferencia Transfermóvil') as claim1 \gset
+do $$ begin
+  assert (select count(*) from payment_claims where business_id = my_business_id()) = 1;
+  assert (select status from payment_claims where business_id = my_business_id()) = 'pendiente';
+end $$;
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+select admin_approve_payment_claim(:'claim1');
+do $$ begin
+  assert (select status from payment_claims where id = :'claim1') = 'aprobado';
+  assert (select count(*) from payments) = 3, 'el pago aprobado también queda en payments';
+end $$;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select submit_payment_claim(1, 1500) as claim2 \gset
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+select admin_reject_payment_claim(:'claim2', 'No coincide el comprobante');
+do $$ begin
+  assert (select status from payment_claims where id = :'claim2') = 'rechazado';
+  assert (select count(*) from payments) = 3, 'el rechazado no suma pago';
+end $$;
+select expect_error($$select admin_approve_payment_claim('$$ || :'claim2' || $$')$$, 'NO_DISPONIBLE');
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+do $$ begin assert (select count(*) from payment_claims) = 0, 'dueño 2 no ve las declaraciones ajenas'; end $$;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+
 reset role;
 set role anon;
 do $$ begin

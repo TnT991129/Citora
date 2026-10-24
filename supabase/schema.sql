@@ -196,6 +196,25 @@ alter table public.payments drop constraint if exists payments_business_id_fkey;
 alter table public.payments add constraint payments_business_id_fkey
   foreign key (business_id) references public.businesses(id) on delete set null;
 
+-- El dueño declara un pago (con captura) desde su panel, en vez de solo mandar el comprobante por
+-- WhatsApp. El administrador lo aprueba (eso activa el mes, igual que admin_activate_plan) o lo
+-- rechaza. No sustituye el WhatsApp, lo complementa: queda más rápido de revisar.
+create table if not exists public.payment_claims (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  months int not null check (months between 1 and 24),
+  amount numeric(10, 2) check (amount is null or amount >= 0),
+  note text check (char_length(note) <= 300),
+  proof_url text,
+  status text not null default 'pendiente' check (status in ('pendiente', 'aprobado', 'rechazado')),
+  admin_note text check (char_length(admin_note) <= 300),
+  created_at timestamptz not null default now(),
+  resolved_at timestamptz,
+  resolved_by uuid references auth.users(id) on delete set null
+);
+create index if not exists payment_claims_business_idx on public.payment_claims (business_id, created_at desc);
+create index if not exists payment_claims_status_idx on public.payment_claims (status, created_at);
+
 -- Opiniones de los clientes (una por cita). El dueño puede ocultarlas o responder.
 create table if not exists public.reviews (
   id uuid primary key default gen_random_uuid(),
@@ -654,6 +673,29 @@ returns void language sql security definer set search_path = public as $$
   where status in ('pendiente', 'confirmada') and ends_at < now() - interval '3 hours';
 $$;
 
+-- Avisa al dueño (push) cuando le quedan 3 días o menos de prueba o de mensualidad pagada, para
+-- que no se le venza sin darse cuenta. Se llama una vez al día.
+create or replace function public._send_expiry_reminders()
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  r record;
+begin
+  for r in
+    select b.id, business_status(b.plan, b.trial_ends_at, b.paid_until) as st,
+      case when business_status(b.plan, b.trial_ends_at, b.paid_until) = 'activo' then b.paid_until else b.trial_ends_at end as expires_at
+    from businesses b
+    where business_effective_plan(b.plan, b.trial_ends_at, b.paid_until) is not null
+  loop
+    if r.expires_at between now() and now() + interval '3 days' then
+      perform _notify_push(r.id, 'owner',
+        null,
+        case when r.st = 'activo' then 'Tu mensualidad vence pronto' else 'Tu prueba gratis termina pronto' end,
+        'El ' || to_char(r.expires_at, 'DD/MM') || '. Entra a Más → Mensualidad para pagar y que tus clientes sigan reservando.');
+    end if;
+  end loop;
+end;
+$$;
+
 -- ---------------------------------------------------------------------
 -- 3. DISPARADORES (triggers)
 -- ---------------------------------------------------------------------
@@ -801,6 +843,16 @@ create policy appt_services_owner_select on public.appointment_services for sele
 drop policy if exists payments_select on public.payments;
 create policy payments_select on public.payments for select to authenticated
   using (is_platform_admin() or business_id = my_business_id());
+
+-- payment_claims: el dueño declara los suyos y los ve (no los puede tocar después); el
+-- administrador los ve todos y los resuelve (aprobar/rechazar va por función, no por update directo)
+alter table public.payment_claims enable row level security;
+drop policy if exists payment_claims_select on public.payment_claims;
+create policy payment_claims_select on public.payment_claims for select to authenticated
+  using (is_platform_admin() or business_id = my_business_id());
+drop policy if exists payment_claims_insert on public.payment_claims;
+create policy payment_claims_insert on public.payment_claims for insert to authenticated
+  with check (business_id = my_business_id());
 
 alter table public.reviews enable row level security;
 alter table public.gallery_photos enable row level security;
@@ -1043,6 +1095,11 @@ begin
     perform cron.unschedule('citora-no-asistio');
   end if;
   perform cron.schedule('citora-no-asistio', '0 * * * *', $cron$select public._auto_mark_no_shows();$cron$);
+  if exists (select 1 from cron.job where jobname = 'citora-vencimiento') then
+    perform cron.unschedule('citora-vencimiento');
+  end if;
+  -- 13:00 UTC ≈ 8:00-9:00 en Cuba
+  perform cron.schedule('citora-vencimiento', '0 13 * * *', $cron$select public._send_expiry_reminders();$cron$);
 exception when others then
   null;
 end;
@@ -2197,6 +2254,51 @@ begin
 end;
 $$;
 
+-- El dueño declara que pagó (ver payment_claims): sube su captura y los datos desde su panel.
+create or replace function public.submit_payment_claim(p_months int, p_amount numeric default null, p_note text default null, p_proof_url text default null)
+returns uuid language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_business uuid := my_business_id();
+  v_id uuid;
+begin
+  if v_business is null then raise exception 'SIN_NEGOCIO'; end if;
+  if p_months is null or p_months not between 1 and 24 then raise exception 'MESES_INVALIDOS'; end if;
+  insert into payment_claims (business_id, months, amount, note, proof_url)
+  values (v_business, p_months, p_amount, nullif(btrim(coalesce(p_note, '')), ''), p_proof_url)
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+
+-- El administrador aprueba una declaración de pago: activa el mes (igual que admin_activate_plan,
+-- con el plan único 'ultra') y marca la declaración como resuelta.
+create or replace function public.admin_approve_payment_claim(p_claim_id uuid, p_amount numeric default null, p_note text default null)
+returns timestamptz language plpgsql volatile security definer set search_path = public as $$
+declare
+  c payment_claims;
+  v_until timestamptz;
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  select * into c from payment_claims where id = p_claim_id for update;
+  if not found then raise exception 'NO_DISPONIBLE'; end if;
+  if c.status <> 'pendiente' then raise exception 'NO_DISPONIBLE'; end if;
+  v_until := admin_activate_plan(c.business_id, 'ultra', c.months, coalesce(p_amount, c.amount), coalesce(nullif(btrim(coalesce(p_note, '')), ''), c.note));
+  update payment_claims set status = 'aprobado', resolved_at = now(), resolved_by = auth.uid() where id = c.id;
+  return v_until;
+end;
+$$;
+
+-- El administrador rechaza una declaración de pago (ej. el comprobante no coincide)
+create or replace function public.admin_reject_payment_claim(p_claim_id uuid, p_note text default null)
+returns void language plpgsql volatile security definer set search_path = public as $$
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  update payment_claims
+     set status = 'rechazado', admin_note = nullif(btrim(coalesce(p_note, '')), ''), resolved_at = now(), resolved_by = auth.uid()
+   where id = p_claim_id and status = 'pendiente';
+end;
+$$;
+
 -- Borra para siempre a un dueño inhabilitado (o que nunca creó su negocio): su negocio, servicios,
 -- citas, clientes, opiniones, etc. Con p_delete_account también su cuenta (su correo queda libre).
 -- No se puede con un negocio en prueba o pagando: primero hay que inhabilitarlo.
@@ -2335,6 +2437,7 @@ grant execute on function public.check_slug_available(text) to anon, authenticat
 grant execute on function public.create_business(text, text, text, text, text, text, jsonb, jsonb, text, boolean, numeric) to authenticated;
 grant execute on function public.get_my_business_status() to authenticated;
 grant execute on function public.get_payment_info() to authenticated;
+grant execute on function public.submit_payment_claim(int, numeric, text, text) to authenticated;
 grant execute on function public.save_owner_push_subscription(text, text, text) to authenticated;
 grant execute on function public.owner_create_appointment(uuid[], date, text, text, text, text, uuid) to authenticated;
 grant execute on function public.owner_reschedule_appointment(uuid, date, text) to authenticated;
@@ -2342,6 +2445,8 @@ grant execute on function public.is_platform_admin() to authenticated;
 grant execute on function public.admin_list_businesses() to authenticated;
 grant execute on function public.admin_list_owners() to authenticated;
 grant execute on function public.admin_activate_plan(uuid, text, int, numeric, text) to authenticated;
+grant execute on function public.admin_approve_payment_claim(uuid, numeric, text) to authenticated;
+grant execute on function public.admin_reject_payment_claim(uuid, text) to authenticated;
 grant execute on function public.admin_deactivate_business(uuid) to authenticated;
 grant execute on function public.admin_delete_owner(uuid, boolean) to authenticated;
 grant execute on function public.admin_extend_trial(uuid, int) to authenticated;
@@ -2385,6 +2490,7 @@ revoke execute on function public._discount_for(uuid, text, numeric, boolean) fr
 revoke execute on function public._notify_push(uuid, text, uuid, text, text) from anon, authenticated;
 revoke execute on function public._send_daily_reminders() from anon, authenticated;
 revoke execute on function public._auto_mark_no_shows() from anon, authenticated;
+revoke execute on function public._send_expiry_reminders() from anon, authenticated;
 revoke execute on function public._appointments_notify() from anon;
 revoke execute on function public.staff_services_guard() from anon;
 revoke execute on function public.staff_schedule_days_normalize() from anon;
