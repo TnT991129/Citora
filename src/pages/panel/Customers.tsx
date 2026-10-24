@@ -102,7 +102,7 @@ export default function Customers() {
                   {c.last_visit && <> · última {shortDate(dateKey(c.last_visit, business.timezone))}</>}
                   {c.no_shows > 0 && <span className="text-red-600"> · {c.no_shows} sin venir</span>}
                 </p>
-                {c.next_at && <p className="text-sm font-medium text-brand">Próxima: {shortDate(dateKey(c.next_at, business.timezone))} · {timeOf(c.next_at, business.timezone)}</p>}
+                {c.next_at && <p className="text-sm font-medium text-brand">Próxima: {shortDate(dateKey(c.next_at, business.timezone))} · {timeOf(c.next_at, business.timezone, true)}</p>}
                 {inactive && <p className="text-sm font-medium text-amber-700">⏰ {daysSince} días sin venir</p>}
               </div>
               <span className="shrink-0 font-semibold">{money(c.spent, business.currency)}</span>
@@ -227,7 +227,7 @@ function CustomerModal({ customer: c, business, onClose, onSaved }: {
               {history.map((a) => (
                 <li key={a.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
                   <span className="min-w-0">
-                    <span className="font-medium">{shortDate(dateKey(a.starts_at, tz))} · {timeOf(a.starts_at, tz)}</span>
+                    <span className="font-medium">{shortDate(dateKey(a.starts_at, tz))} · {timeOf(a.starts_at, tz, true)}</span>
                     <span className="block truncate text-slate-500">{servicesText(a)} · {money(a.total, business.currency)}</span>
                   </span>
                   <StatusBadge status={a.status} />

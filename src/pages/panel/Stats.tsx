@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { BarChart, RankBars } from '../../components/BarChart'
 import { Alert, PageLoader } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
-import { addDays, dayTitle, money, shortDate, todayKey, WEEKDAYS, WEEKDAYS_SHORT } from '../../lib/format'
+import { addDays, dayTitle, money, shortDate, time12, todayKey, WEEKDAYS, WEEKDAYS_SHORT } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import type { OwnerStats } from '../../lib/types'
 import { usePanel } from './context'
@@ -165,7 +165,9 @@ function StatsBody({ s, cur, long, expensesLink }: { s: OwnerStats; cur: (n: num
                 height={110}
                 bars={hours.map((h) => {
                   const n = s.by_hour.find((x) => x.hour === h)?.count || 0
-                  return { label: `${h}h`, value: n, tip: `${String(h).padStart(2, '0')}:00 – ${String(h).padStart(2, '0')}:59 · ${n} citas` }
+                  const hh = String(h).padStart(2, '0')
+                  const h12 = h % 12 === 0 ? 12 : h % 12
+                  return { label: `${h12}${h < 12 ? 'a' : 'p'}`, value: n, tip: `${time12(`${hh}:00`)} – ${time12(`${hh}:59`)} · ${n} citas` }
                 })}
               />
             </section>

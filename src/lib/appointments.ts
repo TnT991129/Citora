@@ -32,7 +32,7 @@ export const MESSAGE_LABELS: Record<MessageKind, string> = {
 /** Mensajes de WhatsApp ya escritos para enviar al cliente */
 export function buildMessage(kind: MessageKind, a: Appointment, b: Business): string {
   const day = longDate(dateKey(a.starts_at, b.timezone))
-  const time = timeOf(a.starts_at, b.timezone)
+  const time = timeOf(a.starts_at, b.timezone, true)
   const first = a.customer_name.split(' ')[0]
   const link = bookingUrl(b.slug, a.token)
   switch (kind) {

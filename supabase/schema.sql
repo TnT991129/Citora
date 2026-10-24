@@ -634,7 +634,7 @@ declare
   a record;
 begin
   for a in
-    select ap.id, ap.business_id, ap.customer_name, b.name, to_char(ap.starts_at at time zone b.timezone, 'HH24:MI') as hora
+    select ap.id, ap.business_id, ap.customer_name, b.name, to_char(ap.starts_at at time zone b.timezone, 'HH12:MI AM') as hora
     from appointments ap join businesses b on b.id = ap.business_id
     where ap.status in ('pendiente', 'confirmada')
       and (ap.starts_at at time zone b.timezone)::date = ((now() at time zone b.timezone)::date + 1)
@@ -991,7 +991,7 @@ declare
 begin
   select * into b from businesses where id = new.business_id;
   if not found then return new; end if;
-  v_when := to_char(new.starts_at at time zone b.timezone, 'DD/MM HH24:MI');
+  v_when := to_char(new.starts_at at time zone b.timezone, 'DD/MM HH12:MI AM');
 
   -- Las citas nuevas se avisan desde create_booking (ahí sí hay a mano los servicios y el
   -- teléfono para mandar un aviso completo); aquí solo se ignoran para no avisar dos veces.
@@ -1500,7 +1500,7 @@ begin
   select string_agg(s.name, ', ' order by s.is_extra, s.position) into v_services
     from services s where s.business_id = b.id and s.id = any (p_service_ids);
   perform _notify_push(b.id, 'owner', null, 'Nueva cita: ' || v_name,
-    to_char(v_start at time zone b.timezone, 'DD/MM HH24:MI') || chr(10) ||
+    to_char(v_start at time zone b.timezone, 'DD/MM HH12:MI AM') || chr(10) ||
     v_services || ' · ' || trim(to_char(v_total - v_disc, 'FM999G999G990')) || ' ' || b.currency || chr(10) ||
     'Tel: ' || v_phone);
 

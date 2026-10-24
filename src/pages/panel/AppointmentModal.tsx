@@ -66,7 +66,7 @@ export function AppointmentModal({ appointment, onClose, onChanged }: {
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-lg font-bold">{dayTitle(dateKey(a.starts_at, tz))}</p>
-            <p className="font-semibold text-brand">{timeOf(a.starts_at, tz)} – {timeOf(a.ends_at, tz)} · {duration(minutes)}</p>
+            <p className="font-semibold text-brand">{timeOf(a.starts_at, tz, true)} – {timeOf(a.ends_at, tz, true)} · {duration(minutes)}</p>
             {a.staff_id && staff.find((s) => s.id === a.staff_id) && (
               <p className="text-sm text-slate-600">Con <b>{staff.find((s) => s.id === a.staff_id)!.name}</b></p>
             )}

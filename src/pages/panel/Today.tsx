@@ -71,7 +71,7 @@ export default function Today() {
       {next && (
         <div className="rounded-2xl bg-brand p-4 text-white shadow-lg shadow-brand/20">
           <p className="text-sm text-white/80">Próxima cita</p>
-          <p className="mt-1 text-xl font-bold">{timeOf(next.starts_at, tz)} · {next.customer_name}</p>
+          <p className="mt-1 text-xl font-bold">{timeOf(next.starts_at, tz, true)} · {next.customer_name}</p>
           <button onClick={() => setOpen(next)} className="mt-2 text-sm font-semibold underline">Ver detalle</button>
         </div>
       )}
@@ -105,7 +105,7 @@ export default function Today() {
           <ul className="mt-3 divide-y divide-slate-100">
             {tomorrows.map((a) => (
               <li key={a.id} className="flex items-center justify-between gap-2 py-2.5">
-                <span className="min-w-0 truncate"><b>{timeOf(a.starts_at, tz)}</b> · {a.customer_name}</span>
+                <span className="min-w-0 truncate"><b>{timeOf(a.starts_at, tz, true)}</b> · {a.customer_name}</span>
                 {a.customer_phone.length >= 8 ? (
                   <LinkButton href={waLink(a.customer_phone, buildMessage('recordatorio', a, business))} variant="whatsapp" size="sm" newTab>
                     <WhatsAppIcon className="h-4 w-4" /> Recordar

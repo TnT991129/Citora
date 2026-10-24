@@ -10,9 +10,9 @@ export function AppointmentRow({ a, onClick }: { a: Appointment; onClick: () => 
   const faded = a.status === 'cancelada' || a.status === 'no_asistio'
   return (
     <button onClick={onClick} className={`flex w-full items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-sm ring-1 ring-slate-200 transition hover:ring-brand ${faded ? 'opacity-60' : ''}`}>
-      <div className="w-14 shrink-0 text-center">
-        <p className="text-lg font-extrabold leading-tight text-brand">{timeOf(a.starts_at, business.timezone)}</p>
-        <p className="text-[11px] text-slate-400">{timeOf(a.ends_at, business.timezone)}</p>
+      <div className="w-20 shrink-0 text-center">
+        <p className="whitespace-nowrap text-base font-extrabold leading-tight text-brand">{timeOf(a.starts_at, business.timezone, true)}</p>
+        <p className="whitespace-nowrap text-[11px] text-slate-400">{timeOf(a.ends_at, business.timezone, true)}</p>
       </div>
       <div className="min-w-0 flex-1 border-l border-slate-100 pl-3">
         <p className={`truncate font-semibold ${a.status === 'cancelada' ? 'line-through' : ''}`}>{a.customer_name}</p>

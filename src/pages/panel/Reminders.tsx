@@ -79,7 +79,7 @@ export default function Reminders() {
               <li key={a.id} className={`card flex items-center justify-between gap-3 ${a.reminded_at ? 'opacity-60' : ''}`}>
                 <div className="min-w-0">
                   <p className="font-semibold">
-                    <span className="text-brand">{timeOf(a.starts_at, business.timezone)}</span> · {a.customer_name}
+                    <span className="text-brand">{timeOf(a.starts_at, business.timezone, true)}</span> · {a.customer_name}
                   </p>
                   <p className="truncate text-sm text-slate-500">{servicesText(a)}</p>
                   {a.reminded_at && <p className="text-xs text-emerald-700">Recordatorio enviado</p>}

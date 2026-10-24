@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { generateSlots } from '../lib/format'
+import { generateSlots, time12 } from '../lib/format'
 import { Button } from './ui'
 
 /** Lista de horas de inicio de turnos, con añadir / quitar y generador automático */
@@ -21,7 +21,7 @@ export function TimeChips({ value, onChange }: { value: string[]; onChange: (v: 
         {value.length === 0 && <span className="text-sm text-slate-500">Sin turnos</span>}
         {value.map((t) => (
           <span key={t} className="inline-flex items-center gap-1 rounded-full bg-brand/10 py-1 pl-3 pr-1 text-sm font-semibold text-brand">
-            {t}
+            {time12(t)}
             <button
               type="button"
               onClick={() => onChange(value.filter((x) => x !== t))}

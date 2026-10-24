@@ -4,7 +4,7 @@ import { CapacityStepper } from '../../components/CapacityStepper'
 import { TimeChips } from '../../components/TimeChips'
 import { Alert, Button, PageLoader, Toggle, flash } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
-import { normalizeSlot, todayKey, WEEKDAYS, dayTitle } from '../../lib/format'
+import { normalizeSlot, time12, todayKey, WEEKDAYS, dayTitle } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import type { ClosedDay, ClosedSlot, ScheduleDay } from '../../lib/types'
 import { usePanel } from './context'
@@ -182,7 +182,7 @@ export default function Schedule() {
         <ul className="divide-y divide-slate-100">
           {slots.map((s) => (
             <li key={s.id} className="flex items-center justify-between py-2">
-              <span>{dayTitle(s.day)} · {s.start_time.slice(0, 5)}-{s.end_time.slice(0, 5)}{s.reason && <span className="normal-case text-slate-500"> · {s.reason}</span>}</span>
+              <span>{dayTitle(s.day)} · {time12(s.start_time.slice(0, 5))}-{time12(s.end_time.slice(0, 5))}{s.reason && <span className="normal-case text-slate-500"> · {s.reason}</span>}</span>
               <button onClick={() => removeSlot(s.id)} className="text-sm font-semibold text-red-600">Quitar</button>
             </li>
           ))}
