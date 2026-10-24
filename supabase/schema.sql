@@ -993,10 +993,9 @@ begin
   if not found then return new; end if;
   v_when := to_char(new.starts_at at time zone b.timezone, 'DD/MM HH24:MI');
 
+  -- Las citas nuevas se avisan desde create_booking (ahí sí hay a mano los servicios y el
+  -- teléfono para mandar un aviso completo); aquí solo se ignoran para no avisar dos veces.
   if tg_op = 'INSERT' then
-    if new.source = 'web' then
-      perform _notify_push(new.business_id, 'owner', null, 'Nueva cita: ' || new.customer_name, v_when);
-    end if;
     return new;
   end if;
 
@@ -1425,6 +1424,7 @@ declare
   v_start timestamptz;
   v_id uuid;
   v_token text;
+  v_services text;
 begin
   select * into b from businesses where slug = lower(p_slug);
   if not found then raise exception 'NEGOCIO_NO_EXISTE'; end if;
@@ -1494,6 +1494,15 @@ begin
   select v_id, s.id, s.name, s.price, s.duration_min
     from services s where s.business_id = b.id and s.id = any (p_service_ids)
     order by s.is_extra, s.position;
+
+  -- Aviso al dueño con los datos de la reserva (aquí, y no en el disparador, porque aquí sí se
+  -- tienen a mano los servicios y el teléfono)
+  select string_agg(s.name, ', ' order by s.is_extra, s.position) into v_services
+    from services s where s.business_id = b.id and s.id = any (p_service_ids);
+  perform _notify_push(b.id, 'owner', null, 'Nueva cita: ' || v_name,
+    to_char(v_start at time zone b.timezone, 'DD/MM HH24:MI') || chr(10) ||
+    v_services || ' · ' || trim(to_char(v_total - v_disc, 'FM999G999G990')) || ' ' || b.currency || chr(10) ||
+    'Tel: ' || v_phone);
 
   return v_token;
 end;
