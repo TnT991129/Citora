@@ -81,6 +81,7 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
   }
 
   const submitClaim = async () => {
+    if (!proofUrl) return
     setSubmitting(true)
     setError(null)
     const { error } = await supabase.rpc('submit_payment_claim', {
@@ -185,7 +186,8 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
           }}
         />
         <input className="input" placeholder="Nota (opcional, ej. últimos dígitos de la tarjeta)" value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} />
-        <Button block size="lg" onClick={submitClaim} loading={submitting}>Declarar pago de {money(amount, 'CUP')}</Button>
+        {!proofUrl && <p className="text-sm text-amber-700">Sube la captura para poder declarar el pago.</p>}
+        <Button block size="lg" onClick={submitClaim} loading={submitting} disabled={!proofUrl}>Declarar pago de {money(amount, 'CUP')}</Button>
         {info.admin_whatsapp && (
           <LinkButton href={waLink(info.admin_whatsapp, message)} variant="ghost" size="sm" newTab>
             <WhatsAppIcon className="h-4 w-4" /> O avísanos por WhatsApp

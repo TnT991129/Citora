@@ -219,6 +219,11 @@ create table if not exists public.payment_claims (
 create index if not exists payment_claims_business_idx on public.payment_claims (business_id, created_at desc);
 create index if not exists payment_claims_status_idx on public.payment_claims (status, created_at);
 
+-- Sin captura no hay declaración válida (evita declarar "a ciegas", sin comprobante que revisar)
+alter table public.payment_claims drop constraint if exists payment_claims_proof_required;
+alter table public.payment_claims add constraint payment_claims_proof_required
+  check (proof_url is not null and btrim(proof_url) <> '');
+
 -- Opiniones de los clientes (una por cita). El dueño puede ocultarlas o responder.
 create table if not exists public.reviews (
   id uuid primary key default gen_random_uuid(),
@@ -2267,6 +2272,7 @@ declare
 begin
   if v_business is null then raise exception 'SIN_NEGOCIO'; end if;
   if p_months is null or p_months not between 1 and 24 then raise exception 'MESES_INVALIDOS'; end if;
+  if nullif(btrim(coalesce(p_proof_url, '')), '') is null then raise exception 'FALTA_COMPROBANTE'; end if;
   insert into payment_claims (business_id, months, amount, note, proof_url)
   values (v_business, p_months, p_amount, nullif(btrim(coalesce(p_note, '')), ''), p_proof_url)
   returning id into v_id;

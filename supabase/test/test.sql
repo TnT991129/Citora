@@ -210,7 +210,8 @@ do $$ begin
 end $$;
 
 -- ===== El dueño declara un pago; el administrador lo aprueba o lo rechaza =====
-select submit_payment_claim(1, 1500, 'Transferencia Transfermóvil') as claim1 \gset
+select expect_error($$select submit_payment_claim(1, 1500)$$, 'FALTA_COMPROBANTE');
+select submit_payment_claim(1, 1500, 'Transferencia Transfermóvil', 'https://x.test/captura1.jpg') as claim1 \gset
 do $$ begin
   assert (select count(*) from payment_claims where business_id = my_business_id()) = 1;
   assert (select status from payment_claims where business_id = my_business_id()) = 'pendiente';
@@ -222,7 +223,7 @@ do $$ begin
   assert (select count(*) from payments) = 3, 'el pago aprobado también queda en payments';
 end $$;
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
-select submit_payment_claim(1, 1500) as claim2 \gset
+select submit_payment_claim(1, 1500, null, 'https://x.test/captura2.jpg') as claim2 \gset
 set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 select admin_reject_payment_claim(:'claim2', 'No coincide el comprobante');
 do $$ begin
