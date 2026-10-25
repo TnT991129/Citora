@@ -66,7 +66,7 @@ create table if not exists public.businesses (
   address text,
   description text,
   logo_url text,
-  color_primary text not null default '#7c3aed' check (color_primary ~ '^#[0-9a-fA-F]{6}$'),
+  color_primary text not null default '#0d9488' check (color_primary ~ '^#[0-9a-fA-F]{6}$'),
   timezone text not null default 'America/Havana',
   currency text not null default 'CUP',
   policies text,
@@ -2020,7 +2020,7 @@ begin
                           color_primary, trial_ends_at, policies, currency, usd_prices, usd_rate)
   values (v_uid, lower(p_slug), v_code, btrim(p_name), coalesce(nullif(p_type, ''), 'otro'),
           _clean_phone(p_whatsapp), nullif(btrim(coalesce(p_address, '')), ''),
-          coalesce(nullif(p_color, ''), '#7c3aed'),
+          coalesce(nullif(p_color, ''), '#0d9488'),
           now() + make_interval(days => coalesce(v_trial, 3)),
           'Llega 5 minutos antes de tu cita. Si no puedes venir, cancela o cambia la fecha desde el enlace de tu cita.',
           coalesce(p_currency, 'CUP'), coalesce(p_usd_prices, false),

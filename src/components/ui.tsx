@@ -218,9 +218,12 @@ export function CitoraLogo({ className = '' }: { className?: string }) {
   return (
     <span className={`inline-flex items-center gap-2 font-extrabold tracking-tight ${className}`}>
       <svg viewBox="0 0 64 64" className="h-7 w-7" aria-hidden="true">
-        <rect width="64" height="64" rx="16" fill="#5243e5" />
-        <circle cx="32" cy="32" r="17" fill="none" stroke="#fff" strokeWidth="5" />
-        <path d="M32 22v10l7 5" fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+        <rect width="64" height="64" rx="16" fill="#0d9488" />
+        <rect x="15" y="16" width="34" height="34" rx="7" fill="#fff" />
+        <path d="M15 23a7 7 0 0 1 7-7h20a7 7 0 0 1 7 7v3H15z" fill="#0f766e" />
+        <rect x="22" y="11" width="4" height="10" rx="2" fill="#fff" />
+        <rect x="38" y="11" width="4" height="10" rx="2" fill="#fff" />
+        <path d="M23 39l7 7 13-15" fill="none" stroke="#0d9488" strokeWidth="5.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
       <span>Citora</span>
     </span>
