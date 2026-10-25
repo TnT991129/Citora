@@ -5,13 +5,13 @@ import { applyAppearance } from './appearance'
 export function setBrandColor(hex: string | null | undefined): void {
   applyAppearance(null)
   const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '')
-  const rgb = m ? `${parseInt(m[1], 16)} ${parseInt(m[2], 16)} ${parseInt(m[3], 16)}` : '13 148 136'
+  const rgb = m ? `${parseInt(m[1], 16)} ${parseInt(m[2], 16)} ${parseInt(m[3], 16)}` : '240 83 46'
   document.documentElement.style.setProperty('--brand-rgb', rgb)
   const meta = document.querySelector('meta[name="theme-color"]')
-  if (meta) meta.setAttribute('content', m ? `#${m[1]}${m[2]}${m[3]}` : '#0d9488')
+  if (meta) meta.setAttribute('content', m ? `#${m[1]}${m[2]}${m[3]}` : '#f0532e')
 }
 
-export const CITORA_COLOR = '#0d9488'
+export const CITORA_COLOR = '#f0532e'
 
 // Colores listos para elegir, por familias (todos se leen bien con texto blanco)
 export const COLOR_GROUPS: { name: string; colors: string[] }[] = [

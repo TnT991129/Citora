@@ -372,8 +372,8 @@ function ToggleRow({ checked, onChange, label }: { checked: boolean; onChange: (
   )
 }
 
-/** "#0d9488" → "13 148 136" (formato de la variable --brand-rgb) */
+/** "#f0532e" → "240 83 46" (formato de la variable --brand-rgb) */
 function hexToRgb(hex: string): string {
   const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex)
-  return m ? `${parseInt(m[1], 16)} ${parseInt(m[2], 16)} ${parseInt(m[3], 16)}` : '13 148 136'
+  return m ? `${parseInt(m[1], 16)} ${parseInt(m[2], 16)} ${parseInt(m[3], 16)}` : '240 83 46'
 }

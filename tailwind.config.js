@@ -8,8 +8,8 @@ export default {
         brand: 'rgb(var(--brand-rgb) / <alpha-value>)',
         // Color de Citora
         citora: {
-          50: '#f0fdfa', 100: '#ccfbf1', 200: '#99f6e4', 300: '#5eead4', 400: '#2dd4bf',
-          500: '#14b8a6', 600: '#0d9488', 700: '#0f766e', 800: '#115e59', 900: '#134e4a',
+          50: '#fff5f2', 100: '#ffe8e1', 200: '#ffd0c2', 300: '#ffab8f', 400: '#ff8360',
+          500: '#fb6b47', 600: '#f0532e', 700: '#cc3e1f', 800: '#a3331b', 900: '#7f2c19',
         },
       },
       fontFamily: {

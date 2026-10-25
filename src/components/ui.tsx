@@ -1,4 +1,4 @@
-import { useEffect, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { useEffect, useId, type ButtonHTMLAttributes, type ReactNode } from 'react'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'whatsapp'
 
@@ -215,15 +215,22 @@ export function StatusBadge({ status }: { status: string }) {
 }
 
 export function CitoraLogo({ className = '' }: { className?: string }) {
+  const gradId = useId()
   return (
     <span className={`inline-flex items-center gap-2 font-extrabold tracking-tight ${className}`}>
       <svg viewBox="0 0 64 64" className="h-7 w-7" aria-hidden="true">
-        <rect width="64" height="64" rx="16" fill="#0d9488" />
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#fb7185" />
+            <stop offset="1" stopColor="#fb923c" />
+          </linearGradient>
+        </defs>
+        <rect width="64" height="64" rx="16" fill={`url(#${gradId})`} />
         <rect x="15" y="16" width="34" height="34" rx="7" fill="#fff" />
-        <path d="M15 23a7 7 0 0 1 7-7h20a7 7 0 0 1 7 7v3H15z" fill="#0f766e" />
+        <path d="M15 23a7 7 0 0 1 7-7h20a7 7 0 0 1 7 7v3H15z" fill="#e8491f" />
         <rect x="22" y="11" width="4" height="10" rx="2" fill="#fff" />
         <rect x="38" y="11" width="4" height="10" rx="2" fill="#fff" />
-        <path d="M23 39l7 7 13-15" fill="none" stroke="#0d9488" strokeWidth="5.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M23 39l7 7 13-15" fill="none" stroke="#f0532e" strokeWidth="5.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
       <span>Citora</span>
     </span>

@@ -34,7 +34,7 @@ export function newDraft(typeKey = 'otro', currency: CurrencyMode = 'CUP'): Draf
     slug: '',
     whatsapp: '',
     address: '',
-    color: '#0d9488',
+    color: '#f0532e',
     currency,
     services: changeCurrency(t.services.map((s) => ({ ...s })), t.key, 'CUP', currency),
     days: [1, 2, 3, 4, 5, 6],

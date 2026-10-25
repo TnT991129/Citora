@@ -45,7 +45,7 @@ export default function Landing() {
           <div className="flex items-center gap-2">
             <div className="hidden sm:block"><ThemeToggle /></div>
             <Link to="/entrar" className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 sm:block">Entrar</Link>
-            <Link to="/crear" className="rounded-xl bg-citora-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-citora-700">
+            <Link to="/crear" className="rounded-xl bg-gradient-to-br from-rose-400 to-orange-400 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:brightness-105">
               Crear mi app
             </Link>
             <button
@@ -92,7 +92,7 @@ export default function Landing() {
               Tú recibes un aviso, llevas tu agenda ordenada y nunca más se te cruzan dos citas.
             </p>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-              <Link to="/crear" className="rounded-2xl bg-citora-600 px-6 py-4 text-center text-base font-bold text-white shadow-lg shadow-citora-600/20 hover:bg-citora-700">
+              <Link to="/crear" className="rounded-2xl bg-gradient-to-br from-rose-400 to-orange-400 px-6 py-4 text-center text-base font-bold text-white shadow-lg shadow-citora-400/30 hover:brightness-105">
                 Crear mi app gratis
               </Link>
               <a href="#como-funciona" className="rounded-2xl border border-slate-300 px-6 py-4 text-center text-base font-semibold text-slate-800 hover:bg-slate-50">
@@ -225,7 +225,7 @@ export default function Landing() {
             <li className="flex items-start gap-2"><span className="mt-0.5 text-citora-600"><Check /></span><span>App instalable en el móvil</span></li>
             <li className="flex items-start gap-2"><span className="mt-0.5 text-citora-600"><Check /></span><span>Tu enlace, tus colores y tu logo</span></li>
           </ul>
-          <Link to="/crear" className="relative mt-6 block rounded-2xl bg-citora-600 py-3.5 text-center font-bold text-white hover:bg-citora-700">
+          <Link to="/crear" className="relative mt-6 block rounded-2xl bg-gradient-to-br from-rose-400 to-orange-400 py-3.5 text-center font-bold text-white hover:brightness-105">
             Probar {trial} días gratis
           </Link>
         </div>
@@ -260,11 +260,11 @@ export default function Landing() {
       </section>
 
       <section className="px-4 py-16">
-        <div className="relative mx-auto max-w-3xl overflow-hidden rounded-3xl bg-gradient-to-br from-citora-600 to-citora-800 px-6 py-10 text-center text-white">
+        <div className="relative mx-auto max-w-3xl overflow-hidden rounded-3xl bg-gradient-to-br from-rose-400 to-orange-400 px-6 py-10 text-center text-white">
           <div aria-hidden="true" className="pointer-events-none absolute -left-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
           <div aria-hidden="true" className="pointer-events-none absolute -bottom-12 -right-12 h-48 w-48 rounded-full bg-white/10" />
           <h2 className="relative text-3xl font-extrabold">Empieza hoy, gratis</h2>
-          <p className="relative mt-2 text-citora-100">En 5 minutos tienes tu app lista para compartir con tus clientes.</p>
+          <p className="relative mt-2 text-white/90">En 5 minutos tienes tu app lista para compartir con tus clientes.</p>
           <Link to="/crear" className="relative mt-6 inline-block rounded-2xl bg-white px-6 py-4 font-bold text-citora-700 hover:bg-citora-50">
             Crear mi app gratis
           </Link>
