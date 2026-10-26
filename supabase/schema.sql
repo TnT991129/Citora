@@ -529,6 +529,18 @@ alter table public.push_subscriptions enable row level security;
 -- Sin políticas para anon/authenticated: solo se gestiona por las funciones de abajo (con sus propios
 -- controles) y la función de notificaciones las lee con la clave de servicio, sin pasar por RLS.
 
+-- Avisos push para el administrador de la plataforma (ej. negocio nuevo registrado). Aparte de
+-- push_subscriptions porque el administrador no tiene business_id (no es dueño de un negocio).
+create table if not exists public.admin_push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+alter table public.admin_push_subscriptions enable row level security;
+-- Sin políticas para anon/authenticated: igual que push_subscriptions, solo por funciones.
+
 -- ---------------------------------------------------------------------
 -- 2. FUNCIONES DE APOYO
 -- ---------------------------------------------------------------------
@@ -704,6 +716,28 @@ begin
   perform net.http_post(
     url := v_url,
     body := jsonb_build_object('photo_id', p_photo, 'url', p_url),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-push-secret', coalesce(v_secret, '')),
+    timeout_milliseconds := 5000
+  );
+exception when others then
+  null;
+end;
+$$;
+
+-- Avisa a ti (administrador) de algo importante en la plataforma (ej. negocio nuevo). Igual que
+-- _notify_push: si no está configurada la función, no pasa nada.
+create or replace function public._notify_admin_push(p_title text, p_body text)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_url text;
+  v_secret text;
+begin
+  select push_function_url, push_shared_secret into v_url, v_secret from platform_settings where id = 1;
+  if v_url is null or btrim(v_url) = '' then return; end if;
+  perform net.http_post(
+    url := v_url,
+    body := jsonb_build_object('kind', 'admin', 'business_id', null, 'appointment_id', null,
+                                'title', p_title, 'body', p_body),
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-push-secret', coalesce(v_secret, '')),
     timeout_milliseconds := 5000
   );
@@ -1977,6 +2011,7 @@ $$;
 create or replace function public.delete_push_subscription(p_endpoint text)
 returns void language sql volatile security definer set search_path = public as $$
   delete from push_subscriptions where endpoint = p_endpoint;
+  delete from admin_push_subscriptions where endpoint = p_endpoint;
 $$;
 
 -- ---------------------------------------------------------------------
@@ -2044,6 +2079,9 @@ begin
             coalesce((select array_agg(x::time) from jsonb_array_elements_text(v_item -> 'slots') x), '{}'))
     on conflict (business_id, weekday) do update set is_open = excluded.is_open, slots = excluded.slots;
   end loop;
+
+  perform _notify_admin_push('Negocio nuevo registrado',
+    btrim(p_name) || ' (' || v_code || ') acaba de empezar su prueba gratis.');
 
   return jsonb_build_object('id', v_id, 'slug', lower(p_slug), 'code', v_code);
 end;
@@ -2325,6 +2363,17 @@ begin
 end;
 $$;
 
+-- El administrador acepta avisos push en este dispositivo (ej. negocio nuevo registrado).
+create or replace function public.save_admin_push_subscription(p_endpoint text, p_p256dh text, p_auth text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  insert into admin_push_subscriptions (endpoint, p256dh, auth)
+  values (p_endpoint, p_p256dh, p_auth)
+  on conflict (endpoint) do update set p256dh = excluded.p256dh, auth = excluded.auth;
+end;
+$$;
+
 -- Todas las cuentas de dueños (con o sin negocio creado), sin contar a los administradores
 create or replace function public.admin_list_owners()
 returns jsonb language plpgsql stable security definer set search_path = public as $$
@@ -2579,6 +2628,7 @@ grant execute on function public.owner_reschedule_appointment(uuid, date, text) 
 grant execute on function public.is_platform_admin() to authenticated;
 grant execute on function public.admin_list_businesses() to authenticated;
 grant execute on function public.admin_list_owners() to authenticated;
+grant execute on function public.save_admin_push_subscription(text, text, text) to authenticated;
 grant execute on function public.admin_activate_plan(uuid, text, int, numeric, text) to authenticated;
 grant execute on function public.admin_grant_free(uuid) to authenticated;
 grant execute on function public.admin_approve_payment_claim(uuid, numeric, text) to authenticated;
@@ -2630,6 +2680,7 @@ revoke execute on function public._send_daily_reminders() from anon, authenticat
 revoke execute on function public._auto_mark_no_shows() from anon, authenticated;
 revoke execute on function public._send_expiry_reminders() from anon, authenticated;
 revoke execute on function public._notify_moderation(uuid, text) from anon, authenticated;
+revoke execute on function public._notify_admin_push(text, text) from anon, authenticated;
 revoke execute on function public._approve_unmoderated_photos() from anon, authenticated;
 revoke execute on function public._appointments_notify() from anon;
 revoke execute on function public.staff_services_guard() from anon;

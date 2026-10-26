@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { ThemeToggle } from '../../components/ThemeToggle'
-import { Alert, Button, CitoraLogo, Field, LinkButton, Modal, PageLoader, StatusBadge, WhatsAppIcon, flash } from '../../components/ui'
+import { Alert, Button, CitoraLogo, Field, LinkButton, Modal, PageLoader, StatusBadge, Toggle, WhatsAppIcon, flash } from '../../components/ui'
 import { useSession } from '../../lib/auth'
 import { CITORA_COLOR, setBrandColor } from '../../lib/brand'
 import { setAppManifest } from '../../lib/pwa'
 import { errorMessage } from '../../lib/errors'
 import { daysLeft, fullDateFromIso, money } from '../../lib/format'
+import { isPushSubscribed, pushSupported, subscribeAdminPush, unsubscribePush } from '../../lib/push'
 import { PLAN_LABEL, SINGLE_PLAN } from '../../lib/plans'
 import { supabase } from '../../lib/supabase'
 import { businessType } from '../../lib/templates'
@@ -631,6 +632,7 @@ function SettingsForm() {
           <input className="input font-mono" value={s.push_shared_secret || ''} onChange={(e) => setS({ ...s, push_shared_secret: e.target.value.trim() || null })} />
         </Field>
       </section>
+      <AdminPushSection />
       <section className="card space-y-4">
         <h2 className="font-bold">Moderación de fotos</h2>
         <p className="text-sm text-slate-500">
@@ -644,6 +646,35 @@ function SettingsForm() {
       {error && <Alert>{error}</Alert>}
       <Button block size="lg" onClick={save} loading={busy}>Guardar</Button>
     </div>
+  )
+}
+
+function AdminPushSection() {
+  const [on, setOn] = useState<boolean | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (pushSupported()) isPushSubscribed().then(setOn)
+  }, [])
+
+  if (!pushSupported()) return null
+
+  const toggle = async (v: boolean) => {
+    setBusy(true)
+    const ok = v ? await subscribeAdminPush() : await unsubscribePush().then(() => true)
+    setBusy(false)
+    if (!ok) return flash('No se pudo activar. Revisa los permisos de notificaciones del navegador.')
+    setOn(v)
+    flash(v ? 'Avisos activados en este dispositivo' : 'Avisos desactivados en este dispositivo')
+  }
+
+  return (
+    <section className="card space-y-2">
+      <h2 className="font-bold">Avisos en este dispositivo</h2>
+      <p className="text-sm text-slate-500">Recibe una notificación cuando un negocio nuevo se registre y empiece su prueba gratis.</p>
+      {on !== null && <Toggle checked={on} onChange={toggle} label="Avisos de negocios nuevos" />}
+      {busy && <p className="text-xs text-slate-400">Guardando…</p>}
+    </section>
   )
 }
 

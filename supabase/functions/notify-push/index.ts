@@ -21,8 +21,8 @@ webpush.setVapidDetails(
 )
 
 interface Payload {
-  business_id: string
-  kind: 'owner' | 'customer'
+  business_id: string | null
+  kind: 'owner' | 'customer' | 'admin'
   appointment_id: string | null
   title: string
   body: string
@@ -43,10 +43,10 @@ Deno.serve(async (req) => {
     return new Response('JSON inválido', { status: 400 })
   }
 
-  let query = supabase.from('push_subscriptions').select('id, endpoint, p256dh, auth').eq('kind', payload.kind)
-  query = payload.kind === 'owner'
-    ? query.eq('business_id', payload.business_id)
-    : query.eq('appointment_id', payload.appointment_id)
+  const table = payload.kind === 'admin' ? 'admin_push_subscriptions' : 'push_subscriptions'
+  let query = supabase.from(table).select('id, endpoint, p256dh, auth')
+  if (payload.kind === 'owner') query = query.eq('kind', 'owner').eq('business_id', payload.business_id)
+  else if (payload.kind === 'customer') query = query.eq('kind', 'customer').eq('appointment_id', payload.appointment_id)
   const { data: subs, error } = await query
   if (error) return new Response(error.message, { status: 500 })
   if (!subs || subs.length === 0) return new Response('ok (sin suscriptores)', { status: 200 })
@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
   }))
 
   if (expired.length > 0) {
-    await supabase.from('push_subscriptions').delete().in('endpoint', expired)
+    await supabase.from(table).delete().in('endpoint', expired)
   }
 
   return new Response('ok', { status: 200 })

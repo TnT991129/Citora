@@ -55,7 +55,17 @@ export async function subscribeOwnerPush(): Promise<boolean> {
   return !error
 }
 
-/** Quita este dispositivo de los avisos (cliente o dueño) */
+/** El administrador acepta avisos de la plataforma (ej. negocio nuevo registrado) */
+export async function subscribeAdminPush(): Promise<boolean> {
+  if (!pushSupported()) return false
+  const sub = await getOrCreateSubscription()
+  if (!sub) return false
+  const { endpoint, p256dh, auth } = subKeys(sub)
+  const { error } = await supabase.rpc('save_admin_push_subscription', { p_endpoint: endpoint, p_p256dh: p256dh, p_auth: auth })
+  return !error
+}
+
+/** Quita este dispositivo de los avisos (cliente, dueño o administrador) */
 export async function unsubscribePush(): Promise<void> {
   if (!('serviceWorker' in navigator)) return
   const reg = await navigator.serviceWorker.ready
