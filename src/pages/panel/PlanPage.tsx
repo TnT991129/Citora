@@ -173,7 +173,8 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
 
       <section className="card space-y-3">
         <h2 className="font-bold">3. Declara tu pago</h2>
-        <p className="text-sm text-slate-500">Sube la captura de la transferencia. La revisamos y activamos tu mes en cuanto la confirmemos — normalmente más rápido que por WhatsApp.</p>
+        <p className="text-sm text-slate-500">Sube la captura de la transferencia. La revisamos y activamos tu mes en cuanto la confirmemos.</p>
+        <Alert kind="info">Demoramos un máximo de 24 horas en confirmar tu pago.</Alert>
         {proofPreview ? (
           <div className="flex items-center gap-3">
             <img src={proofPreview} alt="" className="h-20 w-20 rounded-xl object-cover ring-1 ring-slate-200" />

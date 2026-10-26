@@ -2436,6 +2436,8 @@ create or replace function public.submit_payment_claim(p_months int, p_amount nu
 returns uuid language plpgsql volatile security definer set search_path = public as $$
 declare
   v_business uuid := my_business_id();
+  v_name text;
+  v_code text;
   v_id uuid;
 begin
   if v_business is null then raise exception 'SIN_NEGOCIO'; end if;
@@ -2444,6 +2446,12 @@ begin
   insert into payment_claims (business_id, months, amount, note, proof_path)
   values (v_business, p_months, p_amount, nullif(btrim(coalesce(p_note, '')), ''), p_proof_path)
   returning id into v_id;
+
+  select name, code into v_name, v_code from businesses where id = v_business;
+  perform _notify_admin_push('Pago declarado',
+    v_name || ' (' || v_code || ') declaró el pago de ' || p_months ||
+    case when p_months = 1 then ' mes' else ' meses' end || '. Revísalo en Admin → Pagos.');
+
   return v_id;
 end;
 $$;
