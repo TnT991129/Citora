@@ -184,8 +184,10 @@ function Owners() {
   const monthly = list
     .filter((o) => o.status === 'activo' && o.plan && !o.comped)
     .reduce((s) => s + prices.basico, 0)
+  // Los negocios de cortesía no son clientes reales: no cuentan como "dueños registrados"
+  const realOwners = list.filter((o) => !o.comped)
   const thisMonth = new Date().toISOString().slice(0, 7)
-  const newThisMonth = list.filter((o) => o.signed_up_at.slice(0, 7) === thisMonth).length
+  const newThisMonth = realOwners.filter((o) => o.signed_up_at.slice(0, 7) === thisMonth).length
 
   const act = async (fn: 'admin_extend_trial' | 'admin_deactivate_business' | 'admin_grant_free', o: AdminOwner, msg: string) => {
     const { error } = await supabase.rpc(fn, fn === 'admin_extend_trial' ? { p_business: o.id, p_days: 3 } : { p_business: o.id })
@@ -199,7 +201,7 @@ function Owners() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Dueños registrados" value={String(list.length)} hint={`${newThisMonth} nuevos este mes`} />
+        <Stat label="Dueños registrados" value={String(realOwners.length)} hint={`${newThisMonth} nuevos este mes`} />
         <Stat label="Pagando" value={String(paying)} />
         <Stat label="En prueba gratis" value={String(count('prueba'))} />
         <Stat label="Ingreso mensual" value={money(monthly, 'CUP')} />

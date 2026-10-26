@@ -2557,7 +2557,7 @@ begin
       ) order by m)
       from generate_series(v_first, date_trunc('month', now() at time zone v_tz), interval '1 month') m),
     'totals', (select jsonb_build_object(
-        'businesses', (select count(*) from businesses),
+        'businesses', (select count(*) from businesses where not comped),
         'revenue', (select coalesce(sum(p.amount), 0) from payments p left join businesses b2 on b2.id = p.business_id
                     where not coalesce(b2.comped, false)),
         'appointments', (select count(*) from appointments),
