@@ -22,7 +22,7 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.122.0
 
       - name: Levantar Supabase local
         run: supabase start --ignore-health-check
@@ -31,8 +31,12 @@ jobs:
         env:
           PGURI: postgresql://postgres:postgres@127.0.0.1:54322/postgres
         run: |
-          psql "$PGURI" -v ON_ERROR_STOP=1 -f supabase/schema.sql
+          # Igual que deploy-db.yml: en una sola transacción
+          psql "$PGURI" --single-transaction -v ON_ERROR_STOP=1 -f supabase/schema.sql
           psql "$PGURI" -v ON_ERROR_STOP=1 -f supabase/test/test.sql
+          # Volver a aplicarlo sobre una base que ya tiene datos, como pasa en producción en cada
+          # despliegue: tiene que entrar sin errores
+          psql "$PGURI" --single-transaction -v ON_ERROR_STOP=1 -f supabase/schema.sql
 
       - name: Apagar Supabase local
         if: always()

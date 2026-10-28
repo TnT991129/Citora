@@ -1,0 +1,29 @@
+# Comprueba el código de la app en cada subida: tipos de TypeScript, revisión automática (ESLint)
+# y pruebas (Vitest). Va aparte de "Publicar Citora" a propósito: si algo falla aquí, sale en rojo
+# en GitHub para arreglarlo, pero no frena ni tumba la web publicada.
+name: Comprobaciones del código
+
+on:
+  push:
+    branches: [main, staging]
+    paths-ignore:
+      - 'supabase/**'
+      - '**.md'
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test

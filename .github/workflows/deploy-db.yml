@@ -31,4 +31,11 @@ jobs:
             echo "Falta el secreto para '${{ inputs.destino }}' (ver los comentarios de este archivo)."
             exit 1
           fi
-          psql "$PGURI" -v ON_ERROR_STOP=1 -f supabase/schema.sql
+          # Todo en una sola transacción: si algo falla, no se aplica nada y producción queda como
+          # estaba (antes podía quedar a medias). Los clientes tampoco ven el momento intermedio en
+          # que se quitan y se vuelven a dar los permisos de las funciones.
+          # lock_timeout: si una tabla está ocupada más de 10 s, se cancela todo en vez de dejar las
+          # reservas esperando en cola detrás; basta con volver a lanzarlo un rato después.
+          psql "$PGURI" --single-transaction -v ON_ERROR_STOP=1 \
+            -c "set lock_timeout = '10s'" \
+            -f supabase/schema.sql

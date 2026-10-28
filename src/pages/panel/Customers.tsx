@@ -260,7 +260,7 @@ function BonosSection({ phone, business }: { phone: string; business: Business }
     supabase.from('packages').select('*').eq('active', true).then(({ data }) => setTypes((data as Package[]) || []))
   }, [load])
 
-  const useSession = async (cp: CustomerPackage) => {
+  const spendSession = async (cp: CustomerPackage) => {
     if (cp.sessions_left <= 0) return
     const { error } = await supabase.from('customer_packages').update({ sessions_left: cp.sessions_left - 1 }).eq('id', cp.id)
     if (error) return setError(errorMessage(error))
@@ -283,7 +283,7 @@ function BonosSection({ phone, business }: { phone: string; business: Business }
           {list.map((cp) => (
             <li key={cp.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm">
               <span className="min-w-0 truncate"><b>{cp.package_name}</b> · {cp.sessions_left} de {cp.sessions_total}</span>
-              <Button size="sm" variant="secondary" disabled={cp.sessions_left <= 0} onClick={() => useSession(cp)}>Usar 1 sesión</Button>
+              <Button size="sm" variant="secondary" disabled={cp.sessions_left <= 0} onClick={() => spendSession(cp)}>Usar 1 sesión</Button>
             </li>
           ))}
         </ul>

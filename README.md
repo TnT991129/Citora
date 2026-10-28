@@ -57,6 +57,8 @@ npm install
 cp .env.example .env.local   # y pon tus claves de Supabase
 npm run dev                  # abre http://localhost:5173
 npm run build                # comprueba que todo compila
+npm test                     # pruebas de fechas, precios, WhatsApp y calendario
+npm run lint                 # revisión automática del código (ESLint)
 ```
 
 ## Cómo cobrar (flujo manual)

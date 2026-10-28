@@ -211,7 +211,14 @@ end $$;
 
 -- ===== El dueño declara un pago; el administrador lo aprueba o lo rechaza =====
 select expect_error($$select submit_payment_claim(1, 1500)$$, 'FALTA_COMPROBANTE');
-select submit_payment_claim(1, 1500, 'Transferencia Transfermóvil', 'https://x.test/captura1.jpg') as claim1 \gset
+-- La captura tiene que estar en la carpeta del propio negocio: ni un enlace de fuera ni la de otro
+select expect_error($$select submit_payment_claim(1, 1500, null, 'https://x.test/captura1.jpg')$$, 'FALTA_COMPROBANTE');
+select expect_error($$select submit_payment_claim(1, 1500, null, '00000000-0000-0000-0000-000000000001/pago-1.jpg')$$, 'FALTA_COMPROBANTE');
+select expect_error($$select submit_payment_claim(1, 1500, null, '$$ || my_business_id() || $$/../otro/pago-1.jpg')$$, 'FALTA_COMPROBANTE');
+-- Tampoco se puede escribir directo en la tabla (ej. una declaración ya "aprobada")
+select expect_error($$insert into payment_claims (business_id, months, proof_path, status) values (my_business_id(), 1, my_business_id() || '/pago-1.jpg', 'aprobado')$$, 'row-level security');
+select submit_payment_claim(1, 1500, 'Transferencia Transfermóvil', my_business_id() || '/pago-1.jpg') as claim1 \gset
+insert into ctx values ('claim1', :'claim1');
 do $$ begin
   assert (select count(*) from payment_claims where business_id = my_business_id()) = 1;
   assert (select status from payment_claims where business_id = my_business_id()) = 'pendiente';
@@ -219,15 +226,16 @@ end $$;
 set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 select admin_approve_payment_claim(:'claim1');
 do $$ begin
-  assert (select status from payment_claims where id = :'claim1') = 'aprobado';
+  assert (select status from payment_claims where id = (select v from ctx where k='claim1')::uuid) = 'aprobado';
   assert (select count(*) from payments) = 3, 'el pago aprobado también queda en payments';
 end $$;
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
-select submit_payment_claim(1, 1500, null, 'https://x.test/captura2.jpg') as claim2 \gset
+select submit_payment_claim(1, 1500, null, my_business_id() || '/pago-2.jpg') as claim2 \gset
+insert into ctx values ('claim2', :'claim2');
 set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 select admin_reject_payment_claim(:'claim2', 'No coincide el comprobante');
 do $$ begin
-  assert (select status from payment_claims where id = :'claim2') = 'rechazado';
+  assert (select status from payment_claims where id = (select v from ctx where k='claim2')::uuid) = 'rechazado';
   assert (select count(*) from payments) = 3, 'el rechazado no suma pago';
 end $$;
 select expect_error($$select admin_approve_payment_claim('$$ || :'claim2' || $$')$$, 'NO_DISPONIBLE');
@@ -238,6 +246,7 @@ do $$ begin assert (select count(*) from payment_claims) = 0, 'dueño 2 no ve la
 set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 select admin_activate_plan((select id from businesses where slug='spa-mar'), 'basico', 1, 500, 'Pago de prueba');
 select (admin_stats()->'totals'->>'revenue')::numeric as revenue_antes \gset
+insert into ctx values ('revenue_antes', :'revenue_antes');
 do $$ begin assert (select comped from businesses where slug='spa-mar') = false; end $$;
 select admin_grant_free((select id from businesses where slug='spa-mar'));
 do $$ begin
@@ -250,8 +259,9 @@ do $$ begin
     (select paid_until from businesses where slug='spa-mar')) = 'ultra', 'sigue con acceso completo';
 end $$;
 select (admin_stats()->'totals'->>'revenue')::numeric as revenue_despues \gset
+insert into ctx values ('revenue_despues', :'revenue_despues');
 do $$ begin
-  assert :'revenue_despues'::numeric = :'revenue_antes'::numeric - 500, 'el pago de la cortesía deja de contar en los ingresos';
+  assert (select v from ctx where k='revenue_despues')::numeric = (select v from ctx where k='revenue_antes')::numeric - 500, 'el pago de la cortesía deja de contar en los ingresos';
   assert (admin_stats()->'by_plan'->>'cortesia')::int = 1;
   assert not exists (
     select 1 from jsonb_array_elements(admin_stats()->'recent_payments') x where x->>'code' = (select code from businesses where slug='spa-mar')
@@ -263,13 +273,19 @@ do $$ begin assert (select comped from businesses where slug='spa-mar') = false,
 select expect_error($$select admin_grant_free('00000000-0000-0000-0000-000000000000')$$, 'NEGOCIO_NO_EXISTE');
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 select expect_error($$select admin_grant_free((select id from businesses where slug='spa-mar'))$$, 'NO_AUTORIZADO');
+-- El dueño no puede marcarse a sí mismo como cortesía (se saldría de las estadísticas de cobros)
+update businesses set comped = true where owner_id = auth.uid();
+reset role;
+do $$ begin assert (select comped from businesses where slug='spa-mar') = false, 'el dueño no puede ponerse cortesía'; end $$;
+set role authenticated;
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 
 reset role;
 set role anon;
 do $$ begin
   assert (get_public_business('barberia-leo')->>'accepting')::boolean;
-  assert get_public_business('barberia-leo')->>'plan' = 'plus';
+  -- Aprobar la declaración de pago lo pasó al plan único ('ultra')
+  assert get_public_business('barberia-leo')->>'plan' = 'ultra';
   assert (get_public_prices()->>'plus')::int = 2100;
 end $$;
 
@@ -340,6 +356,16 @@ end $$;
 -- Simula lo que hace moderate-photo (con la clave de servicio, no como "authenticated")
 reset role;
 update gallery_photos set moderation_status = 'aprobada' where business_id = (select id from businesses where slug = 'barberia-leo');
+-- Respaldo de la moderación: solo se aprueba sola la que lleva más de un día sin poder revisarse
+insert into gallery_photos (business_id, url, caption, moderation_status, created_at) values
+  ((select id from businesses where slug = 'barberia-leo'), 'https://x.co/vieja.jpg', 'vieja', 'pendiente', now() - interval '25 hours'),
+  ((select id from businesses where slug = 'barberia-leo'), 'https://x.co/nueva.jpg', 'nueva', 'pendiente', now() - interval '2 hours');
+select _approve_unmoderated_photos();
+do $$ begin
+  assert (select moderation_status from gallery_photos where caption = 'vieja') = 'aprobada', 'la de más de un día se aprueba';
+  assert (select moderation_status from gallery_photos where caption = 'nueva') = 'pendiente', 'la reciente sigue esperando revisión';
+end $$;
+delete from gallery_photos where caption in ('vieja', 'nueva');
 set role authenticated;
 
 -- ===== Bonos =====
@@ -381,11 +407,13 @@ set role authenticated;
 set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 do $$ declare s jsonb := admin_stats(); begin
   assert (s->'totals'->>'businesses')::int = 2;
-  assert (s->'by_plan'->>'plus')::int = 1;
-  assert (s->'by_plan'->>'prueba')::int = 1;
+  -- Leo pagó (declaración aprobada → plan único 'ultra'); Spa Mar pagó el básico tras quitarle la cortesía
+  assert (s->'by_plan'->>'ultra')::int = 1, 'por plan: ' || (s->'by_plan');
+  assert (s->'by_plan'->>'basico')::int = 1;
+  assert (s->'by_plan'->>'prueba')::int = 0;
   assert jsonb_array_length(s->'months') = 12;
   assert (s->'totals'->>'converted')::int = 1, 'conversión: ' || (s->'totals');
-  assert jsonb_array_length(s->'recent_payments') = 2;
+  assert jsonb_array_length(s->'recent_payments') = 5, 'Leo 3 pagos y Spa Mar 2';
 end $$;
 select admin_activate_plan((select v from ctx where k='biz1')::uuid, 'ultra', 1);
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
@@ -457,16 +485,17 @@ select expect_error($$select edit_booking('$$ || (select v from ctx where k='tl'
   '$$ || (select v from ctx where k='day') || $$', '14:30', 'Lili L.', null)$$, 'LIMITE_CAMBIOS');
 select cancel_booking((select v from ctx where k='tl'));
 
--- "Citas pendientes por clienta" también configurable (antes era un 2 fijo)
+-- "Citas pendientes por clienta" también configurable (antes era un 2 fijo). Se usan las 09:00
+-- porque las 10:00 ya las ocupa "Ana Cupón" (prueba de cupones de más arriba).
 update businesses set max_pending_bookings = 1 where id = my_business_id();
 insert into ctx select 'tp1', create_booking('barberia-leo', array[(select v from ctx where k='corte')::uuid],
-  (select v from ctx where k='day')::date, '10:00', 'Pato Prueba', '5355558888');
+  (select v from ctx where k='day')::date, '09:00', 'Pato Prueba', '5355558888');
 select expect_error($$select create_booking('barberia-leo', array['$$ || (select v from ctx where k='corte') || $$'::uuid], '$$ || (select v from ctx where k='day') || $$', '14:00', 'Pato Prueba', '5355558888')$$, 'LIMITE_CITAS');
 select cancel_booking((select v from ctx where k='tp1'));
 -- "Sin límite" (null): el mismo teléfono puede tener varias citas pendientes a la vez
 update businesses set max_pending_bookings = null where id = my_business_id();
 insert into ctx select 'tp2', create_booking('barberia-leo', array[(select v from ctx where k='corte')::uuid],
-  (select v from ctx where k='day')::date, '10:00', 'Rita Repite', '5355559999');
+  (select v from ctx where k='day')::date, '09:00', 'Rita Repite', '5355559999');
 insert into ctx select 'tp3', create_booking('barberia-leo', array[(select v from ctx where k='corte')::uuid],
   (select v from ctx where k='day')::date, '11:00', 'Rita Repite', '5355559999');
 do $$ begin
@@ -479,16 +508,16 @@ select cancel_booking((select v from ctx where k='tp3'));
 -- "Citas creadas por día" es un límite distinto (y también configurable), con su propio error
 update businesses set max_daily_bookings = 2, max_pending_bookings = null where id = my_business_id();
 insert into ctx select 'td1', create_booking('barberia-leo', array[(select v from ctx where k='corte')::uuid],
-  (select v from ctx where k='day')::date, '10:00', 'Dani Diario', '5355556666');
+  (select v from ctx where k='day')::date, '09:00', 'Dani Diario', '5355556666');
 select cancel_booking((select v from ctx where k='td1'));
 insert into ctx select 'td2', create_booking('barberia-leo', array[(select v from ctx where k='corte')::uuid],
-  (select v from ctx where k='day')::date, '10:00', 'Dani Diario', '5355556666');
+  (select v from ctx where k='day')::date, '09:00', 'Dani Diario', '5355556666');
 select expect_error($$select create_booking('barberia-leo', array['$$ || (select v from ctx where k='corte') || $$'::uuid], '$$ || (select v from ctx where k='day') || $$', '11:00', 'Dani Diario', '5355556666')$$, 'LIMITE_DIARIO');
 select cancel_booking((select v from ctx where k='td2'));
 update businesses set max_daily_bookings = null where id = my_business_id();
 -- "Sin límite": tercera reserva del mismo teléfono en el día ya no choca
 insert into ctx select 'td3', create_booking('barberia-leo', array[(select v from ctx where k='corte')::uuid],
-  (select v from ctx where k='day')::date, '10:00', 'Dani Diario', '5355556666');
+  (select v from ctx where k='day')::date, '09:00', 'Dani Diario', '5355556666');
 select cancel_booking((select v from ctx where k='td3'));
 
 -- ===== Bloquear horas sueltas (Horario) =====
@@ -558,20 +587,30 @@ select expect_error($$select create_booking('spa-mar', array['$$ || (select v fr
 -- ===== Notificaciones push: guardar y quitar suscripciones =====
 select save_customer_push_subscription((select v from ctx where k='s1'), 'https://fcm.example/ep1', 'p256dh-test', 'auth-test');
 select expect_error($$select save_customer_push_subscription('no-existe', 'e', 'p', 'a')$$, 'CITA_NO_EXISTE');
+reset role;  -- las suscripciones solo se leen con la clave de servicio, no como anon
 do $$ begin assert (select count(*) from push_subscriptions where kind = 'customer') = 1, 'suscripción de cliente guardada'; end $$;
+set role anon;
 select delete_push_subscription('https://fcm.example/ep1');
+reset role;  -- las suscripciones solo se leen con la clave de servicio, no como anon
 do $$ begin assert (select count(*) from push_subscriptions where kind = 'customer') = 0, 'suscripción de cliente borrada'; end $$;
+set role anon;
 reset role;
 set role authenticated;
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 select save_owner_push_subscription('https://fcm.example/ep-owner', 'p256dh-o', 'auth-o');
+reset role;  -- las suscripciones solo se leen con la clave de servicio, no como authenticated
 do $$ begin assert (select count(*) from push_subscriptions where kind = 'owner') = 1, 'suscripción del dueño guardada'; end $$;
+set role authenticated;
 select expect_error($$select save_admin_push_subscription('https://fcm.example/ep-admin', 'p', 'a')$$, 'NO_AUTORIZADO');
 set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 select save_admin_push_subscription('https://fcm.example/ep-admin', 'p256dh-a', 'auth-a');
+reset role;  -- las suscripciones solo se leen con la clave de servicio, no como authenticated
 do $$ begin assert (select count(*) from admin_push_subscriptions) = 1, 'suscripción del administrador guardada'; end $$;
+set role authenticated;
 select delete_push_subscription('https://fcm.example/ep-admin');
+reset role;  -- las suscripciones solo se leen con la clave de servicio, no como authenticated
 do $$ begin assert (select count(*) from admin_push_subscriptions) = 0, 'suscripción del administrador borrada'; end $$;
+set role authenticated;
 select admin_deactivate_business((select v from ctx where k='biz1')::uuid);
 reset role;
 set role anon;

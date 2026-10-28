@@ -77,10 +77,11 @@ Deno.serve(async (req) => {
       await approve(payload.photo_id)
     }
   } catch (e) {
-    // Si Sightengine falla (caída, clave mal puesta, etc.), se aprueba para no dejar al dueño
-    // con una galería rota; el riesgo de un fallo puntual de la API es menor que bloquearlo todo.
+    // Si Sightengine falla (caída, clave mal puesta, etc.), la foto se queda "pendiente" (no sale
+    // en la web pública) y la base de datos la vuelve a mandar cada hora durante un día (ver
+    // _approve_unmoderated_photos); solo si en todo ese día no se pudo revisar, se aprueba sola.
     console.error('moderate-photo', e)
-    await approve(payload.photo_id)
+    return new Response('Error al revisar (se reintentará)', { status: 502 })
   }
 
   return new Response('ok', { status: 200 })

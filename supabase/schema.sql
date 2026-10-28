@@ -746,13 +746,39 @@ exception when others then
 end;
 $$;
 
--- Respaldo si moderate-photo no está configurada o nunca respondió: aprueba sola cualquier foto
--- que lleve más de un día "pendiente", para que una galería no se quede rota para siempre.
--- Se llama una vez por hora (ver tarea programada en la sección 3).
+-- Respaldo si moderate-photo no está configurada o no pudo revisar una foto (Sightengine caído,
+-- etc.). Se llama una vez por hora (ver tarea programada en la sección 3):
+--   1. Las fotos pendientes de más de una hora se vuelven a mandar a revisar (como mucho 20 por
+--      vez), así un fallo puntual no deja una foto sin revisar.
+--   2. Si después de un día sigue sin poder revisarse, se aprueba sola (para que la galería de un
+--      negocio no se quede rota para siempre) y se te avisa para que le eches un vistazo.
 create or replace function public._approve_unmoderated_photos()
-returns void language sql security definer set search_path = public as $$
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  p record;
+  v_count int;
+begin
+  if exists (select 1 from platform_settings where id = 1 and coalesce(btrim(moderate_function_url), '') <> '') then
+    for p in
+      select id, url from gallery_photos
+      where moderation_status = 'pendiente'
+        and created_at < now() - interval '1 hour' and created_at >= now() - interval '1 day'
+      order by created_at
+      limit 20
+    loop
+      perform _notify_moderation(p.id, p.url);
+    end loop;
+  end if;
+
   update gallery_photos set moderation_status = 'aprobada'
   where moderation_status = 'pendiente' and created_at < now() - interval '1 day';
+  get diagnostics v_count = row_count;
+  if v_count > 0 and exists (select 1 from platform_settings where id = 1 and coalesce(btrim(moderate_function_url), '') <> '') then
+    perform _notify_admin_push('Fotos aprobadas sin revisar',
+      v_count || case when v_count = 1 then ' foto de galería se aprobó sola' else ' fotos de galería se aprobaron solas' end ||
+      ' porque la revisión automática no respondió en un día. Revisa moderate-photo.');
+  end if;
+end;
 $$;
 
 -- Aviso a los clientes con cita mañana (misma hora de negocio) que hayan aceptado notificaciones.
@@ -835,6 +861,7 @@ begin
     new.paid_until := old.paid_until;
     new.trial_ends_at := old.trial_ends_at;
     new.created_at := old.created_at;
+    new.comped := old.comped;
   end if;
   return new;
 end;
@@ -954,15 +981,14 @@ drop policy if exists payments_select on public.payments;
 create policy payments_select on public.payments for select to authenticated
   using (is_platform_admin() or business_id = my_business_id());
 
--- payment_claims: el dueño declara los suyos y los ve (no los puede tocar después); el
--- administrador los ve todos y los resuelve (aprobar/rechazar va por función, no por update directo)
+-- payment_claims: el dueño ve los suyos y el administrador todos. Nadie los escribe directo:
+-- declarar va por submit_payment_claim (así no se puede crear uno ya "aprobado" ni saltarse el
+-- aviso al administrador) y aprobar/rechazar por las funciones del administrador.
 alter table public.payment_claims enable row level security;
 drop policy if exists payment_claims_select on public.payment_claims;
 create policy payment_claims_select on public.payment_claims for select to authenticated
   using (is_platform_admin() or business_id = my_business_id());
 drop policy if exists payment_claims_insert on public.payment_claims;
-create policy payment_claims_insert on public.payment_claims for insert to authenticated
-  with check (business_id = my_business_id());
 
 alter table public.reviews enable row level security;
 alter table public.gallery_photos enable row level security;
@@ -2443,6 +2469,11 @@ begin
   if v_business is null then raise exception 'SIN_NEGOCIO'; end if;
   if p_months is null or p_months not between 1 and 24 then raise exception 'MESES_INVALIDOS'; end if;
   if nullif(btrim(coalesce(p_proof_path, '')), '') is null then raise exception 'FALTA_COMPROBANTE'; end if;
+  -- La captura tiene que ser una subida por este mismo negocio (su carpeta en "payment-proofs"),
+  -- no la de otro negocio ni un enlace de fuera
+  if p_proof_path not like v_business::text || '/%' or p_proof_path like '%..%' then
+    raise exception 'FALTA_COMPROBANTE';
+  end if;
   insert into payment_claims (business_id, months, amount, note, proof_path)
   values (v_business, p_months, p_amount, nullif(btrim(coalesce(p_note, '')), ''), p_proof_path)
   returning id into v_id;
