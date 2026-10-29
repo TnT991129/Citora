@@ -679,15 +679,41 @@ set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 do $$ declare t jsonb := admin_traffic(30); begin
   assert (t->>'visitors')::int = 2, 'visitantes de la portada: ' || (t->>'visitors');
   assert (t->'funnel'->>'crear')::int = 1;
-  assert (t->'funnel'->'pasos'->>0)::int = 1 and (t->'funnel'->'pasos'->>1)::int = 1 and (t->'funnel'->'pasos'->>2)::int = 0, 'embudo: ' || (t->'funnel');
+  assert (t->'funnel'->'pasos'->>0)::int = 1 and (t->'funnel'->'pasos'->>1)::int = 1 and (t->'funnel'->'pasos'->>2)::int = 0, 'embudo: ' || (t->'funnel')::text;
   assert jsonb_array_length(t->'by_day') = 30;
   assert (t->'devices'->>'movil')::int = 1 and (t->'devices'->>'ordenador')::int = 1;
   assert exists (select 1 from jsonb_array_elements(t->'sources') x where x->>'source' = 'instagram' and (x->>'visitors')::int = 1);
   assert exists (select 1 from jsonb_array_elements(t->'sources') x where x->>'source' = 'directo');
   assert (t->'business_totals'->>'visitors')::int = 1 and (t->'business_totals'->>'bookings')::int = 1;
-  assert (t->'business_pages'->0->>'name') = 'Spa Mar', 'nombre del negocio: ' || (t->'business_pages');
+  assert (t->'business_pages'->0->>'name') = 'Spa Mar', 'nombre del negocio: ' || (t->'business_pages')::text;
   assert jsonb_array_length(admin_traffic(7)->'by_day') = 7;
+  assert jsonb_array_length(admin_traffic(1)->'by_day') = 1, 'hoy: un solo día';
+  assert jsonb_array_length(admin_traffic(2)->'by_day') = 2, 'hoy y ayer: dos días';
+  assert jsonb_array_length(t->'by_hour') = 24, 'visitantes por hora';
+  assert (select sum(x::int) from jsonb_array_elements_text(t->'by_hour') x) >= 2, 'las horas suman los visitantes';
 end $$;
+-- Actividad de los negocios
+do $$ declare a jsonb := admin_business_activity(); leo jsonb; begin
+  assert jsonb_array_length(a) = (select count(*) from businesses), 'todos los negocios';
+  select x into leo from jsonb_array_elements(a) x where x->>'slug' = 'barberia-leo';
+  -- (el administrador no puede leer las citas directamente: solo esta función le da las cifras)
+  assert (leo->>'bookings_total')::int >= 1, 'tiene reservas: ' || leo::text;
+  assert (leo->>'bookings_7d')::int <= (leo->>'bookings_30d')::int and (leo->>'bookings_30d')::int <= (leo->>'bookings_total')::int, 'cifras coherentes: ' || leo::text;
+  assert (leo->>'customers')::int >= 1 and leo ? 'last_booking_at' and leo ? 'bookings_7d' and leo ? 'web_30d';
+  assert (a->0->>'bookings_30d')::int >= (a->-1->>'bookings_30d')::int, 'de más a menos reservas';
+end $$;
+-- Sin restricciones (como la base misma), las reservas coinciden exactamente con las citas reales
+reset role;
+do $$ begin
+  assert not exists (
+    select 1 from jsonb_array_elements(admin_business_activity()) x
+    where (x->>'bookings_total')::int <> (select count(*) from appointments a where a.business_id = (x->>'id')::uuid and a.status <> 'cancelada')
+  ), 'las reservas de cada negocio coinciden con sus citas';
+end $$;
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select expect_error('select admin_business_activity()', 'NO_AUTORIZADO');
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 reset role;
 select _purge_analytics();
 do $$ begin assert (select count(*) from analytics_events) > 0, 'la limpieza solo borra lo de hace más de 13 meses'; end $$;

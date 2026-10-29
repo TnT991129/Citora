@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { BarChart, RankBars } from '../../components/BarChart'
 import { Alert, Spinner } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
-import { fullDateFromIso, MONTHS } from '../../lib/format'
+import { fullDateFromIso, MONTHS, time12 } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 
 interface TrafficData {
@@ -13,6 +13,7 @@ interface TrafficData {
   signups: number
   funnel: { portada: number; crear: number; pasos: number[]; creados: number }
   by_day: { day: string; visitors: number; signups: number }[]
+  by_hour: number[]
   sources: { source: string; visitors: number }[]
   devices: Partial<Record<'movil' | 'ordenador', number>>
   business_totals: { visitors: number; bookings: number }
@@ -20,7 +21,14 @@ interface TrafficData {
 }
 
 const TZ = 'America/Havana'
-const RANGES = [7, 30, 90] as const
+// Periodos: "Hoy" es el día de hoy (hora de Cuba) y "Hoy y ayer", los dos últimos días
+const RANGES = [
+  { days: 1, label: 'Hoy' },
+  { days: 2, label: 'Hoy y ayer' },
+  { days: 7, label: '7 días' },
+  { days: 30, label: '30 días' },
+  { days: 90, label: '90 días' },
+] as const
 // Los pasos del asistente de crear la app (ver STEPS en pages/Create.tsx)
 const STEP_NAMES = ['Tipo de negocio', 'Datos del negocio', 'Moneda', 'Servicios', 'Horario', 'Crear la cuenta']
 const SOURCE_NAMES: Record<string, string> = {
@@ -29,10 +37,12 @@ const SOURCE_NAMES: Record<string, string> = {
 }
 
 const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 100) : 0)
+/** 0 → "12a", 13 → "1p" (corto, para el eje del gráfico) */
+const hourLabel = (h: number) => `${h % 12 === 0 ? 12 : h % 12}${h < 12 ? 'a' : 'p'}`
 
 /** Visitas a la portada, cuántos crean su app y dónde abandonan (ver admin_traffic en schema.sql) */
 export function Traffic() {
-  const [days, setDays] = useState<(typeof RANGES)[number]>(30)
+  const [days, setDays] = useState<number>(30)
   const [t, setT] = useState<TrafficData | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -59,16 +69,19 @@ export function Traffic() {
             {t?.since && <> Se mide desde el {fullDateFromIso(t.since, TZ)}.</>}
           </p>
         </div>
-        <div className="flex rounded-full bg-slate-100 p-1">
-          {RANGES.map((r) => (
-            <button
-              key={r}
-              onClick={() => setDays(r)}
-              className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${days === r ? 'bg-white text-slate-900 shadow' : 'text-slate-500 hover:text-slate-800'}`}
-            >
-              {r} días
-            </button>
-          ))}
+        <div className="-mx-1 flex max-w-full overflow-x-auto px-1">
+          <div className="flex shrink-0 rounded-full bg-slate-100 p-1">
+            {RANGES.map((r) => (
+              <button
+                key={r.days}
+                onClick={() => setDays(r.days)}
+                aria-pressed={days === r.days}
+                className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${days === r.days ? 'bg-white text-slate-900 shadow' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -118,14 +131,26 @@ function TrafficBody({ t }: { t: TrafficData }) {
         <Kpi label="Clientes en webs de negocios" value={t.business_totals.visitors} hint={`${t.business_totals.bookings} reservas · ${bookingRate}%`} />
       </div>
 
-      <div>
-        <h3 className="font-bold">Visitantes por día</h3>
-        <BarChart
-          bars={t.by_day.map((d) => ({ label: dayLabel(d.day), value: d.visitors, tip: `${dayTip(d.day)} · ${d.visitors} visitantes · ${d.signups} apps creadas` }))}
-          labelEvery={labelEvery}
-          barClass="bg-gradient-to-t from-rose-400 to-orange-300"
-        />
-      </div>
+      {t.days <= 2 ? (
+        // Con uno o dos días, un gráfico por días tendría una o dos barras: mejor por horas
+        <div>
+          <h3 className="font-bold">Visitantes por hora</h3>
+          <BarChart
+            bars={(t.by_hour || []).map((v, h) => ({ label: hourLabel(h), value: v, tip: `${time12(`${h}:00`)} – ${time12(`${(h + 1) % 24}:00`)} · ${v} ${v === 1 ? 'visitante' : 'visitantes'}` }))}
+            labelEvery={3}
+            barClass="bg-gradient-to-t from-rose-400 to-orange-300"
+          />
+        </div>
+      ) : (
+        <div>
+          <h3 className="font-bold">Visitantes por día</h3>
+          <BarChart
+            bars={t.by_day.map((d) => ({ label: dayLabel(d.day), value: d.visitors, tip: `${dayTip(d.day)} · ${d.visitors} visitantes · ${d.signups} apps creadas` }))}
+            labelEvery={labelEvery}
+            barClass="bg-gradient-to-t from-rose-400 to-orange-300"
+          />
+        </div>
+      )}
 
       <div>
         <h3 className="font-bold">¿Dónde se quedan?</h3>

@@ -2765,6 +2765,11 @@ begin
                     where not comped and created_at >= d::timestamp at time zone v_tz and created_at < (d + 1)::timestamp at time zone v_tz))
         order by d)
       from generate_series(v_first, (now() at time zone v_tz)::date, interval '1 day') g(d0), lateral (select g.d0::date as d) x),
+    -- Por hora del día (hora de Cuba): útil para "Hoy" y "Hoy y ayer"
+    'by_hour', (select jsonb_agg((select count(distinct visitor_id) from analytics_events
+                                  where name = 'visita' and page = 'portada' and created_at >= v_from
+                                    and extract(hour from created_at at time zone v_tz) = h) order by h)
+                from generate_series(0, 23) h),
     'sources', (select coalesce(jsonb_agg(jsonb_build_object('source', q.source, 'visitors', q.n) order by q.n desc), '[]'::jsonb)
       from (select coalesce(source, 'directo') as source, count(distinct visitor_id) as n from analytics_events
             where name = 'visita' and page = 'portada' and created_at >= v_from group by 1) q),
@@ -2787,6 +2792,36 @@ begin
             order by 3 desc
             limit 15) q)
   );
+end;
+$$;
+
+-- Actividad de cada negocio para el administrador: cuántas reservas recibe (por fecha en que se
+-- hicieron, sin contar las canceladas), cuántos clientes distintos y cuándo fue la última. Sirve para
+-- ver cuáles están funcionando y cuáles no, y a cuáles premiar (ej. un descuento en la mensualidad).
+create or replace function public.admin_business_activity()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  return coalesce((
+    select jsonb_agg(q.j order by (q.j->>'bookings_30d')::int desc, (q.j->>'bookings_total')::int desc, q.j->>'name')
+    from (
+      select jsonb_build_object(
+        'id', b.id, 'name', b.name, 'slug', b.slug, 'code', b.code, 'business_type', b.business_type,
+        'whatsapp', b.whatsapp, 'currency', b.currency, 'comped', b.comped, 'created_at', b.created_at,
+        'status', business_status(b.plan, b.trial_ends_at, b.paid_until),
+        'bookings_total', count(a.id) filter (where a.status <> 'cancelada'),
+        'bookings_30d', count(a.id) filter (where a.status <> 'cancelada' and a.created_at > now() - interval '30 days'),
+        'bookings_7d', count(a.id) filter (where a.status <> 'cancelada' and a.created_at > now() - interval '7 days'),
+        'web_30d', count(a.id) filter (where a.status <> 'cancelada' and a.source = 'web' and a.created_at > now() - interval '30 days'),
+        'customers', count(distinct a.customer_phone) filter (where a.status <> 'cancelada'),
+        'revenue_30d', coalesce(sum(a.total) filter (where _appt_done(a.status, a.ends_at) and a.starts_at > now() - interval '30 days'), 0),
+        'last_booking_at', max(a.created_at) filter (where a.status <> 'cancelada'),
+        'services', (select count(*) from services s where s.business_id = b.id and s.active)
+      ) as j
+      from businesses b
+      left join appointments a on a.business_id = b.id
+      group by b.id
+    ) q), '[]'::jsonb);
 end;
 $$;
 
@@ -2831,6 +2866,7 @@ grant execute on function public.admin_delete_owner(uuid, boolean) to authentica
 grant execute on function public.admin_extend_trial(uuid, int) to authenticated;
 grant execute on function public.admin_stats() to authenticated;
 grant execute on function public.admin_traffic(int) to authenticated;
+grant execute on function public.admin_business_activity() to authenticated;
 grant execute on function public.track_event(uuid, uuid, text, text, text, int, text, text) to anon, authenticated;
 grant execute on function public.submit_review(text, int, text) to anon, authenticated;
 grant execute on function public.owner_customers() to authenticated;

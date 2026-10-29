@@ -8,6 +8,7 @@ import { businessType } from '../../lib/templates'
 import type { PlanKey } from '../../lib/types'
 import { waLink } from '../../lib/whatsapp'
 import { Traffic } from './Traffic'
+import { BusinessActivity } from './BusinessActivity'
 
 export interface AdminStatsData {
   months: { month: string; signups: number; revenue: number; payments: number; appointments: number }[]
@@ -62,6 +63,7 @@ export default function AdminStats() {
   return (
     <div className="space-y-4">
       <Traffic />
+      <BusinessActivity />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Cobrado este mes" value={cup(thisMonth?.revenue || 0)} />
         <Stat label="Cobrado en total" value={cup(t.revenue)} />
