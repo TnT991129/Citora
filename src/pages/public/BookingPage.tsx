@@ -9,6 +9,7 @@ import { errorMessage } from '../../lib/errors'
 import { cupRate, dateKey, duration, longDate, money, price, timeOf, todayKey, weekdayOf, dayTitle } from '../../lib/format'
 import { buildAppointmentIcs, downloadIcs } from '../../lib/ics'
 import { hasModule } from '../../lib/plans'
+import { keepStaff, staffDoes } from '../../lib/staff'
 import { isPushSubscribed, pushSupported, subscribeCustomerPush } from '../../lib/push'
 import { rememberBooking } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
@@ -258,7 +259,7 @@ function EditBooking({ booking, onClose, onDone }: {
   const total = same ? Number(booking.total) : chosen.reduce((a, s) => a + Number(s.price), 0)
   const rate = same ? booking.usd_rate : biz ? cupRate(biz) : null
   const team = biz && hasModule(biz.plan, 'empleados') ? biz.staff || [] : []
-  const eligibleTeam = team.filter((s) => s.service_ids.length === 0 || selected.every((id) => s.service_ids.includes(id)))
+  const eligibleTeam = team.filter((s) => staffDoes(s, selected))
   const openDays = new Set((biz?.schedule || []).filter((d) => d.is_open).map((d) => d.weekday))
   const closed = new Set(biz?.closed_days || [])
 
@@ -303,7 +304,16 @@ function EditBooking({ booking, onClose, onDone }: {
             <ServicePicker
               services={services}
               selected={selected}
-              onChange={(ids) => setSelected(ids.filter((id) => services.some((s) => s.id === id)))}
+              onChange={(ids) => {
+                const next = ids.filter((id) => services.some((s) => s.id === id))
+                setSelected(next)
+                // Si el profesional elegido no hace los nuevos servicios, pasa a "Cualquiera"
+                const kept = keepStaff(team, staffId, next)
+                if (kept !== staffId) {
+                  setStaffId(kept)
+                  setTime(null)
+                }
+              }}
               currency={booking.business.currency}
               rate={cupRate(biz)}
             />

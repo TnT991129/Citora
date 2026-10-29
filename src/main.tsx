@@ -4,12 +4,17 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import './index.css'
 import { initPwa } from './lib/pwa'
+import { reloadOnce } from './lib/reload'
 import { initSentry, SentryErrorBoundary } from './lib/sentry'
 import { openSharedLink } from './lib/url'
 
 openSharedLink()
 initPwa()
 initSentry()
+// Un archivo de la versión anterior que ya no existe (ver lib/reload.ts)
+window.addEventListener('vite:preloadError', () => {
+  reloadOnce()
+})
 
 function CrashFallback() {
   return (

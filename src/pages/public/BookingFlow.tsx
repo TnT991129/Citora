@@ -5,6 +5,7 @@ import { Alert, Button, Field, PageLoader } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { cupRate, duration, money, price, time12, weekdayOf, zonedToIso, dayTitle } from '../../lib/format'
 import { hasModule } from '../../lib/plans'
+import { keepStaff, staffDoes } from '../../lib/staff'
 import { load, rememberBooking, save } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
 import { clientPath } from '../../lib/url'
@@ -43,7 +44,7 @@ export default function BookingFlow() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const services = business?.services || []
+  const services = useMemo(() => business?.services || [], [business])
   const chosen = useMemo(() => services.filter((s) => selected.includes(s.id)), [services, selected])
   const total = chosen.reduce((a, s) => a + Number(s.price), 0)
   const minutes = chosen.reduce((a, s) => a + s.duration_min, 0)
@@ -60,7 +61,7 @@ export default function BookingFlow() {
   const team = hasModule(business.plan, 'empleados') ? business.staff || [] : []
   const chosenIds = chosen.map((s) => s.id)
   // Solo se puede elegir a quien haga todos los servicios escogidos (si no marcó ninguno, hace todos)
-  const eligibleTeam = team.filter((s) => s.service_ids.length === 0 || chosenIds.every((id) => s.service_ids.includes(id)))
+  const eligibleTeam = team.filter((s) => staffDoes(s, chosenIds))
   const openDays = new Set((business.schedule || []).filter((d) => d.is_open).map((d) => d.weekday))
   const closed = new Set(business.closed_days || [])
   const isOpen = (key: string) => openDays.has(weekdayOf(key)) && !closed.has(key)
@@ -74,6 +75,16 @@ export default function BookingFlow() {
     setError(null)
     setStep(n)
     window.scrollTo(0, 0)
+  }
+
+  // Si cambia los servicios y el profesional elegido no los hace todos, pasa a "Cualquiera disponible"
+  const changeServices = (ids: string[]) => {
+    setSelected(ids)
+    const kept = keepStaff(team, staffId, ids)
+    if (kept !== staffId) {
+      setStaffId(kept)
+      setTime(null)
+    }
   }
 
   const pickStaff = (id: string | null) => {
@@ -139,7 +150,7 @@ export default function BookingFlow() {
 
         {cur === 'servicio' && (
           <div className="mt-4 space-y-4">
-            <ServicePicker services={services} selected={selected} onChange={setSelected} currency={currency} rate={rate} />
+            <ServicePicker services={services} selected={selected} onChange={changeServices} currency={currency} rate={rate} />
             {hasModule(business.plan, 'descuentos') && chosen.length > 0 && (
               <CouponBox slug={business.slug} serviceIds={selected} applied={coupon} onApplied={setCoupon} />
             )}

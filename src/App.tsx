@@ -1,9 +1,11 @@
-import { lazy, Suspense } from 'react'
+import { Suspense } from 'react'
 import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { PageLoader } from './components/ui'
+import { lazyWithReload as lazy } from './lib/reload'
 import { supabaseConfigured } from './lib/supabase'
 
-// Cada parte se descarga solo cuando se usa: el cliente que reserva nunca baja el código del panel
+// Cada parte se descarga solo cuando se usa: el cliente que reserva nunca baja el código del panel.
+// Si al publicar una versión nueva esa parte ya no existe, se recarga sola (ver lib/reload.ts).
 const Landing = lazy(() => import('./pages/Landing'))
 const Create = lazy(() => import('./pages/Create'))
 const Login = lazy(() => import('./pages/Login'))
