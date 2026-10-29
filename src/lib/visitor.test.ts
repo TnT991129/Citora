@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { detectSource, isBot } from './analytics'
+import { detectSource, isBot } from './visitor'
 
 const HOST = 'tnt991129.github.io'
 const CHROME = 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36'
