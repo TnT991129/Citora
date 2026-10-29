@@ -81,6 +81,13 @@ export function Privacy() {
         tu app funcione. Puedes pedir que se elimine tu cuenta y tus datos en cualquier momento, escribiéndonos
         por WhatsApp desde la página principal.
       </p>
+      <h2 className="font-bold text-slate-900">Visitas a la web</h2>
+      <p>
+        Contamos las visitas de forma anónima para saber cuánta gente usa Citora y mejorarla: qué páginas se
+        ven, desde qué tipo de dispositivo y de dónde viene la visita (por ejemplo, Instagram). No usamos
+        cookies ni guardamos tu IP, tu nombre ni ningún dato que te identifique: tu navegador solo guarda un
+        número al azar. Estos datos se borran a los 13 meses.
+      </p>
       <h2 className="font-bold text-slate-900">Dónde se guardan los datos</h2>
       <p>
         Los datos se guardan en Supabase, un proveedor externo de bases de datos, con las medidas de seguridad

@@ -6,6 +6,7 @@ import { errorMessage } from '../../lib/errors'
 import { cupRate, duration, money, price, time12, weekdayOf, zonedToIso, dayTitle } from '../../lib/format'
 import { hasModule } from '../../lib/plans'
 import { keepStaff, staffDoes } from '../../lib/staff'
+import { track } from '../../lib/analytics'
 import { load, rememberBooking, save } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
 import { clientPath } from '../../lib/url'
@@ -48,6 +49,10 @@ export default function BookingFlow() {
   const chosen = useMemo(() => services.filter((s) => selected.includes(s.id)), [services, selected])
   const total = chosen.reduce((a, s) => a + Number(s.price), 0)
   const minutes = chosen.reduce((a, s) => a + s.duration_min, 0)
+
+  useEffect(() => {
+    if (business?.accepting) track('visita', { page: 'reservar', slug: business.slug })
+  }, [business?.accepting, business?.slug])
 
   // Si cambian los servicios, el descuento se vuelve a calcular
   useEffect(() => setCoupon(null), [selected])
@@ -133,6 +138,7 @@ export default function BookingFlow() {
       return
     }
     const token = data as string
+    track('reserva_hecha', { page: 'reservar', slug: business.slug, once: false })
     rememberBooking({ token, slug: business.slug, starts_at: zonedToIso(date!, time!, business.timezone) })
     navigate(`${clientPath(business.slug, `cita/${token}`)}?nueva=1`, { replace: true })
   }

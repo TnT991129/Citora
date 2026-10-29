@@ -11,6 +11,7 @@ import { clientPath } from '../../lib/url'
 import type { GalleryPhoto, PublicBooking, PublicBusiness, PublicReview, PublicService } from '../../lib/types'
 import NotFound from '../NotFound'
 import { shows } from '../../lib/appearance'
+import { track } from '../../lib/analytics'
 import { hasModule } from '../../lib/plans'
 import { Announcement, BusinessHero, Centered, Closed, PoweredBy, Stars, usePublicBusiness } from './shared'
 
@@ -20,6 +21,10 @@ export default function BusinessHome() {
   const { slug } = useParams()
   const { business, error } = usePublicBusiness(slug)
   const tour = useTour('client')
+
+  useEffect(() => {
+    if (business?.accepting) track('visita', { page: 'negocio', slug: business.slug })
+  }, [business?.accepting, business?.slug])
 
   if (error) return <Centered><p className="text-slate-600">{error}</p></Centered>
   if (business === undefined) return <PageLoader />

@@ -267,6 +267,30 @@ do $$ begin
     select 1 from jsonb_array_elements(admin_stats()->'recent_payments') x where x->>'code' = (select code from businesses where slug='spa-mar')
   ), 'sus pagos ya no aparecen en los últimos pagos';
 end $$;
+-- Deshacer la cortesía (si se regaló por error): vuelve a su plan y a su fecha de pago de antes
+select expect_error($$select admin_revoke_free('00000000-0000-0000-0000-000000000000')$$, 'NEGOCIO_NO_EXISTE');
+select admin_revoke_free((select id from businesses where slug='spa-mar'));
+do $$ begin
+  assert (select comped from businesses where slug='spa-mar') = false, 'ya no es cortesía';
+  assert (select plan from businesses where slug='spa-mar') = 'basico', 'vuelve a su plan de antes';
+  assert (select paid_until from businesses where slug='spa-mar') between now() + interval '25 days' and now() + interval '35 days', 'vuelve a su fecha de pago de antes (1 mes)';
+  assert (select comped_prev_plan is null and comped_prev_paid_until is null from businesses where slug='spa-mar');
+end $$;
+select expect_error($$select admin_revoke_free((select id from businesses where slug='spa-mar'))$$, 'NEGOCIO_NO_EXISTE');
+-- Regalar dos veces no pisa el estado de antes
+select admin_grant_free((select id from businesses where slug='spa-mar'));
+select admin_grant_free((select id from businesses where slug='spa-mar'));
+do $$ begin assert (select comped_prev_plan from businesses where slug='spa-mar') = 'basico', 'regalar dos veces no pisa lo guardado'; end $$;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select expect_error($$select admin_revoke_free((select id from businesses where slug='spa-mar'))$$, 'NO_AUTORIZADO');
+-- El dueño no puede tocar lo guardado
+update businesses set comped_prev_plan = 'ultra', comped_prev_paid_until = now() + interval '50 years' where owner_id = auth.uid();
+reset role;
+do $$ begin
+  assert (select comped_prev_paid_until from businesses where slug='spa-mar') < now() + interval '1 year', 'el dueño no cambia lo guardado';
+end $$;
+set role authenticated;
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 -- Un pago real posterior le quita la cortesía (ya no sería gratis)
 select admin_activate_plan((select id from businesses where slug='spa-mar'), 'basico', 1, 500, 'Pago real después de la cortesía');
 do $$ begin assert (select comped from businesses where slug='spa-mar') = false, 'pagar de verdad quita la cortesía'; end $$;
@@ -615,6 +639,60 @@ select admin_deactivate_business((select v from ctx where k='biz1')::uuid);
 reset role;
 set role anon;
 do $$ begin assert not (get_public_business('barberia-leo')->>'accepting')::boolean, 'desactivado'; end $$;
+-- ===== Medición de visitas (anónima) =====
+reset role;
+set role anon;
+-- Un visitante de Instagram en el móvil: portada, crear y dos pasos del asistente
+select track_event('aaaaaaaa-0000-0000-0000-00000000000a', 'aaaaaaaa-0000-0000-0000-0000000000b1', 'visita', 'portada', null, null, 'Instagram', 'movil');
+select track_event('aaaaaaaa-0000-0000-0000-00000000000a', 'aaaaaaaa-0000-0000-0000-0000000000b1', 'visita', 'crear');
+select track_event('aaaaaaaa-0000-0000-0000-00000000000a', 'aaaaaaaa-0000-0000-0000-0000000000b1', 'crear_paso', null, null, 0);
+select track_event('aaaaaaaa-0000-0000-0000-00000000000a', 'aaaaaaaa-0000-0000-0000-0000000000b1', 'crear_paso', null, null, 1);
+-- Otro, directo desde el ordenador, que solo mira la portada
+select track_event('aaaaaaaa-0000-0000-0000-00000000000b', 'aaaaaaaa-0000-0000-0000-0000000000b2', 'visita', 'portada', null, null, null, 'ordenador');
+-- Un cliente que visita la web de un negocio y reserva
+select track_event('aaaaaaaa-0000-0000-0000-00000000000c', 'aaaaaaaa-0000-0000-0000-0000000000b3', 'visita', 'negocio', 'Spa-Mar');
+select track_event('aaaaaaaa-0000-0000-0000-00000000000c', 'aaaaaaaa-0000-0000-0000-0000000000b3', 'reserva_hecha', 'reservar', 'spa-mar');
+-- Lo que no es un evento conocido se ignora sin error
+select track_event('aaaaaaaa-0000-0000-0000-00000000000a', 'aaaaaaaa-0000-0000-0000-0000000000b1', 'inventado');
+select track_event(null, null, 'visita');
+-- Freno: como mucho 60 por visitante y hora
+do $$ begin
+  for i in 1..70 loop
+    perform track_event('aaaaaaaa-0000-0000-0000-00000000000d', 'aaaaaaaa-0000-0000-0000-0000000000b4', 'visita', 'entrar');
+  end loop;
+end $$;
+select expect_error('select * from analytics_events', 'permission denied');
+reset role;
+do $$ begin
+  assert (select count(*) from analytics_events where visitor_id = 'aaaaaaaa-0000-0000-0000-00000000000d') = 60, 'freno de 60 por hora';
+  assert not exists (select 1 from analytics_events where name not in ('visita', 'crear_paso', 'negocio_creado', 'reserva_hecha'));
+  assert (select source from analytics_events where visitor_id = 'aaaaaaaa-0000-0000-0000-00000000000a' and page = 'portada') = 'instagram', 'fuente en minúsculas';
+  assert (select slug from analytics_events where page = 'negocio') = 'spa-mar', 'enlace en minúsculas';
+end $$;
+-- Una cuenta de dueño autenticada tampoco puede leer la tabla ni las cifras
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+do $$ begin assert (select count(*) from analytics_events) = 0, 'el dueño no ve las visitas'; end $$;
+select expect_error('select admin_traffic(30)', 'NO_AUTORIZADO');
+-- El administrador sí
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+do $$ declare t jsonb := admin_traffic(30); begin
+  assert (t->>'visitors')::int = 2, 'visitantes de la portada: ' || (t->>'visitors');
+  assert (t->'funnel'->>'crear')::int = 1;
+  assert (t->'funnel'->'pasos'->>0)::int = 1 and (t->'funnel'->'pasos'->>1)::int = 1 and (t->'funnel'->'pasos'->>2)::int = 0, 'embudo: ' || (t->'funnel');
+  assert jsonb_array_length(t->'by_day') = 30;
+  assert (t->'devices'->>'movil')::int = 1 and (t->'devices'->>'ordenador')::int = 1;
+  assert exists (select 1 from jsonb_array_elements(t->'sources') x where x->>'source' = 'instagram' and (x->>'visitors')::int = 1);
+  assert exists (select 1 from jsonb_array_elements(t->'sources') x where x->>'source' = 'directo');
+  assert (t->'business_totals'->>'visitors')::int = 1 and (t->'business_totals'->>'bookings')::int = 1;
+  assert (t->'business_pages'->0->>'name') = 'Spa Mar', 'nombre del negocio: ' || (t->'business_pages');
+  assert jsonb_array_length(admin_traffic(7)->'by_day') = 7;
+end $$;
+reset role;
+select _purge_analytics();
+do $$ begin assert (select count(*) from analytics_events) > 0, 'la limpieza solo borra lo de hace más de 13 meses'; end $$;
+set role authenticated;
+
 -- ===== Borrar dueños =====
 reset role;
 set role authenticated;

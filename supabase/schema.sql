@@ -348,6 +348,10 @@ alter table public.businesses add column if not exists loyalty_reward text check
 -- Negocios de cortesía: el administrador les regaló la app para siempre (ver admin_grant_free).
 -- No cuentan como "pagando" ni sus pagos (si tuvieron alguno antes) se suman en las estadísticas.
 alter table public.businesses add column if not exists comped boolean not null default false;
+-- Cómo estaba antes de regalarla (plan y hasta cuándo había pagado), para poder deshacer la cortesía
+-- exactamente (ver admin_revoke_free) si se regaló por error.
+alter table public.businesses add column if not exists comped_prev_plan text;
+alter table public.businesses add column if not exists comped_prev_paid_until timestamptz;
 
 -- Políticas: reglas de reserva que personaliza el dueño, más un texto libre (columna "policies").
 -- reschedule_notice_hours: plazo para cambiar (puede ser distinto de cancelar). max_reschedules:
@@ -540,6 +544,31 @@ create table if not exists public.admin_push_subscriptions (
 );
 alter table public.admin_push_subscriptions enable row level security;
 -- Sin políticas para anon/authenticated: igual que push_subscriptions, solo por funciones.
+
+-- Medición de visitas para las estadísticas del administrador (ver src/lib/analytics.ts). Anónima:
+-- sin cookies, sin IP ni datos personales; cada visitante es un número aleatorio que guarda su
+-- navegador. Se escribe solo con track_event y se lee solo con admin_traffic.
+--   visita          una página vista (page: portada, crear, entrar, negocio, reservar; slug del negocio)
+--   crear_paso      un paso del asistente de crear la app (step: 0 = tipo ... 5 = cuenta)
+--   negocio_creado  terminó de crear su app
+--   reserva_hecha   un cliente reservó desde la web de un negocio (slug)
+create table if not exists public.analytics_events (
+  id bigint generated always as identity primary key,
+  visitor_id uuid not null,
+  session_id uuid not null,
+  name text not null check (name in ('visita', 'crear_paso', 'negocio_creado', 'reserva_hecha')),
+  page text check (char_length(page) <= 30),
+  slug text check (char_length(slug) <= 60),
+  step smallint check (step between 0 and 20),
+  source text check (char_length(source) <= 30),
+  device text check (device in ('movil', 'ordenador')),
+  created_at timestamptz not null default now()
+);
+create index if not exists analytics_events_time_idx on public.analytics_events (created_at);
+create index if not exists analytics_events_visitor_idx on public.analytics_events (visitor_id, created_at);
+create index if not exists analytics_events_slug_idx on public.analytics_events (slug, created_at) where slug is not null;
+alter table public.analytics_events enable row level security;
+-- Sin políticas: nadie la lee ni la escribe directamente.
 
 -- ---------------------------------------------------------------------
 -- 2. FUNCIONES DE APOYO
@@ -862,6 +891,8 @@ begin
     new.trial_ends_at := old.trial_ends_at;
     new.created_at := old.created_at;
     new.comped := old.comped;
+    new.comped_prev_plan := old.comped_prev_plan;
+    new.comped_prev_paid_until := old.comped_prev_paid_until;
   end if;
   return new;
 end;
@@ -1273,6 +1304,10 @@ begin
   end if;
   -- 13:00 UTC ≈ 8:00-9:00 en Cuba
   perform cron.schedule('citora-vencimiento', '0 13 * * *', $cron$select public._send_expiry_reminders();$cron$);
+  if exists (select 1 from cron.job where jobname = 'citora-limpiar-visitas') then
+    perform cron.unschedule('citora-limpiar-visitas');
+  end if;
+  perform cron.schedule('citora-limpiar-visitas', '15 8 * * *', $cron$select public._purge_analytics();$cron$);
 exception when others then
   null;
 end;
@@ -2436,7 +2471,9 @@ begin
   -- Si aún tiene meses pagados, se suman al final; si no, empiezan hoy
   v_until := greatest(now(), coalesce(b.paid_until, now())) + make_interval(months => p_months);
   -- Un pago real ya no es cortesía, aunque antes se le haya regalado la app
-  update businesses set plan = p_plan, paid_until = v_until, comped = false where id = b.id;
+  update businesses set plan = p_plan, paid_until = v_until, comped = false,
+                        comped_prev_plan = null, comped_prev_paid_until = null
+   where id = b.id;
   insert into payments (business_id, plan, months, amount, note, paid_until, created_by, business_name, business_code)
   values (b.id, p_plan, p_months, p_amount, nullif(btrim(coalesce(p_note, '')), ''), v_until, auth.uid(), b.name, b.code);
   return v_until;
@@ -2450,8 +2487,25 @@ create or replace function public.admin_grant_free(p_business uuid)
 returns void language plpgsql volatile security definer set search_path = public as $$
 begin
   if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
-  update businesses set plan = 'ultra', paid_until = now() + interval '100 years', comped = true
+  update businesses
+     set comped_prev_plan = case when comped then comped_prev_plan else plan end,
+         comped_prev_paid_until = case when comped then comped_prev_paid_until else paid_until end,
+         plan = 'ultra', paid_until = now() + interval '100 years', comped = true
    where id = p_business;
+  if not found then raise exception 'NEGOCIO_NO_EXISTE'; end if;
+end;
+$$;
+
+-- Deshace la cortesía: el negocio vuelve exactamente a como estaba antes de regalarla (su plan y la
+-- fecha hasta la que había pagado; si no había pagado, a su prueba o a inhabilitado, según su fecha).
+create or replace function public.admin_revoke_free(p_business uuid)
+returns void language plpgsql volatile security definer set search_path = public as $$
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  update businesses
+     set plan = comped_prev_plan, paid_until = comped_prev_paid_until, comped = false,
+         comped_prev_plan = null, comped_prev_paid_until = null
+   where id = p_business and comped;
   if not found then raise exception 'NEGOCIO_NO_EXISTE'; end if;
 end;
 $$;
@@ -2638,6 +2692,105 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------
+-- 7b. MEDICIÓN DE VISITAS (ver analytics_events)
+-- ---------------------------------------------------------------------
+
+-- Anota una visita o un paso. Lo llama cualquier visitante (sin sesión), así que nunca falla ni
+-- devuelve nada, y lleva un freno: como mucho 60 anotaciones por visitante y hora.
+create or replace function public.track_event(
+  p_visitor uuid, p_session uuid, p_name text, p_page text default null, p_slug text default null,
+  p_step int default null, p_source text default null, p_device text default null)
+returns void language plpgsql volatile security definer set search_path = public as $$
+begin
+  if p_visitor is null or p_session is null
+     or p_name not in ('visita', 'crear_paso', 'negocio_creado', 'reserva_hecha') then
+    return;
+  end if;
+  if (select count(*) from analytics_events
+      where visitor_id = p_visitor and created_at > now() - interval '1 hour') >= 60 then
+    return;
+  end if;
+  insert into analytics_events (visitor_id, session_id, name, page, slug, step, source, device)
+  values (p_visitor, p_session, p_name, left(p_page, 30), left(lower(p_slug), 60),
+          case when p_step between 0 and 20 then p_step end, left(lower(p_source), 30),
+          case when p_device in ('movil', 'ordenador') then p_device end);
+exception when others then
+  null;
+end;
+$$;
+
+-- Borra las visitas de hace más de 13 meses (las estadísticas miran como mucho un año atrás).
+-- Se llama una vez al día (ver tarea programada en la sección 3).
+create or replace function public._purge_analytics()
+returns void language sql security definer set search_path = public as $$
+  delete from analytics_events where created_at < now() - interval '13 months';
+$$;
+
+-- Estadísticas de visitas de los últimos p_days días (en hora de Cuba), para el administrador
+create or replace function public.admin_traffic(p_days int default 30)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_tz text := 'America/Havana';
+  v_days int := least(greatest(coalesce(p_days, 30), 1), 365);
+  v_first date := (now() at time zone v_tz)::date - (v_days - 1);
+  v_from timestamptz := v_first::timestamp at time zone v_tz;
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  return jsonb_build_object(
+    'days', v_days,
+    'since', (select min(created_at) from analytics_events),
+    -- Portada de Citora
+    'visitors', (select count(distinct visitor_id) from analytics_events
+                 where name = 'visita' and page = 'portada' and created_at >= v_from),
+    'sessions', (select count(distinct session_id) from analytics_events
+                 where name = 'visita' and page = 'portada' and created_at >= v_from),
+    'signups', (select count(*) from businesses where created_at >= v_from and not comped),
+    -- Embudo: personas distintas que llegaron a cada punto
+    'funnel', jsonb_build_object(
+      'portada', (select count(distinct visitor_id) from analytics_events
+                  where name = 'visita' and page = 'portada' and created_at >= v_from),
+      'crear', (select count(distinct visitor_id) from analytics_events
+                where name = 'visita' and page = 'crear' and created_at >= v_from),
+      'pasos', (select jsonb_agg((select count(distinct visitor_id) from analytics_events
+                                  where name = 'crear_paso' and step = st and created_at >= v_from) order by st)
+                from generate_series(0, 5) st),
+      'creados', (select count(distinct visitor_id) from analytics_events
+                  where name = 'negocio_creado' and created_at >= v_from)),
+    'by_day', (select jsonb_agg(jsonb_build_object(
+        'day', d,
+        'visitors', (select count(distinct visitor_id) from analytics_events
+                     where name = 'visita' and page = 'portada'
+                       and created_at >= d::timestamp at time zone v_tz and created_at < (d + 1)::timestamp at time zone v_tz),
+        'signups', (select count(*) from businesses
+                    where not comped and created_at >= d::timestamp at time zone v_tz and created_at < (d + 1)::timestamp at time zone v_tz))
+        order by d)
+      from generate_series(v_first, (now() at time zone v_tz)::date, interval '1 day') g(d0), lateral (select g.d0::date as d) x),
+    'sources', (select coalesce(jsonb_agg(jsonb_build_object('source', q.source, 'visitors', q.n) order by q.n desc), '[]'::jsonb)
+      from (select coalesce(source, 'directo') as source, count(distinct visitor_id) as n from analytics_events
+            where name = 'visita' and page = 'portada' and created_at >= v_from group by 1) q),
+    'devices', (select coalesce(jsonb_object_agg(q.device, q.n), '{}'::jsonb)
+      from (select coalesce(device, 'ordenador') as device, count(distinct visitor_id) as n from analytics_events
+            where name = 'visita' and page = 'portada' and created_at >= v_from group by 1) q),
+    -- Webs de los negocios: visitantes y reservas hechas desde ellas
+    'business_totals', jsonb_build_object(
+      'visitors', (select count(distinct visitor_id) from analytics_events
+                   where name = 'visita' and page = 'negocio' and created_at >= v_from),
+      'bookings', (select count(*) from analytics_events where name = 'reserva_hecha' and created_at >= v_from)),
+    'business_pages', (select coalesce(jsonb_agg(jsonb_build_object('slug', q.slug, 'name', q.name, 'visitors', q.visitors, 'bookings', q.bookings)
+                                                 order by q.visitors desc), '[]'::jsonb)
+      from (select e.slug, max(b.name) as name,
+                   count(distinct e.visitor_id) filter (where e.name = 'visita' and e.page = 'negocio') as visitors,
+                   count(*) filter (where e.name = 'reserva_hecha') as bookings
+            from analytics_events e left join businesses b on b.slug = e.slug
+            where e.slug is not null and e.created_at >= v_from
+            group by e.slug
+            order by 3 desc
+            limit 15) q)
+  );
+end;
+$$;
+
+-- ---------------------------------------------------------------------
 -- 8. PERMISOS DE EJECUCIÓN
 -- ---------------------------------------------------------------------
 
@@ -2670,12 +2823,15 @@ grant execute on function public.admin_list_owners() to authenticated;
 grant execute on function public.save_admin_push_subscription(text, text, text) to authenticated;
 grant execute on function public.admin_activate_plan(uuid, text, int, numeric, text) to authenticated;
 grant execute on function public.admin_grant_free(uuid) to authenticated;
+grant execute on function public.admin_revoke_free(uuid) to authenticated;
 grant execute on function public.admin_approve_payment_claim(uuid, numeric, text) to authenticated;
 grant execute on function public.admin_reject_payment_claim(uuid, text) to authenticated;
 grant execute on function public.admin_deactivate_business(uuid) to authenticated;
 grant execute on function public.admin_delete_owner(uuid, boolean) to authenticated;
 grant execute on function public.admin_extend_trial(uuid, int) to authenticated;
 grant execute on function public.admin_stats() to authenticated;
+grant execute on function public.admin_traffic(int) to authenticated;
+grant execute on function public.track_event(uuid, uuid, text, text, text, int, text, text) to anon, authenticated;
 grant execute on function public.submit_review(text, int, text) to anon, authenticated;
 grant execute on function public.owner_customers() to authenticated;
 grant execute on function public.owner_stats(date, date) to authenticated;
@@ -2721,6 +2877,7 @@ revoke execute on function public._send_expiry_reminders() from anon, authentica
 revoke execute on function public._notify_moderation(uuid, text) from anon, authenticated;
 revoke execute on function public._notify_admin_push(text, text) from anon, authenticated;
 revoke execute on function public._approve_unmoderated_photos() from anon, authenticated;
+revoke execute on function public._purge_analytics() from anon, authenticated;
 revoke execute on function public._appointments_notify() from anon;
 revoke execute on function public.staff_services_guard() from anon;
 revoke execute on function public.staff_schedule_days_normalize() from anon;

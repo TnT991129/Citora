@@ -8,6 +8,7 @@ import { useSession } from '../../lib/auth'
 import { setBrandColor } from '../../lib/brand'
 import { setAppManifest } from '../../lib/pwa'
 import { createBusinessFromDraft, loadDraft } from '../../lib/draft'
+import { stopTracking } from '../../lib/analytics'
 import { errorMessage } from '../../lib/errors'
 import { load, save } from '../../lib/storage'
 import { APP_VERSION } from '../../lib/version'
@@ -115,6 +116,11 @@ export default function Panel() {
     if (tour.open) save(NEWS_KEY, APP_VERSION)
     else if (load<string>(NEWS_KEY, '') !== APP_VERSION) setNewsOpen(true)
   }, [business, status, tour.open])
+  // Los dueños no cuentan como visitas cuando miran la portada o su propia web
+  useEffect(() => {
+    if (business) stopTracking()
+  }, [business])
+
   const closeNews = useCallback(() => {
     save(NEWS_KEY, APP_VERSION)
     setNewsOpen(false)
@@ -417,6 +423,7 @@ export function Icon({ name, className = 'h-6 w-6' }: { name: string; className?
     receipt: 'M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2zM9 8h6M9 12h6',
     download: 'M12 3v12M7 10l5 5 5-5M4 19h16',
     lock: 'M6 11h12v10H6zM8 11V7a4 4 0 018 0v4',
+    x: 'M6 6l12 12M18 6L6 18',
     shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z',
     sparkles: 'M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z',
     plus: 'M12 5v14M5 12h14',

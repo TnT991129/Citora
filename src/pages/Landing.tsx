@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { CitoraLogo } from '../components/ui'
+import { track } from '../lib/analytics'
 import { setBrandColor } from '../lib/brand'
 import { money } from '../lib/format'
 import { DEFAULT_PRICE, INCLUDED, MODULES } from '../lib/plans'
@@ -50,6 +51,7 @@ export default function Landing() {
   useEffect(() => {
     setBrandColor(null)
     document.title = 'Citora · La app de reservas de tu negocio'
+    track('visita', { page: 'portada' })
     supabase.rpc('get_public_prices').then(({ data }) => data && setPrices(data as Prices))
   }, [])
 

@@ -7,6 +7,7 @@ import { Alert, Button, BusinessAvatar, CitoraLogo, CopyButton, Field, LinkButto
 import { useSession } from '../lib/auth'
 import { setBrandColor } from '../lib/brand'
 import { ColorPicker } from '../components/ColorPicker'
+import { track } from '../lib/analytics'
 import { changeCurrency, createBusinessFromDraft, draftSlots, loadDraft, newDraft, saveDraft, type Draft } from '../lib/draft'
 import { errorMessage } from '../lib/errors'
 import { cleanPhone, currencyFields, CURRENCY_MODES, duration, money, price, slugify, WEEKDAYS_SHORT } from '../lib/format'
@@ -29,6 +30,13 @@ export default function Create() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<{ slug: string } | null>(null)
+  // Medición del embudo (ver lib/analytics.ts): quién llega y hasta qué paso del asistente
+  useEffect(() => {
+    track('visita', { page: 'crear' })
+  }, [])
+  useEffect(() => {
+    track('crear_paso', { step })
+  }, [step])
   const [needsConfirm, setNeedsConfirm] = useState(false)
 
   useEffect(() => {
@@ -554,6 +562,9 @@ function Shell({ children }: { children: ReactNode }) {
 
 function Success({ slug, name }: { slug: string; name: string }) {
   const url = publicUrl(slug)
+  useEffect(() => {
+    track('negocio_creado')
+  }, [])
   return (
     <Shell>
       <div className="text-center">

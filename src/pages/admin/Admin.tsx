@@ -1,24 +1,25 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import { ThemeToggle } from '../../components/ThemeToggle'
 import { Alert, Button, CitoraLogo, Field, LinkButton, Modal, PageLoader, StatusBadge, Toggle, WhatsAppIcon, flash } from '../../components/ui'
 import { useSession } from '../../lib/auth'
 import { CITORA_COLOR, setBrandColor } from '../../lib/brand'
 import { setAppManifest } from '../../lib/pwa'
+import { stopTracking } from '../../lib/analytics'
 import { errorMessage } from '../../lib/errors'
 import { daysLeft, fullDateFromIso, money } from '../../lib/format'
 import { isPushSubscribed, pushSupported, subscribeAdminPush, unsubscribePush } from '../../lib/push'
 import { PLAN_LABEL, SINGLE_PLAN } from '../../lib/plans'
 import { supabase } from '../../lib/supabase'
-import { businessType } from '../../lib/templates'
 import type { BusinessStatus, PaymentClaimStatus, PlanKey } from '../../lib/types'
 import { publicUrl } from '../../lib/url'
 import { waLink } from '../../lib/whatsapp'
+import { ago, AdminHome, OwnerAvatar } from './AdminHome'
 import AdminStats from './AdminStats'
 import { Icon } from '../panel/Panel'
 
 // Una cuenta de dueño. Los campos del negocio son null si se registró pero no terminó de crearlo.
-interface AdminOwner {
+export interface AdminOwner {
   user_id: string
   email: string | null
   signed_up_at: string
@@ -56,7 +57,7 @@ interface Settings {
 export default function Admin() {
   const session = useSession()
   const [isAdmin, setIsAdmin] = useState<boolean | undefined>(undefined)
-  const [tab, setTab] = useState<'duenos' | 'pagos' | 'estadisticas' | 'ajustes'>('duenos')
+  const [tab, setTab] = useState<AdminTab>('inicio')
 
   useEffect(() => {
     setBrandColor(null)
@@ -66,7 +67,11 @@ export default function Admin() {
 
   useEffect(() => {
     if (!session) return
-    supabase.rpc('is_platform_admin').then(({ data }) => setIsAdmin(Boolean(data)))
+    supabase.rpc('is_platform_admin').then(({ data }) => {
+      setIsAdmin(Boolean(data))
+      // Tus visitas a la portada no cuentan en las estadísticas
+      if (data) stopTracking()
+    })
   }, [session])
 
   if (session === null) return <Navigate to="/entrar?next=%2Fadmin" replace />
@@ -112,9 +117,9 @@ export default function Admin() {
         </div>
       </header>
       <main key={tab} className="ui-page mx-auto max-w-5xl px-4 py-6">
-        {tab === 'duenos' ? <Owners /> : tab === 'pagos' ? <PaymentClaims /> : tab === 'estadisticas' ? <AdminStats /> : <SettingsForm />}
+        {tab === 'inicio' ? <AdminHome go={setTab} /> : tab === 'duenos' ? <Owners /> : tab === 'pagos' ? <PaymentClaims /> : tab === 'estadisticas' ? <AdminStats /> : <SettingsForm />}
       </main>
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-slate-200 bg-white/90 backdrop-blur-lg safe-bottom md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white/90 backdrop-blur-lg safe-bottom md:hidden">
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -134,11 +139,14 @@ export default function Admin() {
 }
 
 const TABS = [
+  { key: 'inicio', label: 'Inicio', icon: 'home' },
   { key: 'duenos', label: 'Dueños', icon: 'users' },
   { key: 'pagos', label: 'Pagos', icon: 'card' },
   { key: 'estadisticas', label: 'Estadísticas', icon: 'chart' },
   { key: 'ajustes', label: 'Ajustes', icon: 'gear' },
 ] as const
+
+export type AdminTab = (typeof TABS)[number]['key']
 
 type Filter = 'todos' | BusinessStatus | 'sin_negocio'
 type Sort = 'recientes' | 'pago'
@@ -156,6 +164,10 @@ function Owners() {
   const [q, setQ] = useState('')
   const [activating, setActivating] = useState<OwnerWithBusiness | null>(null)
   const [deleting, setDeleting] = useState<AdminOwner | null>(null)
+  // Acciones que piden confirmación antes de hacerse (por si se pulsan por error)
+  const [confirming, setConfirming] = useState<{ kind: 'grant' | 'revoke' | 'deactivate'; owner: AdminOwner } | null>(null)
+  const [menu, setMenu] = useState<string | null>(null)
+  const [acting, setActing] = useState(false)
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.rpc('admin_list_owners')
@@ -198,8 +210,11 @@ function Owners() {
   const thisMonth = new Date().toISOString().slice(0, 7)
   const newThisMonth = realOwners.filter((o) => o.signed_up_at.slice(0, 7) === thisMonth).length
 
-  const act = async (fn: 'admin_extend_trial' | 'admin_deactivate_business' | 'admin_grant_free', o: AdminOwner, msg: string) => {
+  const act = async (fn: 'admin_extend_trial' | 'admin_deactivate_business' | 'admin_grant_free' | 'admin_revoke_free', o: AdminOwner, msg: string) => {
+    setActing(true)
     const { error } = await supabase.rpc(fn, fn === 'admin_extend_trial' ? { p_business: o.id, p_days: 3 } : { p_business: o.id })
+    setActing(false)
+    setConfirming(null)
     if (error) setError(errorMessage(error))
     else {
       flash(msg)
@@ -235,35 +250,35 @@ function Owners() {
         {filtered.length === 0 && <p className="py-6 text-center text-slate-500">No hay dueños con ese filtro.</p>}
         {filtered.map((o) => (
           <div key={o.user_id} className="card transition hover:border-slate-300">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="truncate font-bold">{o.email}</p>
-                <p className="text-sm text-slate-500">
-                  Se registró el {fullDateFromIso(o.signed_up_at, TZ)}
+            <div className="flex items-start gap-3">
+              <OwnerAvatar owner={o} size="h-11 w-11" />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <p className="truncate font-extrabold tracking-tight">{o.name || 'Sin negocio todavía'}</p>
+                  {o.code && <span className="font-mono text-xs text-slate-400">{o.code}</span>}
+                </div>
+                <p className="truncate text-sm text-slate-500">{o.email}</p>
+                <p className="text-xs text-slate-400">
+                  {ago(o.signed_up_at)}
                   {o.last_sign_in_at && <> · último acceso {fullDateFromIso(o.last_sign_in_at, TZ)}</>}
                 </p>
-                {o.id ? (
-                  <p className="mt-1 text-sm">
-                    {businessType(o.business_type).emoji} <b>{o.name}</b> <span className="font-mono text-slate-500">{o.code}</span>
-                  </p>
-                ) : (
-                  <p className="mt-1 text-sm text-amber-700">Se registró pero no terminó de crear su negocio.</p>
-                )}
               </div>
-              {o.comped ? <span className="chip bg-violet-100 text-xs text-violet-700">🎁 Cortesía</span> :
-                o.status === 'sin_negocio' ? <span className="chip bg-slate-100 text-xs text-slate-600">Sin negocio</span> : <StatusBadge status={o.status} />}
+              {o.comped ? <span className="chip bg-violet-100 text-violet-700">🎁 Cortesía</span> :
+                o.status === 'sin_negocio' ? <span className="chip bg-slate-100 text-slate-600">Sin negocio</span> : <StatusBadge status={o.status} />}
             </div>
 
-            {o.id && (
-              <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-sm">
-                {o.comped && <>🎁 Cortesía para siempre, no paga</>}
-                {!o.comped && o.status === 'activo' && <>💳 Pagando · próximo pago el <b>{fullDateFromIso(o.paid_until!, TZ)}</b> ({daysLeft(o.paid_until!)} días) · {money(prices.basico, 'CUP')}/mes</>}
-                {!o.comped && o.status === 'prueba' && <>🎁 Prueba gratis · termina el <b>{fullDateFromIso(o.trial_ends_at!, TZ)}</b> ({daysLeft(o.trial_ends_at!)} días)</>}
-                {!o.comped && o.status === 'vencido' && <>⛔ Sin pagar{o.paid_until ? <> desde el {fullDateFromIso(o.paid_until, TZ)}</> : <> desde que terminó la prueba</>}</>}
+            {o.id ? (
+              <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                {o.comped && <>Cortesía para siempre: tiene todo incluido y no paga.</>}
+                {!o.comped && o.status === 'activo' && <>Pagando · próximo pago el <b>{fullDateFromIso(o.paid_until!, TZ)}</b> ({daysLeft(o.paid_until!)} días) · {money(prices.basico, 'CUP')}/mes</>}
+                {!o.comped && o.status === 'prueba' && <>Prueba gratis · termina el <b>{fullDateFromIso(o.trial_ends_at!, TZ)}</b> ({daysLeft(o.trial_ends_at!)} días)</>}
+                {!o.comped && o.status === 'vencido' && <>Sin pagar{o.paid_until ? <> desde el {fullDateFromIso(o.paid_until, TZ)}</> : <> desde que terminó la prueba</>}: sus clientes no pueden reservar.</>}
               </p>
+            ) : (
+              <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">Se registró pero no terminó de crear su negocio.</p>
             )}
 
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               {o.id && !o.comped && <Button size="sm" onClick={() => setActivating(o as OwnerWithBusiness)}>Registrar pago</Button>}
               {o.whatsapp && (
                 <LinkButton href={waLink(o.whatsapp, `Hola, te escribo de Citora sobre ${o.name}.`)} variant="whatsapp" size="sm" newTab>
@@ -271,20 +286,54 @@ function Owners() {
                 </LinkButton>
               )}
               {o.slug && <LinkButton href={publicUrl(o.slug)} variant="secondary" size="sm" newTab>Ver su web</LinkButton>}
-              {o.id && !o.comped && <Button size="sm" variant="ghost" onClick={() => act('admin_extend_trial', o, '3 días más de prueba')}>+3 días prueba</Button>}
-              {o.id && !o.comped && (
-                <Button size="sm" variant="ghost" onClick={() => act('admin_grant_free', o, 'Regalado para siempre')}>🎁 Regalar para siempre</Button>
-              )}
-              {o.id && o.status !== 'vencido' && (
-                <Button size="sm" variant="ghost" className="text-red-600" onClick={() => act('admin_deactivate_business', o, 'Inhabilitado')}>Inhabilitar</Button>
-              )}
-              {(o.status === 'vencido' || o.status === 'sin_negocio') && (
-                <Button size="sm" variant="ghost" className="text-red-600" onClick={() => setDeleting(o)}>🗑 Eliminar</Button>
-              )}
+              {/* El resto de acciones, en un menú para no pulsarlas por error */}
+              <div className="relative ml-auto">
+                <button
+                  onClick={() => setMenu(menu === o.user_id ? null : o.user_id)}
+                  aria-expanded={menu === o.user_id}
+                  aria-label="Más acciones"
+                  className="flex h-9 items-center gap-1 rounded-btn px-3 text-sm font-semibold text-slate-600 ring-1 ring-slate-200 transition hover:bg-slate-50"
+                >
+                  Más
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M6 9l6 6 6-6" /></svg>
+                </button>
+                {menu === o.user_id && (
+                  <>
+                    <button aria-hidden tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={() => setMenu(null)} />
+                    <div className="ui-sheet absolute right-0 z-20 mt-1.5 w-60 overflow-hidden rounded-2xl border border-slate-200 bg-white py-1.5 shadow-xl shadow-slate-900/10">
+                      {o.id && !o.comped && o.status !== 'activo' && (
+                        <MenuItem icon="clock" onClick={() => { setMenu(null); act('admin_extend_trial', o, '3 días más de prueba') }}>Dar 3 días más de prueba</MenuItem>
+                      )}
+                      {o.id && !o.comped && <MenuItem icon="gift" onClick={() => { setMenu(null); setConfirming({ kind: 'grant', owner: o }) }}>Regalar para siempre</MenuItem>}
+                      {o.id && o.comped && <MenuItem icon="gift" onClick={() => { setMenu(null); setConfirming({ kind: 'revoke', owner: o }) }}>Quitar la cortesía</MenuItem>}
+                      {o.id && o.status !== 'vencido' && (
+                        <MenuItem icon="lock" danger onClick={() => { setMenu(null); setConfirming({ kind: 'deactivate', owner: o }) }}>Inhabilitar</MenuItem>
+                      )}
+                      {(o.status === 'vencido' || o.status === 'sin_negocio') && (
+                        <MenuItem icon="x" danger onClick={() => { setMenu(null); setDeleting(o) }}>Eliminar para siempre</MenuItem>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         ))}
       </div>
+
+      {confirming && (
+        <ConfirmModal
+          {...CONFIRM[confirming.kind](confirming.owner.name || confirming.owner.email || '')}
+          busy={acting}
+          onClose={() => setConfirming(null)}
+          onConfirm={() => {
+            const o = confirming.owner
+            if (confirming.kind === 'grant') act('admin_grant_free', o, `${o.name} tiene Citora gratis para siempre`)
+            else if (confirming.kind === 'revoke') act('admin_revoke_free', o, `Cortesía quitada: ${o.name} vuelve a como estaba`)
+            else act('admin_deactivate_business', o, `${o.name} inhabilitado`)
+          }}
+        />
+      )}
 
       {deleting && (
         <DeleteModal
@@ -313,6 +362,56 @@ function Owners() {
 }
 
 const TZ = 'America/Havana'
+
+// Lo que dice cada confirmación (ver Owners)
+const CONFIRM: Record<'grant' | 'revoke' | 'deactivate', (name: string) => { title: string; text: string; confirmLabel: string; danger?: boolean }> = {
+  grant: (name) => ({
+    title: '¿Regalar Citora para siempre?',
+    text: `${name} tendrá todo incluido sin pagar nunca, y no contará en tus ingresos ni en tus estadísticas de pago. Si te equivocas, puedes deshacerlo desde "Más → Quitar la cortesía": volverá exactamente a como está ahora.`,
+    confirmLabel: 'Sí, regalar para siempre',
+  }),
+  revoke: (name) => ({
+    title: '¿Quitar la cortesía?',
+    text: `${name} vuelve exactamente a como estaba antes de regalársela: su plan y la fecha hasta la que había pagado. Si ya no tenía nada pagado ni prueba vigente, su web dejará de recibir reservas hasta que pague.`,
+    confirmLabel: 'Sí, quitar la cortesía',
+    danger: true,
+  }),
+  deactivate: (name) => ({
+    title: '¿Inhabilitar este negocio?',
+    text: `Los clientes de ${name} no podrán reservar desde ahora y el dueño solo verá la pantalla de pago. No se borra nada: vuelve a funcionar en cuanto registres un pago.`,
+    confirmLabel: 'Sí, inhabilitar',
+    danger: true,
+  }),
+}
+
+function ConfirmModal({ title, text, confirmLabel, danger, busy, onClose, onConfirm }: {
+  title: string; text: string; confirmLabel: string; danger?: boolean; busy: boolean; onClose: () => void; onConfirm: () => void
+}) {
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={title}
+      footer={
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={onClose} disabled={busy}>Cancelar</Button>
+          <Button block onClick={onConfirm} loading={busy} className={danger ? '!bg-red-600 !bg-none !shadow-red-600/25' : ''}>{confirmLabel}</Button>
+        </div>
+      }
+    >
+      <p className="text-slate-600">{text}</p>
+    </Modal>
+  )
+}
+
+function MenuItem({ icon, danger, onClick, children }: { icon: string; danger?: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button onClick={onClick} className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold transition hover:bg-slate-50 ${danger ? 'text-red-600' : 'text-slate-700'}`}>
+      <Icon name={icon} className="h-[18px] w-[18px] shrink-0" />
+      {children}
+    </button>
+  )
+}
 
 /** Confirmación para borrar para siempre a un dueño inhabilitado: hay que escribir su código (o su correo) */
 function DeleteModal({ owner, onClose, onDone }: { owner: AdminOwner; onClose: () => void; onDone: () => void }) {

@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { AuthShell } from '../components/AuthShell'
 import { Alert, Button, Field } from '../components/ui'
 import { useSession } from '../lib/auth'
+import { track } from '../lib/analytics'
 import { setBrandColor } from '../lib/brand'
 import { errorMessage } from '../lib/errors'
 import { supabase } from '../lib/supabase'
@@ -24,6 +25,7 @@ export default function Login() {
   useEffect(() => {
     setBrandColor(null)
     document.title = 'Entrar · Citora'
+    track('visita', { page: 'entrar' })
   }, [])
 
   // El administrador va a su panel; el dueño, al panel de su negocio

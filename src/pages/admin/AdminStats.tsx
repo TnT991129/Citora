@@ -7,8 +7,9 @@ import { supabase } from '../../lib/supabase'
 import { businessType } from '../../lib/templates'
 import type { PlanKey } from '../../lib/types'
 import { waLink } from '../../lib/whatsapp'
+import { Traffic } from './Traffic'
 
-interface AdminStatsData {
+export interface AdminStatsData {
   months: { month: string; signups: number; revenue: number; payments: number; appointments: number }[]
   totals: {
     businesses: number
@@ -27,6 +28,13 @@ interface AdminStatsData {
 }
 
 const TZ = 'America/Havana'
+
+/** Mensaje de WhatsApp para un dueño cuyo plan vence o cuya prueba termina pronto */
+export function expiringMessage(b: { name: string; kind: 'activo' | 'prueba'; ends_at: string }): string {
+  return b.kind === 'activo'
+    ? `Hola, te escribo de Citora. El plan de ${b.name} vence el ${fullDateFromIso(b.ends_at, TZ)}. Para renovarlo entra en tu panel > Mensualidad. ¡Gracias!`
+    : `Hola, te escribo de Citora. Tu prueba gratis de ${b.name} termina el ${fullDateFromIso(b.ends_at, TZ)}. Para seguir recibiendo reservas entra en tu panel > Mensualidad. ¿Te ayudo con algo?`
+}
 
 function monthLabel(m: string, long = false): string {
   const [y, mm] = m.split('-').map(Number)
@@ -53,6 +61,7 @@ export default function AdminStats() {
 
   return (
     <div className="space-y-4">
+      <Traffic />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Cobrado este mes" value={cup(thisMonth?.revenue || 0)} />
         <Stat label="Cobrado en total" value={cup(t.revenue)} />
@@ -75,9 +84,7 @@ export default function AdminStats() {
                 </div>
                 {b.whatsapp && (
                   <LinkButton
-                    href={waLink(b.whatsapp, b.kind === 'activo'
-                      ? `Hola, te escribo de Citora. El plan de ${b.name} vence el ${fullDateFromIso(b.ends_at, TZ)}. Para renovarlo entra en tu panel > Plan. ¡Gracias!`
-                      : `Hola, te escribo de Citora. Tu prueba gratis de ${b.name} termina el ${fullDateFromIso(b.ends_at, TZ)}. Para seguir recibiendo reservas entra en tu panel > Plan. ¿Te ayudo con algo?`)}
+                    href={waLink(b.whatsapp, expiringMessage(b))}
                     variant="whatsapp"
                     size="sm"
                     newTab
