@@ -124,7 +124,14 @@ export function BusinessHero({ business, rating, preview, status, actions }: {
             )}
           </div>
         )}
-        {business.address && <p className="mt-3 text-sm text-white/80">📍 {business.address}</p>}
+        {business.address && (
+          <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-white/85">
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d={SOCIAL_ICONS.maps} />
+            </svg>
+            {business.address}
+          </p>
+        )}
         {actions && <div className="mt-6">{actions}</div>}
         {socials.length > 0 && (
           <div className="mt-4 flex justify-center gap-2">
@@ -161,8 +168,13 @@ const SOCIAL_ICONS = {
 export function Announcement({ text }: { text?: string }) {
   if (!text) return null
   return (
-    <div className="rounded-btn bg-amber-50 px-4 py-3 text-center font-semibold text-amber-900 shadow-sm ring-1 ring-amber-200">
-      📣 {text}
+    <div className="flex items-center gap-3 rounded-2xl bg-amber-50 px-4 py-3 font-semibold text-amber-900 shadow-sm ring-1 ring-amber-200">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M3 11v2a1 1 0 001 1h2l5 4V6L6 10H4a1 1 0 00-1 1zM15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13" />
+        </svg>
+      </span>
+      <span className="min-w-0">{text}</span>
     </div>
   )
 }

@@ -124,7 +124,7 @@ function StatsBody({ s, cur, long, expensesLink }: { s: OwnerStats; cur: (n: num
               <Link to={expensesLink} className="text-sm font-semibold text-brand">Ver gastos</Link>
             </div>
             <div className="mt-3">
-              <RankBars items={(s.expenses_by_category || []).map((x) => ({ label: x.category, value: Number(x.total), extra: cur(Number(x.total)) }))} />
+              <RankBars items={(s.expenses_by_category || []).map((x) => ({ label: x.category, value: Number(x.total) }))} format={cur} />
             </div>
           </section>
         </div>

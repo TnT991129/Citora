@@ -19,7 +19,7 @@ export function ServicePicker({ services, selected, onChange, currency, rate }: 
         key={s.id}
         type="button"
         onClick={() => onChange(on ? selected.filter((x) => x !== s.id) : [...selected, s.id])}
-        className={`card flex w-full items-center gap-3 text-left transition ${on ? 'ring-2 ring-brand' : ''}`}
+        className={`card flex w-full items-center gap-3 text-left transition active:scale-[0.99] ${on ? 'border-brand bg-brand/5 ring-1 ring-brand' : 'hover:border-slate-300'}`}
       >
         <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 ${on ? 'border-brand bg-brand text-white' : 'border-slate-300'}`}>
           {on && <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12l5 5 9-10" /></svg>}
@@ -27,9 +27,10 @@ export function ServicePicker({ services, selected, onChange, currency, rate }: 
         {s.photo_url && <img src={s.photo_url} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" />}
         <span className="min-w-0 flex-1">
           <span className="block font-semibold">{s.is_extra ? '+ ' : ''}{s.name}</span>
+          {s.description && <span className="line-clamp-1 text-sm text-slate-500">{s.description}</span>}
           <span className="block text-sm text-slate-500">{s.is_extra ? `+${duration(s.duration_min)}` : duration(s.duration_min)}</span>
         </span>
-        <span className="shrink-0 text-right font-semibold">{price(s.price, currency, rate)}</span>
+        <span className={`shrink-0 text-right font-bold ${on ? 'text-brand' : ''}`}>{price(s.price, currency, rate)}</span>
       </button>
     )
   }

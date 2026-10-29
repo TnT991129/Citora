@@ -46,9 +46,11 @@ export default function BusinessHome() {
   const book = (serviceId?: string) => clientPath(business.slug, serviceId ? `reservar?s=${serviceId}` : 'reservar')
   const wa = business.whatsapp ? waLink(business.whatsapp, `Hola, tengo una pregunta sobre ${business.name}.`) : null
   const bookLabel = look.book_label || 'Reservar cita'
+  const from = main.length > 0 && showPrices ? money(minPrice, currency) : null
+  const mapsUrl = look.maps_url || (business.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(business.address)}` : null)
 
   return (
-    <div className="min-h-dvh pb-28">
+    <div className="min-h-dvh pb-28 lg:pb-12">
       <BusinessHero
         business={business}
         rating={rating}
@@ -74,10 +76,12 @@ export default function BusinessHome() {
         }
       />
 
-      <main className="relative mx-auto -mt-10 max-w-xl space-y-5 px-4">
+      {/* En ordenador: contenido a la izquierda y la tarjeta de reserva fija a la derecha */}
+      <div className="relative mx-auto -mt-10 max-w-xl px-4 lg:grid lg:max-w-5xl lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-8">
+      <main className="space-y-6">
         <Highlights
           rating={rating}
-          from={main.length > 0 && showPrices ? money(minPrice, currency) : null}
+          from={from}
           days={showHours ? daysSummary(openDays) : null}
           count={main.length}
         />
@@ -90,7 +94,7 @@ export default function BusinessHome() {
           {main.length === 0 ? (
             <div className="card text-slate-500">Pronto publicaremos nuestros servicios.</div>
           ) : (
-            <div className="space-y-2.5">
+            <div className="card divide-y divide-slate-100 overflow-hidden p-0 sm:p-0">
               {main.map((s) => (
                 <ServiceCard key={s.id} s={s} to={book(s.id)} price={showPrices ? price(s.price, currency, rate) : null} showDuration={showDurations} />
               ))}
@@ -123,37 +127,22 @@ export default function BusinessHome() {
                 <Link
                   key={s.id}
                   to={clientPath(business.slug, `reservar?p=${s.id}`)}
-                  className="card flex flex-col items-center gap-2 py-5 text-center transition hover:-translate-y-0.5 hover:shadow-md"
+                  className="card flex flex-col items-center gap-2.5 py-5 text-center transition hover:-translate-y-0.5 hover:shadow-md"
                 >
-                  <span className="flex h-14 w-14 items-center justify-center rounded-full bg-brand/10 text-2xl font-extrabold text-brand">
-                    {s.name.trim().charAt(0).toUpperCase()}
-                  </span>
+                  {s.photo_url ? (
+                    <img src={s.photo_url} alt="" loading="lazy" className="h-16 w-16 rounded-full object-cover shadow-md ring-4 ring-brand/10" />
+                  ) : (
+                    <span className="flex h-16 w-16 items-center justify-center rounded-full bg-brand bg-gradient-to-br from-brand to-brand/60 text-2xl font-extrabold text-white shadow-md shadow-brand/20">
+                      {s.name.trim().charAt(0).toUpperCase()}
+                    </span>
+                  )}
                   <span className="w-full truncate font-bold">{s.name}</span>
-                  <span className="text-xs font-semibold text-brand">Reservar con {s.name.split(' ')[0]} ›</span>
+                  <span className="rounded-full bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">Reservar con {s.name.split(' ')[0]}</span>
                 </Link>
               ))}
             </div>
           </section>
         )}
-
-        <section className="card">
-          <SectionTitle eyebrow="Fácil y rápido" title="Reserva en 3 pasos" inCard />
-          <ol className="grid gap-3 sm:grid-cols-3">
-            {[
-              ['list', 'Elige', 'el servicio que quieras'],
-              ['calendar', 'Escoge', 'el día y la hora libre'],
-              ['check', 'Confirma', 'con tu nombre y teléfono'],
-            ].map(([icon, t, d], i) => (
-              <li key={t} className="flex items-center gap-3 sm:flex-col sm:text-center">
-                <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand/10 text-brand">
-                  <Ico name={icon} />
-                  <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-brand text-[11px] font-bold text-white">{i + 1}</span>
-                </span>
-                <span className="text-sm text-slate-600"><b className="block text-slate-900">{t}</b>{d}</span>
-              </li>
-            ))}
-          </ol>
-        </section>
 
         {shows(look, 'show_gallery') && (business.gallery || []).length > 0 && <Gallery photos={business.gallery!} />}
 
@@ -163,35 +152,49 @@ export default function BusinessHome() {
           <section className="card">
             <SectionTitle eyebrow="Visítanos" title="Dónde y cuándo" inCard />
             {business.address && (
-              <div className="flex items-start gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand"><Ico name="pin" /></span>
-                <div className="min-w-0">
-                  <p className="font-semibold">{business.address}</p>
-                  {look.maps_url && (
-                    <a href={look.maps_url} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-brand">Ver en el mapa →</a>
-                  )}
-                </div>
+              <div className="flex items-center gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand"><Ico name="pin" /></span>
+                <p className="min-w-0 flex-1 font-semibold">{business.address}</p>
+                {mapsUrl && (
+                  <a
+                    href={mapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-brand/10 px-3.5 py-2 text-sm font-semibold text-brand transition hover:bg-brand/15"
+                  >
+                    <Ico name="navigate" className="h-4 w-4" /> Cómo llegar
+                  </a>
+                )}
               </div>
             )}
             {showHours && (
-              <div className={`grid grid-cols-7 gap-1.5 ${business.address ? 'mt-4' : ''}`}>
-                {WEEK.map((w) => {
-                  const on = openDays.includes(w)
-                  const isToday = today ? weekdayOf(today) === w : false
-                  return (
-                    <div
-                      key={w}
-                      className={`rounded-xl py-2 text-center text-xs font-semibold ${
-                        on ? 'bg-brand/10 text-brand' : 'bg-slate-100 text-slate-400'
-                      } ${isToday ? 'ring-2 ring-brand' : ''}`}
-                      title={`${WEEKDAYS[w]}: ${on ? 'abierto' : 'cerrado'}`}
-                    >
-                      {WEEKDAYS_SHORT[w]}
-                      <span className="mt-0.5 block text-[10px] font-medium opacity-80">{on ? 'Abre' : '—'}</span>
-                    </div>
-                  )
-                })}
-              </div>
+              <>
+                <div className={`grid grid-cols-7 gap-1.5 ${business.address ? 'mt-5' : ''}`}>
+                  {WEEK.map((w) => {
+                    const on = openDays.includes(w)
+                    const isToday = today ? weekdayOf(today) === w : false
+                    return (
+                      <div
+                        key={w}
+                        className={`flex flex-col items-center rounded-xl py-2.5 text-xs font-semibold ${
+                          isToday ? 'bg-brand text-white shadow-md shadow-brand/25' : on ? 'bg-brand/10 text-brand' : 'bg-slate-100 text-slate-400'
+                        }`}
+                        title={`${WEEKDAYS[w]}: ${on ? 'abierto' : 'cerrado'}`}
+                      >
+                        <span className={on ? '' : 'line-through'}>{WEEKDAYS_SHORT[w]}</span>
+                        {isToday && <span className="mt-0.5 text-[10px] font-medium opacity-90">Hoy</span>}
+                      </div>
+                    )
+                  })}
+                </div>
+                {today && (
+                  <p className="mt-3 flex items-center gap-2 text-sm text-slate-600">
+                    <span className={`h-2 w-2 shrink-0 rounded-full ${todayOpen ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                    {todayOpen ? 'Hoy estamos abiertos.' : 'Hoy está cerrado.'}{' '}
+                    Abrimos {daysSummary(openDays, true)}.
+                  </p>
+                )}
+              </>
             )}
           </section>
         )}
@@ -218,12 +221,57 @@ export default function BusinessHome() {
             </LinkButton>
           )}
         </section>
-        <button onClick={tour.relaunch} className="mx-auto block text-sm font-semibold text-brand">🧭 ¿Cómo reservar? Ver guía rápida</button>
+        <button onClick={tour.relaunch} className="mx-auto flex items-center gap-1.5 text-sm font-semibold text-brand">
+          <Ico name="help" className="h-4 w-4" /> ¿Cómo reservar? Ver guía rápida
+        </button>
         <PoweredBy />
       </main>
 
       {main.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur safe-bottom">
+        <aside className="hidden lg:sticky lg:top-6 lg:block">
+          <div className="card space-y-4 shadow-xl shadow-slate-900/5">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand">Reserva online</p>
+              <p className="mt-1 text-lg font-extrabold leading-tight">{business.name}</p>
+            </div>
+            {from && (
+              <p className="text-sm text-slate-500">
+                Desde <span className="text-2xl font-extrabold tracking-tight text-slate-900">{from}</span>
+              </p>
+            )}
+            {today && showHours && (
+              <p className="flex items-center gap-2 text-sm font-medium text-slate-600">
+                <span className={`h-2 w-2 rounded-full ${todayOpen ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                {todayOpen ? 'Abierto hoy' : 'Hoy cerrado'}
+              </p>
+            )}
+            <Link
+              to={book()}
+              className="flex w-full items-center justify-center gap-2 rounded-btn bg-brand bg-btn-grad py-3.5 font-bold text-white shadow-lg shadow-brand/30 transition hover:brightness-105 active:scale-[0.98]"
+            >
+              <Ico name="calendar" /> {bookLabel}
+            </Link>
+            {wa && (
+              <a
+                href={wa}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex w-full items-center justify-center gap-2 rounded-btn py-3 font-semibold text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-50"
+              >
+                <WhatsAppIcon className="h-5 w-5 text-[#25d366]" /> Escribir por WhatsApp
+              </a>
+            )}
+            <p className="flex items-start gap-2 border-t border-slate-100 pt-4 text-xs text-slate-500">
+              <Ico name="check" className="mt-px h-4 w-4 shrink-0 text-emerald-500" />
+              Sin cuenta ni contraseña. Puedes cambiar o cancelar tu cita desde el enlace que recibes al reservar.
+            </p>
+          </div>
+        </aside>
+      )}
+      </div>
+
+      {main.length > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur safe-bottom lg:hidden">
           <div className="mx-auto flex max-w-xl items-center gap-3">
             {showPrices && (
               <div className="shrink-0 leading-tight">
@@ -255,15 +303,17 @@ const CLIENT_TOUR = (name: string) => [
   { emoji: '📱', title: 'Instálala en tu teléfono', text: 'Si vas a reservar seguido, instala esta web en la pantalla de inicio de tu teléfono: se abre como una app, sin buscarla en el navegador.' },
 ]
 
-/** "Lunes a sábado", "Lun, Mié y Vie"... */
-function daysSummary(days: number[]): string {
+/** "Lun a Sáb", "Lun, Mié y Vie", "Todos los días"... Con long: "de lunes a sábado", "lunes, miércoles y viernes" */
+function daysSummary(days: number[], long = false): string {
+  if (days.length === 7) return long ? 'todos los días' : 'Todos los días'
+  const name = (w: number) => (long ? WEEKDAYS[w].toLowerCase() : WEEKDAYS_SHORT[w])
   const idx = WEEK.map((w) => days.includes(w))
   const first = idx.indexOf(true)
   const last = idx.lastIndexOf(true)
   if (first >= 0 && idx.slice(first, last + 1).every(Boolean) && last > first) {
-    return `${WEEKDAYS_SHORT[WEEK[first]]} a ${WEEKDAYS_SHORT[WEEK[last]]}`
+    return `${long ? 'de ' : ''}${name(WEEK[first])} a ${name(WEEK[last])}`
   }
-  const names = WEEK.filter((w) => days.includes(w)).map((w) => WEEKDAYS_SHORT[w])
+  const names = WEEK.filter((w) => days.includes(w)).map(name)
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}` : names[0] || ''
 }
 
@@ -273,17 +323,18 @@ function Highlights({ rating, from, days, count }: { rating: PublicBusiness['rat
   if (rating) items.push({ icon: 'star', value: Number(rating.avg).toFixed(1), label: `${rating.count} ${rating.count === 1 ? 'opinión' : 'opiniones'}` })
   if (from) items.push({ icon: 'tag', value: from, label: 'desde' })
   if (days) items.push({ icon: 'clock', value: days, label: 'abrimos' })
-  if (items.length < 3 && count > 0) items.push({ icon: 'list', value: String(count), label: count === 1 ? 'servicio' : 'servicios' })
+  // El número de servicios solo si no hay nada mejor que mostrar
+  if (items.length === 0 && count > 0) items.push({ icon: 'list', value: String(count), label: count === 1 ? 'servicio' : 'servicios' })
   if (items.length === 0) return null
   return (
-    <div className={`grid divide-x divide-slate-100 rounded-2xl border border-slate-200 bg-white py-3 shadow-lg shadow-slate-900/5 ${items.length === 1 ? 'grid-cols-1' : items.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+    <div className={`grid divide-x divide-slate-100 rounded-2xl border border-slate-200 bg-white py-3.5 shadow-xl shadow-slate-900/5 ${items.length === 1 ? 'grid-cols-1' : items.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
       {items.slice(0, 3).map((it) => (
         <div key={it.icon} className="min-w-0 px-2 text-center">
-          <p className="flex items-center justify-center gap-1 truncate font-extrabold">
+          <p className="flex items-center justify-center gap-1 text-sm font-extrabold leading-tight sm:text-base">
             <Ico name={it.icon} className={`h-4 w-4 shrink-0 ${it.icon === 'star' ? 'text-amber-400' : 'text-brand'}`} />
-            <span className="truncate">{it.value}</span>
+            <span>{it.value}</span>
           </p>
-          <p className="truncate text-xs text-slate-500">{it.label}</p>
+          <p className="mt-0.5 truncate text-xs text-slate-500">{it.label}</p>
         </div>
       ))}
     </div>
@@ -301,25 +352,24 @@ function SectionTitle({ eyebrow, title, inCard }: { eyebrow: string; title: stri
 
 function ServiceCard({ s, to, price, showDuration }: { s: PublicService; to: string; price: string | null; showDuration: boolean }) {
   return (
-    <Link to={to} className="group card flex items-center gap-4 transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]">
-      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand/10 text-lg font-extrabold text-brand">
-        {s.name.trim().charAt(0).toUpperCase()}
-      </span>
+    <Link to={to} className="group flex items-center gap-4 px-4 py-4 transition hover:bg-slate-50 active:bg-slate-100 sm:px-5">
+      {s.photo_url && <img src={s.photo_url} alt="" loading="lazy" className="h-16 w-16 shrink-0 rounded-xl object-cover" />}
       <span className="min-w-0 flex-1">
         <span className="block font-bold">{s.name}</span>
-        {s.description && <span className="mt-0.5 block text-sm text-slate-500">{s.description}</span>}
-        {showDuration && (
-          <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-slate-500">
-            <Ico name="clock" className="h-3.5 w-3.5" /> {duration(s.duration_min)}
+        {s.description && <span className="mt-0.5 line-clamp-2 text-sm text-slate-500">{s.description}</span>}
+        {(showDuration || price) && (
+          <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            {price && <span className="font-extrabold text-slate-900">{price}</span>}
+            {showDuration && (
+              <span className="inline-flex items-center gap-1 text-slate-500">
+                <Ico name="clock" className="h-3.5 w-3.5" /> {duration(s.duration_min)}
+              </span>
+            )}
           </span>
         )}
       </span>
-      <span className="flex shrink-0 flex-col items-end gap-1">
-        {price && <span className="text-right font-extrabold text-brand">{price}</span>}
-        <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-slate-400 transition group-hover:text-brand">
-          Reservar
-          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden><path d="M9 6l6 6-6 6" /></svg>
-        </span>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand transition group-hover:bg-brand group-hover:text-white" aria-hidden>
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
       </span>
     </Link>
   )
@@ -347,7 +397,7 @@ function MyBookings({ slug, tz }: { slug: string; tz: string }) {
     if (!hasHistory) return null
     return (
       <Link to={clientPath(slug, 'mis-citas')} className="card flex items-center justify-between font-semibold">
-        <span>📋 Mis citas</span>
+        <span className="flex items-center gap-2"><Ico name="history" className="h-5 w-5 text-brand" /> Mis citas</span>
         <span className="text-brand">Ver historial →</span>
       </Link>
     )
@@ -487,6 +537,9 @@ function Ico({ name, className = 'h-5 w-5' }: { name: string; className?: string
     star: 'M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z',
     tag: 'M3 12V4h8l10 10-8 8L3 12zM7.5 8.5h.01',
     refresh: 'M20 11a8 8 0 00-14.9-3M4 4v4h4M4 13a8 8 0 0014.9 3M20 20v-4h-4',
+    navigate: 'M3 11l18-8-8 18-2-8z',
+    help: 'M12 21a9 9 0 100-18 9 9 0 000 18zM9.5 9a2.5 2.5 0 015 .5c0 1.5-2.5 2-2.5 3.5M12 17h.01',
+    history: 'M3 12a9 9 0 109-9 9 9 0 00-6.4 2.6L3 8M3 3v5h5M12 7v5l3 2',
   }
   return (
     <svg viewBox="0 0 24 24" className={className} fill={name === 'star' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>

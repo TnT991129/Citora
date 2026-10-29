@@ -14,10 +14,11 @@ body { min-height: 100dvh; }
 
 @layer components {
   .input {
-    @apply w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-base text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20 disabled:bg-slate-100;
+    @apply w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-base text-slate-900 shadow-sm shadow-slate-900/[0.03] placeholder:text-slate-400 outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/15 disabled:bg-slate-100;
   }
-  .label { @apply mb-1.5 block text-sm font-medium text-slate-700; }
-  .card { @apply rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5; }
+  .label { @apply mb-1.5 block text-sm font-semibold text-slate-700; }
+  /* Sombra en dos capas: un borde nítido y una sombra amplia y suave (se ve más "profesional" que una sola) */
+  .card { @apply rounded-2xl border border-slate-200 bg-white p-4 sm:p-5; box-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 10px 28px -14px rgb(15 23 42 / 0.12); }
   /* shrink-0: dentro de una fila flex (ej. junto al nombre de un cliente), nunca se aprieta ni se parte en dos líneas */
   .chip { @apply inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium; }
 }
@@ -29,6 +30,19 @@ body { min-height: 100dvh; }
 }
 
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+/* Movimiento de la interfaz: al cambiar de pantalla, al abrir una ventana y los avisos breves */
+@keyframes ui-page { from { opacity: 0; transform: translate3d(0, 10px, 0); } to { opacity: 1; transform: none; } }
+@keyframes ui-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ui-sheet { from { opacity: 0; transform: translate3d(0, 32px, 0) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes ui-toast { from { opacity: 0; transform: translate3d(-50%, -14px, 0) scale(0.96); } to { opacity: 1; transform: translate3d(-50%, 0, 0); } }
+.ui-page { animation: ui-page 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.ui-fade { animation: ui-fade 0.2s ease-out both; }
+.ui-sheet { animation: ui-sheet 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.ui-toast { animation: ui-toast 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .ui-page, .ui-fade, .ui-sheet, .ui-toast { animation: none; }
+}
 
 /* ---------------------------------------------------------------------
    Modo oscuro (clase "dark" en <html>, ver src/lib/theme.ts).
@@ -82,6 +96,8 @@ html.dark { color-scheme: dark; }
 .dark .text-brand, .dark .group:hover .group-hover\:text-brand { color: color-mix(in srgb, rgb(var(--brand-rgb)) 50%, #fff); }
 .dark .bg-brand\/10 { background-color: rgb(var(--brand-rgb) / 0.22); }
 .dark .bg-brand\/5 { background-color: rgb(var(--brand-rgb) / 0.12); }
+.dark .card { box-shadow: 0 1px 2px rgb(0 0 0 / 0.3); }
+.dark .input { box-shadow: none; }
 
 /* Colores de Citora (portada, administrador) */
 .dark .bg-gradient-to-b.from-citora-50 { background-image: linear-gradient(to bottom, rgb(82 67 229 / 0.18), #0b1120 55%, #0b1120); }

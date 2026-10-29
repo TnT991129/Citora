@@ -3,8 +3,8 @@ import { useEffect, useId, type ButtonHTMLAttributes, type ReactNode } from 'rea
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'whatsapp'
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-brand bg-btn-grad text-white hover:brightness-110 shadow-sm',
-  secondary: 'bg-white text-slate-800 border border-slate-300 hover:bg-slate-50',
+  primary: 'bg-brand bg-btn-grad text-white shadow-md shadow-brand/25 hover:brightness-110 hover:shadow-lg hover:shadow-brand/30',
+  secondary: 'bg-white text-slate-800 border border-slate-200 shadow-sm hover:border-slate-300 hover:bg-slate-50',
   ghost: 'text-slate-700 hover:bg-slate-100',
   danger: 'bg-white text-red-600 border border-red-200 hover:bg-red-50',
   whatsapp: 'bg-[#25D366] text-white hover:brightness-105 shadow-sm',
@@ -65,7 +65,7 @@ export function Spinner({ small }: { small?: boolean }) {
 export function PageLoader({ text = 'Cargando…' }: { text?: string }) {
   return (
     <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-slate-500">
-      <Spinner />
+      <span className="text-brand"><Spinner /></span>
       <span className="text-sm">{text}</span>
     </div>
   )
@@ -89,7 +89,20 @@ export function Alert({ kind = 'error', children }: { kind?: 'error' | 'success'
     info: 'bg-sky-50 text-sky-800 border-sky-200',
     warning: 'bg-amber-50 text-amber-900 border-amber-200',
   }
-  return <div className={`rounded-xl border px-3.5 py-2.5 text-sm ${styles[kind]}`}>{children}</div>
+  const icons = {
+    error: 'M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z',
+    success: 'M22 11.1V12a10 10 0 11-5.9-9.1M22 4L12 14l-3-3',
+    info: 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 16v-4M12 8h.01',
+    warning: 'M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z',
+  }
+  return (
+    <div className={`flex items-start gap-2.5 rounded-xl border px-3.5 py-2.5 text-sm ${styles[kind]}`} role={kind === 'error' ? 'alert' : undefined}>
+      <svg viewBox="0 0 24 24" className="mt-px h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d={icons[kind]} />
+      </svg>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  )
 }
 
 export function Modal({ open, onClose, title, children, footer }: {
@@ -113,16 +126,18 @@ export function Modal({ open, onClose, title, children, footer }: {
 
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 sm:items-center sm:p-4" onClick={onClose}>
+    <div className="ui-fade fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 backdrop-blur-[2px] sm:items-center sm:p-4" onClick={onClose}>
       <div
-        className="flex max-h-[92dvh] w-full flex-col rounded-t-3xl bg-white shadow-xl sm:max-w-lg sm:rounded-3xl"
+        className="ui-sheet flex max-h-[92dvh] w-full flex-col rounded-t-3xl bg-white shadow-2xl shadow-slate-900/20 sm:max-w-lg sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label={title}
       >
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-          <h2 className="text-lg font-bold">{title}</h2>
+        {/* Asa para arrastrar (solo como señal visual en el móvil) */}
+        <div className="flex justify-center pt-2.5 sm:hidden" aria-hidden><span className="h-1.5 w-10 rounded-full bg-slate-200" /></div>
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5 sm:py-4">
+          <h2 className="text-lg font-extrabold tracking-tight">{title}</h2>
           <button onClick={onClose} className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100" aria-label="Cerrar">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
           </button>
@@ -136,7 +151,10 @@ export function Modal({ open, onClose, title, children, footer }: {
 
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-4 py-8 text-center">
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-4 py-9 text-center">
+      <span className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-brand/10 text-brand" aria-hidden>
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16M4 12h10M4 17h7" /></svg>
+      </span>
       <p className="font-semibold text-slate-700">{title}</p>
       {children && <div className="mt-1 text-sm text-slate-500">{children}</div>}
     </div>
@@ -178,8 +196,9 @@ export function CopyButton({ text, label = 'Copiar' }: { text: string; label?: s
 export function flash(text: string) {
   const el = document.createElement('div')
   el.textContent = text
+  el.setAttribute('role', 'status')
   el.className =
-    'fixed left-1/2 top-4 z-[100] -translate-x-1/2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-lg transition-opacity'
+    'ui-toast fixed left-1/2 top-4 z-[100] -translate-x-1/2 rounded-full bg-[#0f172a] px-4 py-2.5 text-sm font-semibold text-white shadow-xl shadow-slate-900/25 ring-1 ring-white/10 transition-opacity duration-300'
   document.body.appendChild(el)
   setTimeout(() => (el.style.opacity = '0'), 1600)
   setTimeout(() => el.remove(), 2000)
@@ -211,7 +230,12 @@ export function StatusBadge({ status }: { status: string }) {
     vencido: ['Vencido', 'bg-red-100 text-red-700'],
   }
   const [label, cls] = map[status] || [status, 'bg-slate-100 text-slate-700']
-  return <span className={`chip ${cls}`}>{label}</span>
+  return (
+    <span className={`chip ${cls}`}>
+      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" aria-hidden />
+      {label}
+    </span>
+  )
 }
 
 export function CitoraLogo({ className = '' }: { className?: string }) {

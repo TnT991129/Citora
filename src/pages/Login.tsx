@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { ThemeToggle } from '../components/ThemeToggle'
-import { Alert, Button, CitoraLogo, Field } from '../components/ui'
+import { AuthShell } from '../components/AuthShell'
+import { Alert, Button, Field } from '../components/ui'
 import { useSession } from '../lib/auth'
 import { setBrandColor } from '../lib/brand'
 import { errorMessage } from '../lib/errors'
@@ -64,19 +64,19 @@ export default function Login() {
   }
 
   return (
-    <div className="relative flex min-h-dvh flex-col items-center justify-center px-4 py-10">
-      <ThemeToggle className="absolute right-3 top-3" />
-      <Link to="/"><CitoraLogo className="text-2xl" /></Link>
+    <AuthShell
+      title={session && !justSignedIn ? 'Ya tienes la sesión abierta' : 'Bienvenido de nuevo'}
+      subtitle={session && !justSignedIn ? undefined : 'Entra a tu panel para ver tu agenda.'}
+      footer={<>¿No tienes app todavía? <Link to="/crear" className="font-semibold text-brand">Créala gratis</Link></>}
+    >
       {session && !justSignedIn ? (
-        <div className="card mt-6 w-full max-w-sm space-y-3 text-center">
-          <h1 className="text-xl font-bold">Ya tienes la sesión abierta</h1>
+        <div className="card space-y-3 text-center">
           <p className="text-slate-600">Estás conectado como <b>{session.user.email}</b>.</p>
           <Button block onClick={goToPanel}>Ir a mi panel</Button>
           <Button block variant="secondary" onClick={() => supabase.auth.signOut()}>Entrar con otra cuenta</Button>
         </div>
       ) : (
-      <form onSubmit={submit} className="card mt-6 w-full max-w-sm space-y-4">
-        <h1 className="text-xl font-bold">Entrar a tu panel</h1>
+      <form onSubmit={submit} className="card space-y-4">
         <Field label="Correo electrónico">
           <input className="input" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         </Field>
@@ -85,15 +85,12 @@ export default function Login() {
         </Field>
         {error && <Alert>{error}</Alert>}
         {info && <Alert kind="success">{info}</Alert>}
-        <Button type="submit" block loading={busy}>Entrar</Button>
+        <Button type="submit" block size="lg" loading={busy}>Entrar</Button>
         <button type="button" onClick={forgot} className="w-full text-center text-sm font-medium text-slate-500 hover:text-slate-700">
           Olvidé mi contraseña
         </button>
       </form>
       )}
-      <p className="mt-6 text-sm text-slate-600">
-        ¿No tienes app todavía? <Link to="/crear" className="font-semibold text-brand">Créala gratis</Link>
-      </p>
-    </div>
+    </AuthShell>
   )
 }

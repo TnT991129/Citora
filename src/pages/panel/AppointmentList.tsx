@@ -8,15 +8,19 @@ export function AppointmentRow({ a, onClick }: { a: Appointment; onClick: () => 
   const { business, staff } = usePanel()
   const who = a.staff_id ? staff.find((s) => s.id === a.staff_id)?.name : null
   const faded = a.status === 'cancelada' || a.status === 'no_asistio'
+  // Franja de color a la izquierda según el estado: se ve de un vistazo qué falta por confirmar
+  const bar = { pendiente: 'bg-amber-400', confirmada: 'bg-sky-400', completada: 'bg-emerald-400', no_asistio: 'bg-slate-300', cancelada: 'bg-red-300' }[a.status]
   return (
-    <button onClick={onClick} className={`flex w-full items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-sm ring-1 ring-slate-200 transition hover:ring-brand ${faded ? 'opacity-60' : ''}`}>
+    <button onClick={onClick} className={`card relative flex w-full items-center gap-3 overflow-hidden p-3 text-left transition hover:-translate-y-px hover:border-brand/40 sm:p-3.5 ${faded ? 'opacity-60' : ''}`}>
+      <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${bar}`} />
       <div className="w-20 shrink-0 text-center">
         <p className="whitespace-nowrap text-base font-extrabold leading-tight text-brand">{timeOf(a.starts_at, business.timezone, true)}</p>
         <p className="whitespace-nowrap text-[11px] text-slate-400">{timeOf(a.ends_at, business.timezone, true)}</p>
       </div>
       <div className="min-w-0 flex-1 border-l border-slate-100 pl-3">
         <p className={`truncate font-semibold ${a.status === 'cancelada' ? 'line-through' : ''}`}>{a.customer_name}</p>
-        <p className="truncate text-sm text-slate-500">{servicesText(a)}{who && <span className="font-medium text-slate-600"> · con {who}</span>}</p>
+        <p className="truncate text-sm text-slate-500">{servicesText(a)}</p>
+        {who && <p className="truncate text-xs font-medium text-slate-500">con {who}</p>}
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">
         <StatusBadge status={a.status} />

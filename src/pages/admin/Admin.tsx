@@ -85,37 +85,46 @@ export default function Admin() {
   }
 
   return (
-    <div className="min-h-dvh pb-20 md:pb-0">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
+    <div className="min-h-dvh pb-24 md:pb-0">
+      {/* Cabecera oscura: así se distingue de un vistazo del panel de un negocio */}
+      <header className="sticky top-0 z-30 border-b border-white/10 bg-[#0b0b14]/95 text-white backdrop-blur-lg">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <CitoraLogo className="text-lg" />
-            <span className="chip bg-slate-900 text-white">Admin</span>
+            <span className="rounded-full bg-gradient-to-r from-rose-400 to-orange-400 px-2.5 py-0.5 text-xs font-bold text-white">Admin</span>
           </div>
-          <nav className="hidden items-center gap-1 md:flex">
+          <nav className="hidden items-center gap-1 rounded-full bg-white/5 p-1 ring-1 ring-white/10 md:flex">
             {TABS.map((t) => (
-              <button key={t.key} onClick={() => setTab(t.key)} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${tab === t.key ? 'bg-citora-100 text-citora-700' : 'text-slate-600 hover:bg-slate-100'}`}>
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                aria-current={tab === t.key ? 'page' : undefined}
+                className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${tab === t.key ? 'bg-white text-[#0b0b14] shadow' : 'text-white/70 hover:text-white'}`}
+              >
                 {t.label}
               </button>
             ))}
           </nav>
           <div className="flex items-center gap-1">
-            <ThemeToggle />
-            <button onClick={() => supabase.auth.signOut()} className="ml-1 rounded-lg px-2 py-1.5 text-sm text-slate-500 hover:bg-slate-100">Salir</button>
+            <ThemeToggle onImage />
+            <button onClick={() => supabase.auth.signOut()} className="ml-1 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-white/70 transition hover:bg-white/10 hover:text-white">Salir</button>
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-5">
+      <main key={tab} className="ui-page mx-auto max-w-5xl px-4 py-6">
         {tab === 'duenos' ? <Owners /> : tab === 'pagos' ? <PaymentClaims /> : tab === 'estadisticas' ? <AdminStats /> : <SettingsForm />}
       </main>
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-slate-200 bg-white safe-bottom md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-slate-200 bg-white/90 backdrop-blur-lg safe-bottom md:hidden">
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex flex-col items-center gap-0.5 py-2 text-[11px] font-semibold ${tab === t.key ? 'text-brand' : 'text-slate-500'}`}
+            aria-current={tab === t.key ? 'page' : undefined}
+            className={`flex flex-col items-center gap-0.5 pb-1.5 pt-2 text-[11px] font-semibold ${tab === t.key ? 'text-brand' : 'text-slate-500'}`}
           >
-            <Icon name={t.icon} />
+            <span className={`flex h-8 w-14 items-center justify-center rounded-full transition duration-300 ${tab === t.key ? 'bg-brand/10' : ''}`}>
+              <Icon name={t.icon} className="h-[22px] w-[22px]" />
+            </span>
             {t.label}
           </button>
         ))}
@@ -216,7 +225,7 @@ function Owners() {
       </div>
       <div className="flex flex-wrap gap-1">
         {(['todos', 'activo', 'prueba', 'vencido', 'sin_negocio'] as const).map((f) => (
-          <button key={f} onClick={() => setFilter(f)} className={`rounded-full px-3 py-1.5 text-sm font-semibold ${filter === f ? 'bg-slate-900 text-white' : 'bg-white ring-1 ring-slate-300'}`}>
+          <button key={f} onClick={() => setFilter(f)} className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${filter === f ? 'bg-brand text-white shadow-md shadow-brand/25' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-slate-300'}`}>
             {FILTER_LABEL[f]} ({count(f)})
           </button>
         ))}
@@ -225,7 +234,7 @@ function Owners() {
       <div className="space-y-2">
         {filtered.length === 0 && <p className="py-6 text-center text-slate-500">No hay dueños con ese filtro.</p>}
         {filtered.map((o) => (
-          <div key={o.user_id} className="card">
+          <div key={o.user_id} className="card transition hover:border-slate-300">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="truncate font-bold">{o.email}</p>
@@ -485,7 +494,7 @@ function PaymentClaims() {
     <div className="space-y-4">
       <div className="flex flex-wrap gap-1">
         {(['pendiente', 'aprobado', 'rechazado', 'todos'] as const).map((f) => (
-          <button key={f} onClick={() => setFilter(f)} className={`rounded-full px-3 py-1.5 text-sm font-semibold ${filter === f ? 'bg-slate-900 text-white' : 'bg-white ring-1 ring-slate-300'}`}>
+          <button key={f} onClick={() => setFilter(f)} className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${filter === f ? 'bg-brand text-white shadow-md shadow-brand/25' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-slate-300'}`}>
             {f === 'pendiente' ? 'Pendientes' : f === 'aprobado' ? 'Aprobados' : f === 'rechazado' ? 'Rechazados' : 'Todos'}
             {f !== 'todos' && ` (${count(f)})`}
           </button>
@@ -682,9 +691,10 @@ function AdminPushSection() {
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
-      <p className="text-xs font-medium text-slate-500">{label}</p>
-      <p className="mt-1 truncate text-xl font-extrabold">{value}</p>
+    <div className="card relative overflow-hidden p-3.5 sm:p-4">
+      <span aria-hidden className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-rose-400 to-orange-400" />
+      <p className="text-xs font-semibold text-slate-500">{label}</p>
+      <p className="mt-1.5 truncate text-2xl font-extrabold tracking-tight">{value}</p>
       {hint && <p className="mt-0.5 truncate text-xs text-slate-400">{hint}</p>}
     </div>
   )

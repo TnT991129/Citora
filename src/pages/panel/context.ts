@@ -18,6 +18,8 @@ export interface PanelCtx {
   slugChanged: (slug: string) => void
   /** Vuelve a mostrar el recorrido guiado del panel */
   showTour: () => void
+  /** Vuelve a mostrar las novedades de la versión actual */
+  showNews: () => void
 }
 
 export const PanelContext = createContext<PanelCtx | null>(null)

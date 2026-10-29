@@ -160,9 +160,10 @@ export default function AdminStats() {
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
-      <p className="text-xs font-medium text-slate-500">{label}</p>
-      <p className="mt-1 truncate text-xl font-extrabold">{value}</p>
+    <div className="card relative overflow-hidden p-3.5 sm:p-4">
+      <span aria-hidden className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-rose-400 to-orange-400" />
+      <p className="text-xs font-semibold text-slate-500">{label}</p>
+      <p className="mt-1.5 truncate text-2xl font-extrabold tracking-tight">{value}</p>
       {hint && <p className="mt-0.5 truncate text-xs text-slate-400">{hint}</p>}
     </div>
   )

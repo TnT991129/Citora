@@ -202,11 +202,14 @@ export default function Create() {
     <Shell>
       <div className="mb-5">
         <div className="flex items-center justify-between text-sm">
-          <span className="font-semibold text-slate-700">Paso {step + 1} de {totalSteps}</span>
-          <span className="text-slate-500">{STEPS[step]}</span>
+          <span className="text-xs font-bold uppercase tracking-[0.16em] text-brand">Paso {step + 1} de {totalSteps}</span>
+          <span className="font-semibold text-slate-500">{STEPS[step]}</span>
         </div>
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
-          <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${((step + 1) / totalSteps) * 100}%` }} />
+        {/* Un tramo por paso: se ve cuánto falta de un vistazo */}
+        <div className="mt-2.5 flex gap-1.5">
+          {Array.from({ length: totalSteps }, (_, i) => (
+            <span key={i} className={`h-1.5 flex-1 rounded-full transition-colors duration-500 ${i <= step ? 'bg-brand' : 'bg-slate-200'}`} />
+          ))}
         </div>
       </div>
 
@@ -223,7 +226,7 @@ export default function Create() {
                   setDraft((d) => ({ ...newDraft(t.key, d.currency), name: d.name, slug: d.slug, whatsapp: d.whatsapp, address: d.address, color: d.color }))
                   setStep(1)
                 }}
-                className={`card flex flex-col items-center gap-2 py-5 text-center transition hover:ring-2 hover:ring-brand ${draft.type === t.key ? 'ring-2 ring-brand' : ''}`}
+                className={`card flex flex-col items-center gap-2 py-5 text-center transition hover:-translate-y-0.5 hover:border-brand/50 hover:shadow-lg active:scale-[0.98] ${draft.type === t.key ? 'border-brand bg-brand/5 ring-1 ring-brand' : ''}`}
               >
                 <span className="text-3xl">{t.emoji}</span>
                 <span className="font-semibold">{t.name}</span>
@@ -533,8 +536,9 @@ export default function Create() {
 
 function Shell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-dvh">
-      <header className="border-b border-slate-200 bg-white">
+    <div className="relative min-h-dvh">
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-brand/10 to-transparent" />
+      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur-lg">
         <div className="mx-auto flex max-w-xl items-center justify-between px-4 py-3">
           <Link to="/"><CitoraLogo className="text-lg" /></Link>
           <div className="flex items-center gap-2">
@@ -543,7 +547,7 @@ function Shell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-xl px-4 py-6">{children}</main>
+      <main className="ui-page relative mx-auto max-w-xl px-4 py-6">{children}</main>
     </div>
   )
 }
@@ -553,9 +557,12 @@ function Success({ slug, name }: { slug: string; name: string }) {
   return (
     <Shell>
       <div className="text-center">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl">🎉</div>
-        <h1 className="mt-4 text-2xl font-bold">¡Tu app está lista!</h1>
-        <p className="mt-2 text-slate-600">Tienes 3 días gratis con todo incluido. Comparte tu enlace para empezar a recibir reservas.</p>
+        <div className="ui-sheet mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 ring-8 ring-emerald-50">
+          <svg viewBox="0 0 24 24" className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12l5 5 9-10" /></svg>
+        </div>
+        <h1 className="mt-5 text-3xl font-extrabold tracking-tight">¡Tu app está lista!</h1>
+        {/* Antes decía "3 días gratis" fijo, aunque la prueba dura lo que se configure en el administrador */}
+        <p className="mt-2 text-slate-600">Tu prueba gratis con todo incluido ya empezó. Comparte tu enlace para empezar a recibir reservas.</p>
       </div>
       <div className="card mt-6">
         <p className="text-sm font-medium text-slate-500">Tu enlace</p>
@@ -569,7 +576,7 @@ function Success({ slug, name }: { slug: string; name: string }) {
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <LinkButton href={url} variant="secondary" size="lg" newTab>Ver mi app</LinkButton>
-        <Link to={panelPath(slug)} className="inline-flex items-center justify-center rounded-xl bg-brand px-5 py-3.5 font-semibold text-white">Ir a mi panel</Link>
+        <Link to={panelPath(slug)} className="inline-flex items-center justify-center rounded-btn bg-brand bg-btn-grad px-5 py-3.5 font-semibold text-white shadow-md shadow-brand/25 transition hover:brightness-110">Ir a mi panel</Link>
       </div>
     </Shell>
   )

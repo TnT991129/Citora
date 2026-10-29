@@ -146,7 +146,8 @@ export default function BookingFlow() {
             <div key={k} className={`h-1.5 flex-1 rounded-full ${i <= step ? 'bg-brand' : 'bg-slate-200'}`} />
           ))}
         </div>
-        <h1 className="text-2xl font-bold">{STEP_TITLES[cur]}</h1>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand">Paso {steps.indexOf(cur) + 1} de {steps.length}</p>
+        <h1 className="mt-1 text-2xl font-extrabold tracking-tight">{STEP_TITLES[cur]}</h1>
 
         {cur === 'servicio' && (
           <div className="mt-4 space-y-4">
