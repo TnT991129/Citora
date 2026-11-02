@@ -1,7 +1,9 @@
 // Zonas horarias que puede tener un negocio (la cambia el administrador: ver admin_set_timezone en
 // schema.sql). Con nombre de país o ciudad, que "America/Argentina/Buenos_Aires" no se entiende.
+import { serverNow } from './clockSkew'
 export const TIMEZONES: { tz: string; label: string }[] = [
-  { tz: 'America/Havana', label: 'Cuba' },
+  // Cuba no cambia la hora en invierno, aunque "America/Havana" sí lo hace: UTC−4 fijo
+  { tz: 'Etc/GMT+4', label: 'Cuba' },
   { tz: 'America/Mexico_City', label: 'México (Ciudad de México)' },
   { tz: 'America/Cancun', label: 'México (Cancún)' },
   { tz: 'America/Tijuana', label: 'México (Tijuana)' },
@@ -43,7 +45,7 @@ export function tzLabel(tz: string): string {
 }
 
 /** Hora y diferencia con UTC en una zona en un momento, ej. { time: '10:32', offset: 'UTC−5' } */
-export function tzNow(tz: string, at: Date = new Date()): { time: string; offset: string } {
+export function tzNow(tz: string, at: Date = new Date(serverNow())): { time: string; offset: string } {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat('en-GB', {
       timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',

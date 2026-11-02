@@ -8,6 +8,7 @@ import { waLink } from '../../lib/whatsapp'
 import { Icon } from '../panel/Panel'
 import type { AdminOwner, AdminTab } from './Admin'
 import { expiringMessage, type AdminStatsData } from './AdminStats'
+import { serverNow } from '../../lib/clockSkew'
 
 interface Week { visitors: number; signups: number }
 
@@ -49,7 +50,7 @@ export function AdminHome({ go }: { go: (t: AdminTab) => void }) {
   const newThisMonth = real.filter((o) => o.signed_up_at.slice(0, 7) === thisMonth).length
   const latest = owners.slice(0, 5)
   const todo = pendingClaims + stats.expiring.length
-  const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Havana', hour: '2-digit', hour12: false }).format(new Date()))
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Etc/GMT+4', hour: '2-digit', hour12: false }).format(new Date(serverNow())))
   const hello = hour < 12 ? 'Buenos días' : hour < 19 ? 'Buenas tardes' : 'Buenas noches'
 
   return (

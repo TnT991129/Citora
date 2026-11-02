@@ -28,7 +28,7 @@ export interface AdminStatsData {
   recent_payments: { name: string; code: string; plan: PlanKey; months: number; amount: number | null; note: string | null; created_at: string }[]
 }
 
-const TZ = 'America/Havana'
+const TZ = 'Etc/GMT+4'
 
 /** Mensaje de WhatsApp para un dueño cuyo plan vence o cuya prueba termina pronto */
 /** Mensaje para avisar a un dueño de que se le vence el plan, con la fecha en la hora de su negocio */

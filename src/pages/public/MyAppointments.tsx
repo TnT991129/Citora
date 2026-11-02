@@ -7,7 +7,8 @@ import { supabase } from '../../lib/supabase'
 import { clientPath } from '../../lib/url'
 import type { PublicBooking } from '../../lib/types'
 import NotFound from '../NotFound'
-import { Centered, PoweredBy, PublicHeader, usePublicBusiness } from './shared'
+import { Centered, PoweredBy, PublicHeader, usePublicBusiness } from './shared'
+import { serverNow } from '../../lib/clockSkew'
 
 /** Todas las citas que el cliente reservó desde este móvil en un negocio */
 export default function MyAppointments() {
@@ -31,9 +32,9 @@ export default function MyAppointments() {
   if (business === undefined || bookings === null) return <PageLoader />
   if (business === null) return <NotFound />
 
-  const tz = business.timezone || bookings[0]?.business.timezone || 'America/Havana'
+  const tz = business.timezone || bookings[0]?.business.timezone || 'Etc/GMT+4'
   const currency = business.currency || bookings[0]?.business.currency || 'CUP'
-  const now = Date.now()
+  const now = serverNow()
   const upcoming = bookings
     .filter((b) => (b.status === 'pendiente' || b.status === 'confirmada') && new Date(b.ends_at).getTime() > now)
     .sort((a, b) => a.starts_at.localeCompare(b.starts_at))

@@ -9,7 +9,6 @@ import { setBrandColor } from '../../lib/brand'
 import { setAppManifest } from '../../lib/pwa'
 import { createBusinessFromDraft, loadDraft } from '../../lib/draft'
 import { stopTracking } from '../../lib/analytics'
-import { clockSkewSeconds } from '../../lib/clockSkew'
 import { errorMessage } from '../../lib/errors'
 import { load, save } from '../../lib/storage'
 import { APP_VERSION } from '../../lib/version'
@@ -207,7 +206,6 @@ export default function Panel() {
         </header>
 
         <StatusBanner status={status} planLink={link('plan')} />
-        <ClockBanner />
         {!blocked && <SurveyBanner />}
 
         <main className="mx-auto max-w-4xl px-4 py-5 lg:px-8 lg:py-8">
@@ -360,24 +358,6 @@ function SideLink({ to, label, icon, base }: { to: string; label: string; icon: 
       <Icon name={icon} className="h-5 w-5 shrink-0" />
       {label}
     </Link>
-  )
-}
-
-/** Reloj del móvil desajustado: la sesión ya lo tolera (clockSkew.ts), pero la agenda vería mal "ahora" */
-function ClockBanner() {
-  const skew = clockSkewSeconds()
-  if (Math.abs(skew) < 10 * 60) return null
-  const min = Math.round(Math.abs(skew) / 60)
-  const amount = min >= 60 ? `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60} min` : ''}` : `${min} min`
-  return (
-    <div className="mx-auto max-w-4xl px-4 pt-4 lg:px-8 lg:pt-6">
-      <div className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        <Icon name="clock" className="h-5 w-5 shrink-0" />
-        <span className="min-w-0 flex-1">
-          La hora de tu móvil está <b>{skew > 0 ? 'adelantada' : 'atrasada'} {amount}</b>. Ponla en automática en los ajustes de fecha y hora del móvil para ver bien tu agenda.
-        </span>
-      </div>
-    </div>
   )
 }
 

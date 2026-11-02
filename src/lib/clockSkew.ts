@@ -38,8 +38,16 @@ function readRecord(base: BaseStorage): SkewRecord | null {
 }
 
 /** Segundos que va adelantado el reloj del móvil respecto al servidor (0 si está bien o no se sabe) */
-export function clockSkewSeconds(base: BaseStorage | null = safeLocalStorage()): number {
+export function clockSkewSeconds(base: BaseStorage | null = browserStorage()): number {
   return base ? readRecord(base)?.skew || 0 : 0
+}
+
+/**
+ * La hora de ahora (ms) según el servidor: el reloj del móvil menos su desfase. En Cuba mucha gente
+ * adelantó el reloj a mano porque el móvil cambió la hora en noviembre y el país no.
+ */
+export function serverNow(): number {
+  return Date.now() - clockSkewSeconds() * 1000
 }
 
 export function clockSafeStorage(base: BaseStorage, now: () => number = Date.now): BaseStorage {
@@ -80,6 +88,12 @@ export function clockSafeStorage(base: BaseStorage, now: () => number = Date.now
       base.removeItem(key)
     },
   }
+}
+
+let cached: BaseStorage | null | undefined
+function browserStorage(): BaseStorage | null {
+  if (cached === undefined) cached = typeof window === 'undefined' ? null : safeLocalStorage()
+  return cached
 }
 
 /** localStorage si se puede usar (en modo privado o con datos bloqueados puede fallar) */

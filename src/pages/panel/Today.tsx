@@ -15,6 +15,7 @@ import { usePanel } from './context'
 import { Icon } from './Panel'
 import { NewAppointment } from './NewAppointment'
 import { RateCard } from './RateCard'
+import { serverNow } from '../../lib/clockSkew'
 
 export default function Today() {
   const { business, status, link } = usePanel()
@@ -49,7 +50,7 @@ export default function Today() {
   const upcomingCount = list.filter((a) => isActive(a)).length
   const income = todays.filter((a) => a.status === 'completada').reduce((s, a) => s + Number(a.total), 0)
   const expected = todays.filter(isActive).reduce((s, a) => s + Number(a.total), 0)
-  const now = Date.now()
+  const now = serverNow()
   const next = todays.find((a) => isActive(a) && new Date(a.ends_at).getTime() > now)
   const url = publicUrl(business.slug)
   const canWhatsApp = hasModule(status.effective_plan, 'whatsapp')
@@ -179,7 +180,7 @@ function Stat({ icon, label, value, sub, highlight }: { icon: string; label: str
 
 /** "Buenos días", "Buenas tardes" o "Buenas noches" según la hora del negocio */
 function greeting(tz: string): string {
-  const h = Number(new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', hour12: false }).format(new Date()))
+  const h = Number(new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', hour12: false }).format(new Date(serverNow())))
   return h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches'
 }
 

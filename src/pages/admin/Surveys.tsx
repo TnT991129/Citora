@@ -7,7 +7,7 @@ import type { SurveyAnswers, SurveyQuestion, SurveyQuestionType } from '../../li
 import { panelUrl } from '../../lib/url'
 import { waLink } from '../../lib/whatsapp'
 
-const TZ = 'America/Havana'
+const TZ = 'Etc/GMT+4'
 
 interface SurveyBusiness { business_id: string; name: string; code: string; slug: string; whatsapp: string }
 

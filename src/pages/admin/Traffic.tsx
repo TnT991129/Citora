@@ -20,7 +20,7 @@ interface TrafficData {
   business_pages: { slug: string; name: string | null; visitors: number; bookings: number }[]
 }
 
-const TZ = 'America/Havana'
+const TZ = 'Etc/GMT+4'
 // Periodos: "Hoy" es el día de hoy (hora de Cuba) y "Hoy y ayer", los dos últimos días
 const RANGES = [
   { days: 1, label: 'Hoy' },

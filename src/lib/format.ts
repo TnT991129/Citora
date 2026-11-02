@@ -1,6 +1,8 @@
 // Fechas y dinero. Las fechas "clave" son textos YYYY-MM-DD en la zona horaria del negocio.
+import { serverNow } from './clockSkew'
 
-export const DEFAULT_TZ = 'America/Havana'
+// Cuba: UTC−4 todo el año (ver "Etc/GMT+4" en schema.sql)
+export const DEFAULT_TZ = 'Etc/GMT+4'
 
 // Moneda del negocio. "Ambas": los precios van en USD y se muestra también su cambio en CUP
 // con la tasa del día que pone el dueño (usd_rate = CUP por 1 USD).
@@ -69,7 +71,7 @@ export function time12(hhmm: string): string {
 }
 
 export function todayKey(tz = DEFAULT_TZ): string {
-  return dateKey(new Date(), tz)
+  return dateKey(new Date(serverNow()), tz)
 }
 
 export function addDays(key: string, n: number): string {
@@ -122,11 +124,11 @@ export function zonedToIso(key: string, time: string, tz = DEFAULT_TZ): string {
 }
 
 export function daysLeft(iso: string): number {
-  return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000))
+  return Math.max(0, Math.ceil((new Date(iso).getTime() - serverNow()) / 86400000))
 }
 
 export function hoursLeft(iso: string): number {
-  return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 3600000))
+  return Math.max(0, Math.ceil((new Date(iso).getTime() - serverNow()) / 3600000))
 }
 
 export function slugify(text: string): string {

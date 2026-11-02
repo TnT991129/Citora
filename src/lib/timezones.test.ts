@@ -7,6 +7,8 @@ describe('zonas horarias', () => {
     const verano = new Date('2026-07-15T15:00:00Z')
     expect(tzNow('America/Havana', invierno)).toEqual({ time: '10:00', offset: 'UTC−5' })
     expect(tzNow('America/Havana', verano)).toEqual({ time: '11:00', offset: 'UTC−4' })
+    expect(tzNow('Etc/GMT+4', invierno), 'Cuba: UTC−4 también en invierno').toEqual({ time: '11:00', offset: 'UTC−4' })
+    expect(tzNow('Etc/GMT+4', verano)).toEqual({ time: '11:00', offset: 'UTC−4' })
     expect(tzNow('Europe/Madrid', invierno)).toEqual({ time: '16:00', offset: 'UTC+1' })
     expect(tzNow('Europe/Madrid', verano)).toEqual({ time: '17:00', offset: 'UTC+2' })
     expect(tzNow('Europe/London', invierno).offset).toBe('UTC+0')
@@ -17,7 +19,7 @@ describe('zonas horarias', () => {
   })
 
   it('pone nombre a las zonas', () => {
-    expect(tzLabel('America/Havana')).toBe('Cuba')
+    expect(tzLabel('Etc/GMT+4')).toBe('Cuba')
     expect(tzLabel('Asia/Ho_Chi_Minh'), 'una que no está en la lista').toBe('Asia/Ho Chi Minh')
   })
 

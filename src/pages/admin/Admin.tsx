@@ -403,7 +403,7 @@ function Owners() {
   )
 }
 
-const TZ = 'America/Havana'
+const TZ = 'Etc/GMT+4'
 
 // Lo que dice cada confirmación (ver Owners)
 const CONFIRM: Record<'grant' | 'revoke' | 'deactivate', (name: string) => { title: string; text: string; confirmLabel: string; danger?: boolean }> = {
@@ -532,7 +532,7 @@ function ActivateModal({ business, prices, onClose, onDone }: {
     })
     setBusy(false)
     if (error) return setError(errorMessage(error))
-    flash(`Activo hasta el ${fullDateFromIso(data as string, 'America/Havana')}`)
+    flash(`Activo hasta el ${fullDateFromIso(data as string, 'Etc/GMT+4')}`)
     onDone()
   }
 

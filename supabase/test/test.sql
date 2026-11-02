@@ -51,7 +51,7 @@ do $$ begin assert get_public_business('no-existe') is null; end $$;
 select expect_error('select * from appointments', 'permission denied');
 select expect_error('select * from businesses', 'permission denied');
 
-insert into ctx values ('day', ((now() at time zone 'America/Havana')::date + 2)::text);
+insert into ctx values ('day', ((now() at time zone 'Etc/GMT+4')::date + 2)::text);
 insert into ctx select 'corte', (get_public_business('barberia-leo')->'services'->0->>'id');
 insert into ctx select 'barba', (get_public_business('barberia-leo')->'services'->1->>'id');
 
@@ -92,9 +92,9 @@ do $$ declare j jsonb := get_booking((select v from ctx where k='t1')); begin
   assert (j->>'total')::numeric = 500;
   assert (j->>'can_cancel')::boolean and (j->>'can_edit')::boolean;
   assert j->'business'->>'name' = 'Barbería Leo';
-  -- Las 10:00 de La Habana (14:00 o 15:00 UTC según el horario de verano, que cambia en noviembre)
-  assert to_char((j->>'starts_at')::timestamptz at time zone 'America/Havana', 'HH24:MI') = '10:00', 'zona horaria: ' || (j->>'starts_at');
-  assert to_char((j->>'starts_at')::timestamptz at time zone 'UTC', 'HH24:MI') in ('14:00', '15:00'), 'guardada en UTC: ' || (j->>'starts_at');
+  -- Las 10:00 en Cuba (UTC−4 todo el año: no cambia la hora en invierno)
+  assert (select timezone from businesses where slug = 'barberia-leo') = 'Etc/GMT+4', 'Cuba por defecto';
+  assert to_char((j->>'starts_at')::timestamptz at time zone 'UTC', 'HH24:MI') = '14:00', 'guardada en UTC: ' || (j->>'starts_at');
 end $$;
 select reschedule_booking((select v from ctx where k='t1'), (select v from ctx where k='day')::date, '11:00');
 -- Sin límite de cambios: se puede volver a cambiar (aquí, a la misma hora)
@@ -739,7 +739,7 @@ select expect_error($$update services set options = '[{"name":"","price":1},{"na
 
 reset request.jwt.claim.sub;
 set role anon;
-insert into ctx values ('dia_opc', ((now() at time zone 'America/Havana')::date + 40)::text);
+insert into ctx values ('dia_opc', ((now() at time zone 'Etc/GMT+4')::date + 40)::text);
 do $$ begin
   assert jsonb_array_length((select x from jsonb_array_elements(get_public_business('spa-mar')->'services') x
                              where x->>'name' = 'Corte a elegir')->'options') = 3, 'la web pública ve las opciones';
@@ -820,16 +820,16 @@ insert into appointments (business_id, token, starts_at, ends_at, customer_name,
 select id, 'zona2', date_trunc('hour', now()) + interval '200 days 1 hour', date_trunc('hour', now()) + interval '200 days 2 hours',
        'Bea Zona', '5355550002', 'pendiente', 'manual' from businesses where slug = 'spa-mar';
 create temp table zona_antes as
-  select token, starts_at, ends_at, starts_at at time zone 'America/Havana' as hora_local
+  select token, starts_at, ends_at, starts_at at time zone 'Etc/GMT+4' as hora_local
   from appointments where token in ('zona1', 'zona2');
-do $$ begin assert (select timezone from businesses where slug = 'spa-mar') = 'America/Havana'; end $$;
+do $$ begin assert (select timezone from businesses where slug = 'spa-mar') = 'Etc/GMT+4'; end $$;
 
 set role authenticated;
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 select expect_error($$select admin_set_timezone((select id from businesses where slug='spa-mar'), 'Europe/Madrid')$$, 'NO_AUTORIZADO');
 update businesses set timezone = 'Europe/Madrid' where slug = 'spa-mar';
 reset role;
-do $$ begin assert (select timezone from businesses where slug = 'spa-mar') = 'America/Havana', 'el dueño no se cambia la zona'; end $$;
+do $$ begin assert (select timezone from businesses where slug = 'spa-mar') = 'Etc/GMT+4', 'el dueño no se cambia la zona'; end $$;
 
 set role authenticated;
 set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
@@ -854,16 +854,34 @@ create temp table zona_madrid as select token, starts_at from appointments where
 set role authenticated;
 set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 do $$ begin
-  assert admin_set_timezone((select id from businesses where slug='spa-mar'), 'America/Havana', false) = 0;
-  assert admin_set_timezone((select id from businesses where slug='spa-mar'), 'America/Havana') = 0, 'misma zona: nada que hacer';
+  assert admin_set_timezone((select id from businesses where slug='spa-mar'), 'Etc/GMT+4', false) = 0;
+  assert admin_set_timezone((select id from businesses where slug='spa-mar'), 'Etc/GMT+4') = 0, 'misma zona: nada que hacer';
 end $$;
 reset role;
 do $$ begin
-  assert (select timezone from businesses where slug = 'spa-mar') = 'America/Havana';
+  assert (select timezone from businesses where slug = 'spa-mar') = 'Etc/GMT+4';
   assert not exists (select 1 from appointments a join zona_madrid z using (token) where a.starts_at <> z.starts_at),
     'sin mantener horas, las citas no se mueven';
 end $$;
 delete from appointments where token in ('zona1', 'zona2');
+
+-- Paso de Cuba a UTC−4 fijo (final de schema.sql): la cita de las 10:00 sigue a las 10:00
+reset role;
+update businesses set timezone = 'America/Havana' where slug = 'spa-mar';
+insert into appointments (business_id, token, starts_at, ends_at, customer_name, customer_phone, status, source)
+select id, 'cuba1', '2027-01-20 15:00+00', '2027-01-20 16:00+00', 'Cuca Cuba', '5355550003', 'confirmada', 'manual'
+  from businesses where slug = 'spa-mar';
+do $$ begin assert to_char((select starts_at from appointments where token = 'cuba1') at time zone 'America/Havana', 'HH24:MI') = '10:00'; end $$;
+select _move_business_timezone((select id from businesses where slug = 'spa-mar'), 'Etc/GMT+4', true);
+do $$ begin
+  assert (select timezone from businesses where slug = 'spa-mar') = 'Etc/GMT+4';
+  assert (select starts_at from appointments where token = 'cuba1') = '2027-01-20 14:00+00', 'a las 10:00 de UTC−4';
+  assert to_char((select starts_at from appointments where token = 'cuba1') at time zone 'Etc/GMT+4', 'HH24:MI') = '10:00';
+end $$;
+set role authenticated;
+select expect_error($$select _move_business_timezone(gen_random_uuid(), 'Etc/GMT+4', true)$$, 'permission denied');
+reset role;
+delete from appointments where token = 'cuba1';
 
 -- Los negocios nuevos empiezan con la zona de los ajustes (o la de Cuba si está mal escrita)
 insert into auth.users (id, email) values
@@ -881,27 +899,27 @@ select create_business('Zona Erratas', 'zona-erratas', 'otro', '+34600000001', n
 reset role;
 do $$ begin
   assert (select timezone from businesses where slug = 'zona-madrid') = 'Europe/Madrid', 'zona de los ajustes';
-  assert (select timezone from businesses where slug = 'zona-erratas') = 'America/Havana', 'zona mal escrita: la de Cuba';
+  assert (select timezone from businesses where slug = 'zona-erratas') = 'Etc/GMT+4', 'zona mal escrita: la de Cuba';
 end $$;
-update platform_settings set default_timezone = 'America/Havana';
+update platform_settings set default_timezone = 'Etc/GMT+4';
 delete from auth.users where id in ('33333333-3333-3333-3333-333333333333', '44444444-4444-4444-4444-444444444444');
 set role authenticated;
 
 -- ===== Aviso de que se acaba la prueba gratis =====
 reset role;
 do $$ declare
-  hoy timestamptz := '2026-11-10 13:00+00';  -- 8:00 en Cuba
+  hoy timestamptz := '2026-11-10 13:00+00';  -- 9:00 en Cuba
   t text[];
 begin
-  t := _expiry_push_text('prueba', '2026-11-13 20:00+00', 'America/Havana', 'Spa Mar', hoy);
+  t := _expiry_push_text('prueba', '2026-11-13 20:00+00', 'Etc/GMT+4', 'Spa Mar', hoy);
   assert t[1] = 'Te quedan 3 días de prueba gratis', t[1];
   assert t[2] = 'Tu prueba gratis termina el 13/11. Suscríbete en Más → Mensualidad para que tus clientes sigan reservando en Spa Mar.', t[2];
-  t := _expiry_push_text('prueba', '2026-11-11 20:00+00', 'America/Havana', 'Spa Mar', hoy);
-  assert t[1] = 'Mañana termina tu prueba gratis' and t[2] like 'Tu prueba gratis termina mañana a las 15:00.%', t::text;
-  -- A las 2:00 UTC del día 11 en Cuba todavía es el día 10
-  t := _expiry_push_text('prueba', '2026-11-11 02:00+00', 'America/Havana', 'Spa Mar', hoy);
-  assert t[1] = 'Hoy termina tu prueba gratis' and t[2] like '%hoy a las 21:00.%', t::text;
-  t := _expiry_push_text('activo', '2026-11-12 20:00+00', 'America/Havana', 'Spa Mar', hoy);
+  t := _expiry_push_text('prueba', '2026-11-11 20:00+00', 'Etc/GMT+4', 'Spa Mar', hoy);
+  assert t[1] = 'Mañana termina tu prueba gratis' and t[2] like 'Tu prueba gratis termina mañana a las 16:00.%', t::text;
+  -- A las 2:00 UTC del día 11 en Cuba todavía es el día 10 (las 22:00)
+  t := _expiry_push_text('prueba', '2026-11-11 02:00+00', 'Etc/GMT+4', 'Spa Mar', hoy);
+  assert t[1] = 'Hoy termina tu prueba gratis' and t[2] like '%hoy a las 22:00.%', t::text;
+  t := _expiry_push_text('activo', '2026-11-12 20:00+00', 'Etc/GMT+4', 'Spa Mar', hoy);
   assert t[1] = 'Tu mensualidad vence en 2 días' and t[2] like 'Vence el 12/11. Paga en Más → Mensualidad%', t::text;
 end $$;
 set role authenticated;

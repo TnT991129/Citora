@@ -15,6 +15,7 @@ import { shows } from '../../lib/appearance'
 import { track } from '../../lib/analytics'
 import { hasModule } from '../../lib/plans'
 import { Announcement, BusinessHero, Centered, Closed, PoweredBy, Stars, usePublicBusiness } from './shared'
+import { serverNow } from '../../lib/clockSkew'
 
 const WEEK = [1, 2, 3, 4, 5, 6, 0]
 
@@ -387,7 +388,7 @@ function MyBookings({ slug, tz }: { slug: string; tz: string }) {
 
   useEffect(() => {
     const upcoming = savedBookings(slug)
-      .filter((b) => new Date(b.starts_at).getTime() > Date.now() - 3600000)
+      .filter((b) => new Date(b.starts_at).getTime() > serverNow() - 3600000)
       .slice(0, 3)
     setItems(upcoming)
     upcoming.forEach((b) => {

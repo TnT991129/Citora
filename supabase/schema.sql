@@ -50,7 +50,13 @@ alter table public.platform_settings add column if not exists moderate_function_
 
 -- Zona horaria con la que empiezan los negocios nuevos. Cada negocio tiene la suya (la cambia el
 -- administrador: ver admin_set_timezone) y en ella se leen su horario, sus citas y sus estadísticas.
-alter table public.platform_settings add column if not exists default_timezone text not null default 'America/Havana';
+alter table public.platform_settings add column if not exists default_timezone text not null default 'Etc/GMT+4';
+-- Cuba no cambió la hora en noviembre de 2026, pero la base de zonas horarias del mundo (la de
+-- Postgres, la de los navegadores y la de los móviles) sí lo hace para "America/Havana" (UTC−5 en
+-- invierno). Cuba usa la zona fija "Etc/GMT+4" (UTC−4 todo el año; el signo va al revés en "Etc").
+-- Los negocios que estaban en "America/Havana" se pasan al final de este archivo.
+alter table public.platform_settings alter column default_timezone set default 'Etc/GMT+4';
+update public.platform_settings set default_timezone = 'Etc/GMT+4' where default_timezone = 'America/Havana';
 
 -- Un solo plan de 1.500 CUP/mes. Al pasar de tres planes a uno se unifica el precio una vez
 -- (después el panel de administrador guarda siempre los tres iguales).
@@ -71,7 +77,7 @@ create table if not exists public.businesses (
   description text,
   logo_url text,
   color_primary text not null default '#f0532e' check (color_primary ~ '^#[0-9a-fA-F]{6}$'),
-  timezone text not null default 'America/Havana',
+  timezone text not null default 'Etc/GMT+4',
   currency text not null default 'CUP',
   policies text,
   min_notice_hours int not null default 2 check (min_notice_hours between 0 and 168),
@@ -2297,7 +2303,7 @@ begin
 
   select trial_days, default_timezone into v_trial, v_tz from platform_settings where id = 1;
   -- Una zona mal escrita en los ajustes no debe impedir que alguien cree su app
-  if v_tz is null or not _is_valid_timezone(v_tz) then v_tz := 'America/Havana'; end if;
+  if v_tz is null or not _is_valid_timezone(v_tz) then v_tz := 'Etc/GMT+4'; end if;
 
   v_prefix := upper(left(regexp_replace(lower(p_slug), '[^a-z]', '', 'g') || 'cit', 3));
   loop
@@ -2878,13 +2884,23 @@ $$;
 -- Devuelve cuántas citas activas se movieron.
 create or replace function public.admin_set_timezone(p_business uuid, p_timezone text, p_keep_times boolean default true)
 returns int language plpgsql volatile security definer set search_path = public as $$
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  return _move_business_timezone(p_business, p_timezone, p_keep_times);
+end;
+$$;
+
+-- Cambia la zona de un negocio y, con p_keep_times, mueve sus citas futuras para que sigan a la
+-- misma hora en el reloj del negocio. Sin comprobar permisos: la llaman admin_set_timezone y el
+-- paso de Cuba a "Etc/GMT+4" del final de este archivo.
+create or replace function public._move_business_timezone(p_business uuid, p_timezone text, p_keep_times boolean)
+returns int language plpgsql volatile security definer set search_path = public as $$
 declare
   b businesses;
   a record;
   v_later boolean;
   v_moved int := 0;
 begin
-  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
   if p_timezone is null or not _is_valid_timezone(p_timezone) then raise exception 'ZONA_INVALIDA'; end if;
   select * into b from businesses where id = p_business for update;
   if not found then raise exception 'NEGOCIO_NO_EXISTE'; end if;
@@ -2923,7 +2939,7 @@ $$;
 create or replace function public.admin_stats()
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 declare
-  v_tz text := 'America/Havana';
+  v_tz text := 'Etc/GMT+4';
   v_first timestamp := date_trunc('month', now() at time zone v_tz) - interval '11 months';
 begin
   if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
@@ -3032,7 +3048,7 @@ $$;
 create or replace function public.admin_traffic(p_days int default 30)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 declare
-  v_tz text := 'America/Havana';
+  v_tz text := 'Etc/GMT+4';
   v_days int := least(greatest(coalesce(p_days, 30), 1), 365);
   v_first date := (now() at time zone v_tz)::date - (v_days - 1);
   v_from timestamptz := v_first::timestamp at time zone v_tz;
@@ -3327,6 +3343,7 @@ revoke execute on function public._send_daily_reminders() from anon, authenticat
 revoke execute on function public._auto_mark_no_shows() from anon, authenticated;
 revoke execute on function public._send_expiry_reminders() from anon, authenticated;
 revoke execute on function public._expiry_push_text(text, timestamptz, text, text, timestamptz) from anon, authenticated;
+revoke execute on function public._move_business_timezone(uuid, text, boolean) from anon, authenticated;
 revoke execute on function public._notify_moderation(uuid, text) from anon, authenticated;
 revoke execute on function public._notify_admin_push(text, text) from anon, authenticated;
 revoke execute on function public._approve_unmoderated_photos() from anon, authenticated;
@@ -3387,6 +3404,25 @@ begin
   end if;
 end;
 $$;
+alter table public.businesses alter column timezone set default 'Etc/GMT+4';
+
+-- Cuba a UTC−4 todo el año (ver default_timezone arriba). Las citas futuras se quedan a la misma
+-- hora que eligió el cliente. Si a un negocio no se le pueden mover (dos citas se pisarían), se deja
+-- como estaba para no frenar el despliegue: el administrador lo cambia a mano desde su panel.
+do $$
+declare
+  r record;
+begin
+  for r in select id, name from public.businesses where timezone = 'America/Havana' loop
+    begin
+      perform public._move_business_timezone(r.id, 'Etc/GMT+4', true);
+    exception when others then
+      raise notice 'No se pudo pasar % a Etc/GMT+4: %', r.name, sqlerrm;
+    end;
+  end loop;
+end;
+$$;
+
 -- ---------------------------------------------------------------------
 -- 10. Avisa a la API de Supabase de que hay funciones o tablas nuevas
 -- ---------------------------------------------------------------------
