@@ -1,4 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
+import { clockSafeStorage, safeLocalStorage } from './clockSkew'
+
+const localStore = typeof window === 'undefined' ? null : safeLocalStorage()
 
 // Limpia lo que se pegó en los secretos: espacios, comillas, barra final o "/rest/v1"
 function clean(v: string | undefined): string {
@@ -22,5 +25,10 @@ export const supabaseConfigured = Boolean(url && key)
 
 // Si faltan las claves, se crea un cliente "vacío" para que la app muestre el aviso en vez de quedarse en blanco
 export const supabase = createClient(url || 'https://sin-configurar.supabase.co', key || 'sin-clave', {
-  auth: { persistSession: true, autoRefreshToken: true },
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    // Que un reloj mal puesto en el móvil no cierre la sesión nada más entrar (ver clockSkew.ts)
+    storage: localStore ? clockSafeStorage(localStore) : undefined,
+  },
 })
