@@ -36,7 +36,10 @@ body { min-height: 100dvh; }
 @keyframes ui-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes ui-sheet { from { opacity: 0; transform: translate3d(0, 32px, 0) scale(0.98); } to { opacity: 1; transform: none; } }
 @keyframes ui-toast { from { opacity: 0; transform: translate3d(-50%, -14px, 0) scale(0.96); } to { opacity: 1; transform: translate3d(-50%, 0, 0); } }
-.ui-page { animation: ui-page 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
+/* "backwards" y no "both": si la animación se queda aplicada al terminar, el navegador trata la
+   pantalla como si tuviera transform y lo que va "fixed" dentro (ventanas como "Nueva cita", barras de
+   guardar) se coloca respecto a la página entera en vez de a la pantalla, y en el móvil queda fuera de vista. */
+.ui-page { animation: ui-page 0.45s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
 .ui-fade { animation: ui-fade 0.2s ease-out both; }
 .ui-sheet { animation: ui-sheet 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .ui-toast { animation: ui-toast 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }

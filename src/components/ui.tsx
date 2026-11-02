@@ -1,4 +1,5 @@
 import { useEffect, useId, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'whatsapp'
 
@@ -125,7 +126,8 @@ export function Modal({ open, onClose, title, children, footer }: {
   }, [open, onClose])
 
   if (!open) return null
-  return (
+  // Directamente en <body>: así la ventana siempre ocupa la pantalla, esté donde esté en la página
+  return createPortal(
     <div className="ui-fade fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 backdrop-blur-[2px] sm:items-center sm:p-4" onClick={onClose}>
       <div
         className="ui-sheet flex max-h-[92dvh] w-full flex-col rounded-t-3xl bg-white shadow-2xl shadow-slate-900/20 sm:max-w-lg sm:rounded-3xl"
@@ -142,10 +144,11 @@ export function Modal({ open, onClose, title, children, footer }: {
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
           </button>
         </div>
-        <div className="overflow-y-auto px-5 py-4">{children}</div>
-        {footer && <div className="safe-bottom border-t border-slate-100 px-5 py-3">{footer}</div>}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">{children}</div>
+        {footer && <div className="safe-bottom shrink-0 border-t border-slate-100 px-5 py-3">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
