@@ -92,8 +92,9 @@ do $$ declare j jsonb := get_booking((select v from ctx where k='t1')); begin
   assert (j->>'total')::numeric = 500;
   assert (j->>'can_cancel')::boolean and (j->>'can_edit')::boolean;
   assert j->'business'->>'name' = 'Barbería Leo';
-  -- 10:00 en La Habana (UTC-4 en octubre) = 14:00 UTC
-  assert to_char((j->>'starts_at')::timestamptz at time zone 'UTC', 'HH24:MI') = '14:00', 'zona horaria: ' || (j->>'starts_at');
+  -- Las 10:00 de La Habana (14:00 o 15:00 UTC según el horario de verano, que cambia en noviembre)
+  assert to_char((j->>'starts_at')::timestamptz at time zone 'America/Havana', 'HH24:MI') = '10:00', 'zona horaria: ' || (j->>'starts_at');
+  assert to_char((j->>'starts_at')::timestamptz at time zone 'UTC', 'HH24:MI') in ('14:00', '15:00'), 'guardada en UTC: ' || (j->>'starts_at');
 end $$;
 select reschedule_booking((select v from ctx where k='t1'), (select v from ctx where k='day')::date, '11:00');
 -- Sin límite de cambios: se puede volver a cambiar (aquí, a la misma hora)
