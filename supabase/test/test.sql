@@ -848,6 +848,24 @@ do $$ begin
 end $$;
 set role authenticated;
 
+-- Encuesta solo para algunos negocios
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+select expect_error($$select admin_create_survey('Solo unos', null, '[{"type":"si_no","text":"¿Te sirve?"}]', false, array['00000000-0000-0000-0000-000000000000'::uuid])$$, 'ENCUESTA_SIN_DESTINO');
+insert into ctx values ('encuesta2', admin_create_survey('Solo para Spa Mar', null, '[{"type":"si_no","text":"¿Te sirve?"}]', true,
+  array[(select id from businesses where slug = 'spa-mar'), '00000000-0000-0000-0000-000000000000'::uuid])::text);
+do $$ declare s jsonb := (select x from jsonb_array_elements(admin_list_surveys()) x where x->>'id' = (select v from ctx where k = 'encuesta2')); begin
+  assert jsonb_array_length(s->'business_ids') = 1, 'solo se guardan negocios que existen: ' || s::text;
+  assert jsonb_array_length(s->'pending') = 1 and s->'pending'->0->>'name' = 'Spa Mar', 'pendiente solo a quien va: ' || s::text;
+end $$;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+do $$ begin assert get_my_survey() is null, 'a Barbería Leo no le llega'; end $$;
+select expect_error($$select submit_survey_answer('$$ || (select v from ctx where k = 'encuesta2') || $$', '{"p1":true}')$$, 'ENCUESTA_CERRADA');
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+do $$ begin assert get_my_survey()->>'id' = (select v from ctx where k = 'encuesta2'), 'a Spa Mar sí'; end $$;
+select submit_survey_answer((select v from ctx where k = 'encuesta2')::uuid, '{"p1":true}');
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+select admin_delete_survey((select v from ctx where k = 'encuesta2')::uuid);
+
 -- ===== Borrar dueños =====
 reset role;
 set role authenticated;

@@ -36,17 +36,21 @@ const MESSAGES: Record<string, string> = {
   LIMITE_ESPERA: 'Ya estás en la lista de espera de varios días. Espera a que el negocio te escriba.',
   ZONA_INVALIDA: 'Esa zona horaria no existe.',
   ENCUESTA_INVALIDA: 'Revisa la encuesta: necesita un título y de 1 a 10 preguntas de al menos 3 letras.',
-  ENCUESTA_CERRADA: 'Esta encuesta ya está cerrada. ¡Gracias de todos modos!',
+  ENCUESTA_SIN_DESTINO: 'Elige al menos un negocio para la encuesta.',
+  ENCUESTA_CERRADA:'Esta encuesta ya está cerrada. ¡Gracias de todos modos!',
   RESPUESTA_INVALIDA: 'Responde las preguntas de estrellas y de Sí/No.',
   CITAS_SE_SOLAPAN: 'Al pasar a esa zona, dos citas de este negocio se pisarían. Muévelas antes o cambia la zona sin mantener la hora de las citas.',
 }
+
+// Primero los códigos más largos: OPINION_FUERA_DE_PLAZO contiene FUERA_DE_PLAZO y no deben confundirse
+const CODES = Object.keys(MESSAGES).sort((a, b) => b.length - a.length)
 
 export function errorMessage(err: unknown): string {
   const raw =
     typeof err === 'string'
       ? err
       : (err as { message?: string })?.message || (err as { error_description?: string })?.error_description || ''
-  for (const code of Object.keys(MESSAGES)) {
+  for (const code of CODES) {
     if (raw.includes(code)) return MESSAGES[code]
   }
   if (/Invalid login credentials/i.test(raw)) return 'Correo o contraseña incorrectos.'

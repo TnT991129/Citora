@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, Button, Field, LinkButton, Modal, PageLoader, Toggle, WhatsAppIcon, flash } from '../../components/ui'
+import { Alert, Button, Field, LinkButton, Modal, PageLoader, Spinner, Toggle, WhatsAppIcon, flash } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { fullDateFromIso } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
@@ -18,9 +18,14 @@ interface AdminSurvey {
   questions: SurveyQuestion[]
   active: boolean
   created_at: string
+  /** null = para todos los negocios */
+  business_ids: string[] | null
   answers: (SurveyBusiness & { answers: SurveyAnswers; created_at: string })[]
   pending: SurveyBusiness[]
 }
+
+/** Un negocio que puede recibir la encuesta (de admin_list_owners) */
+interface Candidate { id: string; name: string; code: string; status: 'prueba' | 'activo'; comped: boolean }
 
 const TYPE_LABEL: Record<SurveyQuestionType, string> = { estrellas: 'Estrellas (1 a 5)', si_no: 'Sí o No', texto: 'Texto libre' }
 
@@ -108,7 +113,8 @@ function SurveyCard({ survey: s, onChange }: { survey: AdminSurvey; onChange: ()
         <div className="min-w-0">
           <h2 className="font-extrabold tracking-tight">{s.title}</h2>
           <p className="text-sm text-slate-500">
-            {fullDateFromIso(s.created_at, TZ)} · <b className="text-slate-700">{total}</b> {total === 1 ? 'respuesta' : 'respuestas'}
+            {fullDateFromIso(s.created_at, TZ)} · {s.business_ids ? `para ${s.business_ids.length} ${s.business_ids.length === 1 ? 'negocio' : 'negocios'}` : 'para todos'}
+            {' · '}<b className="text-slate-700">{total}</b> {total === 1 ? 'respuesta' : 'respuestas'}
             {s.active && <> · {s.pending.length} sin responder</>}
           </p>
         </div>
@@ -239,6 +245,75 @@ function Summary({ n, q, survey }: { n: number; q: SurveyQuestion; survey: Admin
   )
 }
 
+type PickerFilter = 'todos' | 'prueba' | 'activo'
+
+/** Lista de negocios activos para marcar a quién va la encuesta, con buscador y filtros */
+function BusinessPicker({ value, onChange }: { value: string[]; onChange: (ids: string[]) => void }) {
+  const [all, setAll] = useState<Candidate[] | null>(null)
+  const [q, setQ] = useState('')
+  const [filter, setFilter] = useState<PickerFilter>('todos')
+
+  useEffect(() => {
+    supabase.rpc('admin_list_owners').then(({ data }) => {
+      // Solo los que pueden verla: con negocio y en prueba o pagando (a un negocio vencido no le sale su panel)
+      const rows = ((data as (Omit<Candidate, 'status'> & { id: string | null; status: string })[]) || [])
+        .filter((o): o is Candidate => !!o.id && (o.status === 'prueba' || o.status === 'activo'))
+        .sort((a, b) => a.name.localeCompare(b.name, 'es'))
+      setAll(rows)
+    })
+  }, [])
+
+  if (!all) return <div className="flex justify-center py-4 text-slate-400"><Spinner /></div>
+  if (all.length === 0) return <p className="text-sm text-slate-500">No hay negocios en prueba ni pagando.</p>
+
+  const term = q.trim().toLowerCase()
+  const shown = all.filter((b) =>
+    (filter === 'todos' || b.status === filter) &&
+    (!term || b.name.toLowerCase().includes(term) || b.code.toLowerCase().includes(term)),
+  )
+  const toggle = (id: string) => onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id])
+  const allShown = shown.length > 0 && shown.every((b) => value.includes(b.id))
+  const markShown = () => onChange(allShown
+    ? value.filter((id) => !shown.some((b) => b.id === id))
+    : Array.from(new Set([...value, ...shown.map((b) => b.id)])))
+
+  return (
+    <div className="space-y-2.5">
+      <input className="input" placeholder="Buscar por nombre o código…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="flex flex-wrap items-center gap-1.5">
+        {(['todos', 'prueba', 'activo'] as const).map((f) => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => setFilter(f)}
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition ${filter === f ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'}`}
+          >
+            {f === 'todos' ? 'Todos' : f === 'prueba' ? 'En prueba' : 'Pagando'}
+          </button>
+        ))}
+        <button type="button" onClick={markShown} disabled={shown.length === 0} className="ml-auto text-xs font-semibold text-brand disabled:opacity-40">
+          {allShown ? 'Quitar estos' : 'Marcar estos'}
+        </button>
+      </div>
+      <ul className="max-h-64 divide-y divide-slate-100 overflow-y-auto overscroll-contain rounded-xl ring-1 ring-slate-200">
+        {shown.length === 0 && <li className="px-3 py-4 text-center text-sm text-slate-500">Ningún negocio con ese filtro.</li>}
+        {shown.map((b) => (
+          <li key={b.id}>
+            <label className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm hover:bg-slate-50">
+              <input type="checkbox" className="h-5 w-5 shrink-0" checked={value.includes(b.id)} onChange={() => toggle(b.id)} />
+              <span className="min-w-0 flex-1 truncate font-semibold">{b.name} <span className="font-mono text-xs font-normal text-slate-400">{b.code}</span></span>
+              <span className={`chip shrink-0 text-[11px] ${b.comped ? 'bg-violet-100 text-violet-700' : b.status === 'activo' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                {b.comped ? 'Cortesía' : b.status === 'activo' ? 'Pagando' : 'Prueba'}
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs font-semibold text-slate-600">{value.length} {value.length === 1 ? 'negocio elegido' : 'negocios elegidos'}</p>
+    </div>
+  )
+}
+
 // La primera encuesta ya viene escrita: lo que más interesa saber al principio
 const TEMPLATE: { type: SurveyQuestionType; text: string }[] = [
   { type: 'estrellas', text: '¿Te está gustando Citora?' },
@@ -251,6 +326,8 @@ function NewSurveyModal({ onClose, onDone }: { onClose: () => void; onDone: () =
   const [intro, setIntro] = useState('Queremos mejorar Citora para tu negocio. Son 3 preguntas rápidas.')
   const [questions, setQuestions] = useState(TEMPLATE)
   const [notify, setNotify] = useState(true)
+  const [toAll, setToAll] = useState(true)
+  const [picked, setPicked] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -260,9 +337,12 @@ function NewSurveyModal({ onClose, onDone }: { onClose: () => void; onDone: () =
   const publish = async () => {
     if (title.trim().length < 3) return setError('Ponle un título a la encuesta.')
     if (questions.some((q) => q.text.trim().length < 3)) return setError('Escribe todas las preguntas (o quita las vacías).')
+    if (!toAll && picked.length === 0) return setError('Elige al menos un negocio.')
     setBusy(true)
     setError(null)
-    const { error } = await supabase.rpc('admin_create_survey', { p_title: title, p_intro: intro, p_questions: questions, p_notify: notify })
+    const { error } = await supabase.rpc('admin_create_survey', {
+      p_title: title, p_intro: intro, p_questions: questions, p_notify: notify, p_business_ids: toAll ? null : picked,
+    })
     setBusy(false)
     if (error) return setError(errorMessage(error))
     onDone()
@@ -276,7 +356,9 @@ function NewSurveyModal({ onClose, onDone }: { onClose: () => void; onDone: () =
       footer={
         <div className="space-y-2">
           {error && <Alert>{error}</Alert>}
-          <Button block onClick={publish} loading={busy}>Publicar a todos los dueños</Button>
+          <Button block onClick={publish} loading={busy}>
+            {toAll ? 'Publicar a todos los dueños' : `Publicar a ${picked.length} ${picked.length === 1 ? 'negocio' : 'negocios'}`}
+          </Button>
         </div>
       }
     >
@@ -309,6 +391,25 @@ function NewSurveyModal({ onClose, onDone }: { onClose: () => void; onDone: () =
             <Button size="sm" variant="secondary" onClick={() => setQuestions((qs) => [...qs, { type: 'texto', text: '' }])}>Añadir pregunta</Button>
           )}
           <p className="text-xs text-slate-500">Las de estrellas y Sí/No son obligatorias; las de texto, opcionales. Una vez publicada no se pueden cambiar las preguntas.</p>
+        </div>
+        <div className="space-y-3">
+          <span className="label">¿A quién se la envías?</span>
+          <div className="grid grid-cols-2 gap-2">
+            {([true, false] as const).map((v) => (
+              <button
+                key={String(v)}
+                type="button"
+                onClick={() => setToAll(v)}
+                aria-pressed={toAll === v}
+                className={`rounded-xl px-3 py-2.5 text-sm font-semibold transition ${toAll === v ? 'bg-brand text-white shadow' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-brand'}`}
+              >
+                {v ? 'A todos' : 'Solo a algunos'}
+              </button>
+            ))}
+          </div>
+          {toAll
+            ? <p className="text-xs text-slate-500">La verán todos los negocios en prueba o pagando, también los que se registren mientras esté abierta.</p>
+            : <BusinessPicker value={picked} onChange={setPicked} />}
         </div>
         <div className="flex items-center gap-3">
           <Toggle checked={notify} onChange={setNotify} label="Avisar con una notificación" />
