@@ -48,6 +48,10 @@ alter table public.platform_settings add column if not exists card_phone text no
 -- revisión (igual que con push_function_url vacío: la app sigue funcionando, solo sin ese aviso).
 alter table public.platform_settings add column if not exists moderate_function_url text;
 
+-- Zona horaria con la que empiezan los negocios nuevos. Cada negocio tiene la suya (la cambia el
+-- administrador: ver admin_set_timezone) y en ella se leen su horario, sus citas y sus estadísticas.
+alter table public.platform_settings add column if not exists default_timezone text not null default 'America/Havana';
+
 -- Un solo plan de 1.500 CUP/mes. Al pasar de tres planes a uno se unifica el precio una vez
 -- (después el panel de administrador guarda siempre los tres iguales).
 update public.platform_settings
@@ -653,6 +657,12 @@ returns boolean language sql stable security definer set search_path = public as
      and not exists (select 1 from businesses where slug = lower(p_slug));
 $$;
 
+-- ¿Es una zona horaria que conoce la base de datos (ej. 'America/Havana', 'Europe/Madrid')?
+create or replace function public._is_valid_timezone(p_tz text)
+returns boolean language sql stable set search_path = public as $$
+  select exists (select 1 from pg_timezone_names where name = p_tz);
+$$;
+
 -- Deja solo las opciones conocidas y con valores válidos. Lo que no cumple, se descarta.
 create or replace function public._clean_appearance(p jsonb)
 returns jsonb language plpgsql immutable as $$
@@ -883,7 +893,14 @@ begin
   if new.cover_url is not null and new.cover_url !~ '^https://' then
     new.cover_url := null;
   end if;
+  if tg_op = 'INSERT' then
+    if not _is_valid_timezone(new.timezone) then raise exception 'ZONA_INVALIDA'; end if;
+  elsif new.timezone is distinct from old.timezone and not _is_valid_timezone(new.timezone) then
+    raise exception 'ZONA_INVALIDA';
+  end if;
   if tg_op = 'UPDATE' and not is_platform_admin() and current_user in ('authenticated', 'anon') then
+    -- La zona horaria la cambia el administrador (admin_set_timezone), que además ajusta las citas
+    new.timezone := old.timezone;
     new.owner_id := old.owner_id;
     new.code := old.code;
     new.plan := old.plan;
@@ -1236,6 +1253,11 @@ begin
   -- Las citas nuevas se avisan desde create_booking (ahí sí hay a mano los servicios y el
   -- teléfono para mandar un aviso completo); aquí solo se ignoran para no avisar dos veces.
   if tg_op = 'INSERT' then
+    return new;
+  end if;
+  -- El administrador cambió la zona horaria del negocio: la cita se sigue viendo a la misma hora
+  -- (ver admin_set_timezone), así que no hay nada que avisar
+  if current_setting('citora.cambio_zona', true) = 'si' then
     return new;
   end if;
 
@@ -2094,6 +2116,7 @@ declare
   v_code text;
   v_prefix text;
   v_trial int;
+  v_tz text;
   v_item jsonb;
   v_pos int := 0;
   i int := 0;
@@ -2102,7 +2125,9 @@ begin
   if exists (select 1 from businesses where owner_id = v_uid) then raise exception 'YA_TIENE_NEGOCIO'; end if;
   if not check_slug_available(p_slug) then raise exception 'ENLACE_NO_DISPONIBLE'; end if;
 
-  select trial_days into v_trial from platform_settings where id = 1;
+  select trial_days, default_timezone into v_trial, v_tz from platform_settings where id = 1;
+  -- Una zona mal escrita en los ajustes no debe impedir que alguien cree su app
+  if v_tz is null or not _is_valid_timezone(v_tz) then v_tz := 'America/Havana'; end if;
 
   v_prefix := upper(left(regexp_replace(lower(p_slug), '[^a-z]', '', 'g') || 'cit', 3));
   loop
@@ -2113,14 +2138,14 @@ begin
   end loop;
 
   insert into businesses (owner_id, slug, code, name, business_type, whatsapp, address,
-                          color_primary, trial_ends_at, policies, currency, usd_prices, usd_rate)
+                          color_primary, trial_ends_at, policies, currency, usd_prices, usd_rate, timezone)
   values (v_uid, lower(p_slug), v_code, btrim(p_name), coalesce(nullif(p_type, ''), 'otro'),
           _clean_phone(p_whatsapp), nullif(btrim(coalesce(p_address, '')), ''),
           coalesce(nullif(p_color, ''), '#f0532e'),
           now() + make_interval(days => coalesce(v_trial, 3)),
           'Llega 5 minutos antes de tu cita. Si no puedes venir, cancela o cambia la fecha desde el enlace de tu cita.',
           coalesce(p_currency, 'CUP'), coalesce(p_usd_prices, false),
-          case when p_usd_rate > 0 then round(p_usd_rate, 2) end)
+          case when p_usd_rate > 0 then round(p_usd_rate, 2) end, v_tz)
   returning id into v_id;
 
   for v_item in select * from jsonb_array_elements(coalesce(p_services, '[]'::jsonb)) loop
@@ -2446,6 +2471,7 @@ begin
       'id', b.id, 'name', b.name, 'slug', b.slug, 'code', b.code, 'business_type', b.business_type,
       'whatsapp', b.whatsapp, 'plan', b.plan, 'trial_ends_at', b.trial_ends_at,
       'paid_until', b.paid_until, 'created_at', b.created_at, 'comped', coalesce(b.comped, false),
+      'timezone', b.timezone,
       'status', case when b.id is null then 'sin_negocio'
                      else business_status(b.plan, b.trial_ends_at, b.paid_until) end
     ) order by u.created_at desc)
@@ -2614,6 +2640,54 @@ begin
   update businesses
      set trial_ends_at = greatest(trial_ends_at, now()) + make_interval(days => p_days)
    where id = p_business;
+end;
+$$;
+
+-- Cambia la zona horaria de un negocio (ej. uno de España que empezó con la de Cuba). El horario
+-- se lee en la zona nueva: sus 9:00 pasan a ser las 9:00 de allí. Con p_keep_times, las citas que
+-- aún no han llegado conservan la hora que ven el dueño y el cliente (las 10:00 siguen siendo las
+-- 10:00, ahora de la zona nueva); sin él, conservan el momento real y se verán a otra hora.
+-- Devuelve cuántas citas activas se movieron.
+create or replace function public.admin_set_timezone(p_business uuid, p_timezone text, p_keep_times boolean default true)
+returns int language plpgsql volatile security definer set search_path = public as $$
+declare
+  b businesses;
+  a record;
+  v_later boolean;
+  v_moved int := 0;
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  if p_timezone is null or not _is_valid_timezone(p_timezone) then raise exception 'ZONA_INVALIDA'; end if;
+  select * into b from businesses where id = p_business for update;
+  if not found then raise exception 'NEGOCIO_NO_EXISTE'; end if;
+  if b.timezone = p_timezone then return 0; end if;
+
+  if p_keep_times then
+    -- Sin avisos push: para el cliente su cita no cambia de hora (ver _appointments_notify)
+    perform set_config('citora.cambio_zona', 'si', true);
+    -- Se mueven de una en una sin pisarse entre ellas por el camino: si pasan a más tarde,
+    -- empezando por la última; si pasan a más temprano, por la primera
+    v_later := (now() at time zone b.timezone) at time zone p_timezone > now();
+    begin
+      for a in
+        select x.id, x.starts_at, x.ends_at, x.status from appointments x
+        where x.business_id = b.id and x.starts_at > now()
+        order by case when v_later then x.starts_at end desc, case when not v_later then x.starts_at end
+      loop
+        update appointments
+           set starts_at = (a.starts_at at time zone b.timezone) at time zone p_timezone,
+               ends_at = ((a.starts_at at time zone b.timezone) at time zone p_timezone) + (a.ends_at - a.starts_at)
+         where id = a.id;
+        if a.status <> 'cancelada' then v_moved := v_moved + 1; end if;
+      end loop;
+    exception when exclusion_violation then
+      raise exception 'CITAS_SE_SOLAPAN';
+    end;
+    perform set_config('citora.cambio_zona', '', true);
+  end if;
+
+  update businesses set timezone = p_timezone where id = b.id;
+  return v_moved;
 end;
 $$;
 
@@ -2864,6 +2938,7 @@ grant execute on function public.admin_reject_payment_claim(uuid, text) to authe
 grant execute on function public.admin_deactivate_business(uuid) to authenticated;
 grant execute on function public.admin_delete_owner(uuid, boolean) to authenticated;
 grant execute on function public.admin_extend_trial(uuid, int) to authenticated;
+grant execute on function public.admin_set_timezone(uuid, text, boolean) to authenticated;
 grant execute on function public.admin_stats() to authenticated;
 grant execute on function public.admin_traffic(int) to authenticated;
 grant execute on function public.admin_business_activity() to authenticated;
@@ -2885,6 +2960,7 @@ grant execute on function public.business_effective_plan(text, timestamptz, time
 grant execute on function public.business_status(text, timestamptz, timestamptz) to anon, authenticated;
 grant execute on function public.is_valid_slug(text) to anon, authenticated;
 grant execute on function public.is_reserved_slug(text) to anon, authenticated;
+grant execute on function public._is_valid_timezone(text) to authenticated;
 grant execute on function public._clean_phone(text) to anon, authenticated;
 grant execute on function public._clean_appearance(jsonb) to authenticated;
 grant execute on function public.businesses_guard() to authenticated;

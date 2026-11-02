@@ -12,6 +12,7 @@ import { isPushSubscribed, pushSupported, subscribeAdminPush, unsubscribePush } 
 import { PLAN_LABEL, SINGLE_PLAN } from '../../lib/plans'
 import { supabase } from '../../lib/supabase'
 import type { BusinessStatus, PaymentClaimStatus, PlanKey } from '../../lib/types'
+import { TIMEZONES, tzLabel, tzNow } from '../../lib/timezones'
 import { publicUrl } from '../../lib/url'
 import { waLink } from '../../lib/whatsapp'
 import { ago, AdminHome, OwnerAvatar } from './AdminHome'
@@ -35,6 +36,7 @@ export interface AdminOwner {
   paid_until: string | null
   created_at: string | null
   comped: boolean
+  timezone: string | null
   status: BusinessStatus | 'sin_negocio'
 }
 
@@ -52,6 +54,7 @@ interface Settings {
   push_function_url: string | null
   push_shared_secret: string | null
   moderate_function_url: string | null
+  default_timezone: string
 }
 
 export default function Admin() {
@@ -164,6 +167,7 @@ function Owners() {
   const [q, setQ] = useState('')
   const [activating, setActivating] = useState<OwnerWithBusiness | null>(null)
   const [deleting, setDeleting] = useState<AdminOwner | null>(null)
+  const [zoning, setZoning] = useState<OwnerWithBusiness | null>(null)
   // Acciones que piden confirmación antes de hacerse (por si se pulsan por error)
   const [confirming, setConfirming] = useState<{ kind: 'grant' | 'revoke' | 'deactivate'; owner: AdminOwner } | null>(null)
   const [menu, setMenu] = useState<string | null>(null)
@@ -261,6 +265,7 @@ function Owners() {
                 <p className="text-xs text-slate-400">
                   {ago(o.signed_up_at)}
                   {o.last_sign_in_at && <> · último acceso {fullDateFromIso(o.last_sign_in_at, TZ)}</>}
+                  {o.timezone && o.timezone !== TZ && <> · hora de {tzLabel(o.timezone)}</>}
                 </p>
               </div>
               {o.comped ? <span className="chip bg-violet-100 text-violet-700">🎁 Cortesía</span> :
@@ -306,6 +311,7 @@ function Owners() {
                       )}
                       {o.id && !o.comped && <MenuItem icon="gift" onClick={() => { setMenu(null); setConfirming({ kind: 'grant', owner: o }) }}>Regalar para siempre</MenuItem>}
                       {o.id && o.comped && <MenuItem icon="gift" onClick={() => { setMenu(null); setConfirming({ kind: 'revoke', owner: o }) }}>Quitar la cortesía</MenuItem>}
+                      {o.id && <MenuItem icon="globe" onClick={() => { setMenu(null); setZoning(o as OwnerWithBusiness) }}>Cambiar zona horaria</MenuItem>}
                       {o.id && o.status !== 'vencido' && (
                         <MenuItem icon="lock" danger onClick={() => { setMenu(null); setConfirming({ kind: 'deactivate', owner: o }) }}>Inhabilitar</MenuItem>
                       )}
@@ -341,6 +347,17 @@ function Owners() {
           onClose={() => setDeleting(null)}
           onDone={() => {
             setDeleting(null)
+            load()
+          }}
+        />
+      )}
+
+      {zoning && (
+        <TimezoneModal
+          business={zoning}
+          onClose={() => setZoning(null)}
+          onDone={() => {
+            setZoning(null)
             load()
           }}
         />
@@ -515,6 +532,67 @@ function ActivateModal({ business, prices, onClose, onDone }: {
           <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. Transfermóvil 14:32" />
         </Field>
         <p className="text-xs text-slate-500">Si todavía tiene meses pagados, los nuevos se suman al final.</p>
+        {error && <Alert>{error}</Alert>}
+      </div>
+    </Modal>
+  )
+}
+
+/** Lista de zonas con la hora que es ahora en cada una. Si la actual no está en la lista, se añade. */
+function TimezoneSelect({ value, onChange }: { value: string; onChange: (tz: string) => void }) {
+  const options = TIMEZONES.some((z) => z.tz === value) ? TIMEZONES : [{ tz: value, label: tzLabel(value) }, ...TIMEZONES]
+  return (
+    <select className="input" value={value} onChange={(e) => onChange(e.target.value)}>
+      {options.map((z) => {
+        const now = tzNow(z.tz)
+        return <option key={z.tz} value={z.tz}>{z.label} · {now.time} ({now.offset})</option>
+      })}
+    </select>
+  )
+}
+
+function TimezoneModal({ business, onClose, onDone }: { business: OwnerWithBusiness; onClose: () => void; onDone: () => void }) {
+  const current = business.timezone || TZ
+  const [tz, setTz] = useState(current)
+  const [keep, setKeep] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const change = async () => {
+    setBusy(true)
+    setError(null)
+    const { data, error } = await supabase.rpc('admin_set_timezone', { p_business: business.id, p_timezone: tz, p_keep_times: keep })
+    setBusy(false)
+    if (error) return setError(errorMessage(error))
+    const moved = Number(data) || 0
+    flash(`${business.name}: hora de ${tzLabel(tz)}${moved ? ` · ${moved} ${moved === 1 ? 'cita ajustada' : 'citas ajustadas'}` : ''}`)
+    onDone()
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Zona horaria · ${business.name}`}
+      footer={<Button block onClick={change} loading={busy} disabled={tz === current}>Cambiar zona horaria</Button>}
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-slate-600">
+          Ahora usa la hora de <b>{tzLabel(current)}</b> (allí son las {tzNow(current).time}). Su horario, su agenda, sus recordatorios y sus estadísticas van con esta hora.
+        </p>
+        <Field label="Nueva zona horaria">
+          <TimezoneSelect value={tz} onChange={setTz} />
+        </Field>
+        <p className="text-sm text-slate-500">
+          Su horario no cambia de números: si abre a las 9:00, abrirá a las 9:00 de {tzLabel(tz)}.
+        </p>
+        <label className="flex items-start gap-3 rounded-xl bg-white p-3 ring-1 ring-slate-200">
+          <input type="checkbox" className="mt-1 h-5 w-5" checked={keep} onChange={(e) => setKeep(e.target.checked)} />
+          <span className="text-sm text-slate-700">
+            <b>Mantener la hora de las citas ya reservadas.</b> Una cita de las 10:00 sigue siendo a las 10:00, ahora de la nueva zona (lo normal si la zona estaba mal puesta). Al cliente no le llega ningún aviso.
+            Si lo desmarcas, las citas se quedan en el mismo momento real y se verán a otra hora.
+          </span>
+        </label>
         {error && <Alert>{error}</Alert>}
       </div>
     </Modal>
@@ -728,6 +806,12 @@ function SettingsForm() {
         </Field>
         <Field label="Días de prueba gratis" hint="Para los negocios nuevos.">
           <input className="input" type="number" min={0} max={60} value={s.trial_days} onChange={(e) => setS({ ...s, trial_days: Number(e.target.value) })} />
+        </Field>
+      </section>
+      <section className="card space-y-4">
+        <h2 className="font-bold">Zona horaria</h2>
+        <Field label="Zona de los negocios nuevos" hint="Con la que empiezan al crear su app. La de cada negocio se cambia en Dueños → Más → Cambiar zona horaria.">
+          <TimezoneSelect value={s.default_timezone || TZ} onChange={(tz) => setS({ ...s, default_timezone: tz })} />
         </Field>
       </section>
       <section className="card space-y-4">

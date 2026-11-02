@@ -719,6 +719,83 @@ select _purge_analytics();
 do $$ begin assert (select count(*) from analytics_events) > 0, 'la limpieza solo borra lo de hace más de 13 meses'; end $$;
 set role authenticated;
 
+-- ===== Zona horaria de cada negocio =====
+reset role;
+-- Dos citas seguidas, lejos de cualquier otra: al moverlas no deben pisarse entre ellas
+insert into appointments (business_id, token, starts_at, ends_at, customer_name, customer_phone, status, source)
+select id, 'zona1', date_trunc('hour', now()) + interval '200 days', date_trunc('hour', now()) + interval '200 days 1 hour',
+       'Ana Zona', '5355550001', 'confirmada', 'manual' from businesses where slug = 'spa-mar';
+insert into appointments (business_id, token, starts_at, ends_at, customer_name, customer_phone, status, source)
+select id, 'zona2', date_trunc('hour', now()) + interval '200 days 1 hour', date_trunc('hour', now()) + interval '200 days 2 hours',
+       'Bea Zona', '5355550002', 'pendiente', 'manual' from businesses where slug = 'spa-mar';
+create temp table zona_antes as
+  select token, starts_at, ends_at, starts_at at time zone 'America/Havana' as hora_local
+  from appointments where token in ('zona1', 'zona2');
+do $$ begin assert (select timezone from businesses where slug = 'spa-mar') = 'America/Havana'; end $$;
+
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select expect_error($$select admin_set_timezone((select id from businesses where slug='spa-mar'), 'Europe/Madrid')$$, 'NO_AUTORIZADO');
+update businesses set timezone = 'Europe/Madrid' where slug = 'spa-mar';
+reset role;
+do $$ begin assert (select timezone from businesses where slug = 'spa-mar') = 'America/Havana', 'el dueño no se cambia la zona'; end $$;
+
+set role authenticated;
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+select expect_error($$select admin_set_timezone((select id from businesses where slug='spa-mar'), 'Marte/Olimpo')$$, 'ZONA_INVALIDA');
+select expect_error($$select admin_set_timezone('00000000-0000-0000-0000-000000000000', 'Europe/Madrid')$$, 'NEGOCIO_NO_EXISTE');
+do $$ begin
+  assert admin_set_timezone((select id from businesses where slug='spa-mar'), 'Europe/Madrid') >= 2, 'mueve las citas futuras';
+  assert (select x->>'timezone' from jsonb_array_elements(admin_list_owners()) x where x->>'slug' = 'spa-mar') = 'Europe/Madrid';
+end $$;
+reset role;
+do $$ begin
+  assert (select timezone from businesses where slug = 'spa-mar') = 'Europe/Madrid';
+  assert not exists (select 1 from appointments a join zona_antes z using (token)
+                     where a.starts_at at time zone 'Europe/Madrid' <> z.hora_local
+                        or a.ends_at - a.starts_at <> z.ends_at - z.starts_at),
+    'las citas se ven a la misma hora y duran lo mismo';
+  assert not exists (select 1 from appointments a join zona_antes z using (token) where a.starts_at = z.starts_at),
+    'el momento real sí cambió';
+end $$;
+-- Sin mantener las horas: las citas se quedan en su momento real
+create temp table zona_madrid as select token, starts_at from appointments where token in ('zona1', 'zona2');
+set role authenticated;
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+do $$ begin
+  assert admin_set_timezone((select id from businesses where slug='spa-mar'), 'America/Havana', false) = 0;
+  assert admin_set_timezone((select id from businesses where slug='spa-mar'), 'America/Havana') = 0, 'misma zona: nada que hacer';
+end $$;
+reset role;
+do $$ begin
+  assert (select timezone from businesses where slug = 'spa-mar') = 'America/Havana';
+  assert not exists (select 1 from appointments a join zona_madrid z using (token) where a.starts_at <> z.starts_at),
+    'sin mantener horas, las citas no se mueven';
+end $$;
+delete from appointments where token in ('zona1', 'zona2');
+
+-- Los negocios nuevos empiezan con la zona de los ajustes (o la de Cuba si está mal escrita)
+insert into auth.users (id, email) values
+  ('33333333-3333-3333-3333-333333333333', 'madrid@test.com'),
+  ('44444444-4444-4444-4444-444444444444', 'erratas@test.com');
+update platform_settings set default_timezone = 'Europe/Madrid';
+set role authenticated;
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select create_business('Zona Madrid', 'zona-madrid', 'otro', '+34600000000', null, '#0ea5e9', '[]', '[]');
+reset role;
+update platform_settings set default_timezone = 'Europe/Madrdi';
+set role authenticated;
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+select create_business('Zona Erratas', 'zona-erratas', 'otro', '+34600000001', null, '#0ea5e9', '[]', '[]');
+reset role;
+do $$ begin
+  assert (select timezone from businesses where slug = 'zona-madrid') = 'Europe/Madrid', 'zona de los ajustes';
+  assert (select timezone from businesses where slug = 'zona-erratas') = 'America/Havana', 'zona mal escrita: la de Cuba';
+end $$;
+update platform_settings set default_timezone = 'America/Havana';
+delete from auth.users where id in ('33333333-3333-3333-3333-333333333333', '44444444-4444-4444-4444-444444444444');
+set role authenticated;
+
 -- ===== Borrar dueños =====
 reset role;
 set role authenticated;

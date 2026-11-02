@@ -34,6 +34,8 @@ const MESSAGES: Record<string, string> = {
   CUPON_AGOTADO: 'Ese código de descuento ya se usó todas las veces permitidas.',
   PROFESIONAL_INVALIDO: 'Ese profesional no es de tu negocio.',
   LIMITE_ESPERA: 'Ya estás en la lista de espera de varios días. Espera a que el negocio te escriba.',
+  ZONA_INVALIDA: 'Esa zona horaria no existe.',
+  CITAS_SE_SOLAPAN: 'Al pasar a esa zona, dos citas de este negocio se pisarían. Muévelas antes o cambia la zona sin mantener la hora de las citas.',
 }
 
 export function errorMessage(err: unknown): string {
