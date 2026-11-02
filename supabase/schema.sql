@@ -340,8 +340,11 @@ alter table public.services add column if not exists photo_url text;
 -- lo mismo; el cliente elige una al reservar. [{"id": "o1", "name": "Niño", "price": 500}, ...];
 -- vacío = precio único. services.price guarda la más barata ("desde"). Ver services_guard.
 alter table public.services add column if not exists options jsonb not null default '[]'::jsonb;
--- La opción elegida en cada cita (el nombre y el precio ya quedan copiados en name y price)
+-- La opción elegida en cada cita (el nombre y el precio ya quedan copiados en name y price). Si
+-- eligió varias, sus ids ordenados y separados por comas (ver _option_key).
 alter table public.appointment_services add column if not exists option_id text;
+-- El cliente puede elegir varias opciones del servicio a la vez (se suman los precios)
+alter table public.services add column if not exists multi_options boolean not null default false;
 
 -- Depósito opcional al reservar (protege de quienes no asisten). No hay pasarela de pago para
 -- Cuba, así que es informativo: el cliente transfiere por su cuenta (Transfermóvil/EnZona) y manda
@@ -1500,7 +1503,8 @@ begin
     'services', coalesce((
       select jsonb_agg(jsonb_build_object(
         'id', s.id, 'name', s.name, 'description', s.description, 'photo_url', s.photo_url,
-        'price', s.price, 'duration_min', s.duration_min, 'is_extra', s.is_extra, 'options', s.options)
+        'price', s.price, 'duration_min', s.duration_min, 'is_extra', s.is_extra, 'options', s.options,
+        'multi_options', s.multi_options)
         order by s.position, s.created_at)
       from services s where s.business_id = b.id and s.active), '[]'::jsonb),
     'schedule', coalesce((
@@ -1775,16 +1779,30 @@ begin
 end;
 $$;
 
--- Los servicios elegidos con su precio, ya con la opción elegida de cada uno (p_options:
--- {"<id del servicio>": "<id de la opción>"}). Un servicio con opciones necesita una válida.
--- Es la única forma de calcular precios al reservar: el precio nunca viene del navegador.
+-- Las opciones elegidas de un servicio ("o2" o ["o3", "o1"]) como texto fijo: "o1,o3"
+create or replace function public._option_key(p jsonb)
+returns text language sql immutable set search_path = public as $$
+  select case jsonb_typeof(p)
+    when 'string' then nullif(p #>> '{}', '')
+    when 'array' then (select string_agg(distinct x, ',' order by x) from jsonb_array_elements_text(p) x)
+  end;
+$$;
+
+-- Los servicios elegidos con su precio, ya con las opciones elegidas de cada uno (p_options:
+-- {"<id del servicio>": ["<id de la opción>", ...]}). Un servicio con opciones necesita una válida,
+-- o varias si el dueño lo permite (se suman sus precios). Es la única forma de calcular precios al
+-- reservar: el precio nunca viene del navegador.
 create or replace function public._chosen_services(p_business uuid, p_service_ids uuid[], p_options jsonb,
                                                    p_active_only boolean default true)
 returns table (service_id uuid, option_id text, name text, price numeric, duration_min int, is_extra boolean, pos int)
 language plpgsql stable security definer set search_path = public as $$
 declare
   sv services;
-  o jsonb;
+  v_key text;
+  v_ids text[];
+  v_names text;
+  v_sum numeric;
+  v_n int;
 begin
   for sv in
     select x.* from services x
@@ -1792,16 +1810,24 @@ begin
       and (x.active or not p_active_only)
     order by x.is_extra, x.position, x.created_at
   loop
-    o := null;
+    v_key := null;
+    v_names := null;
+    v_sum := null;
     if jsonb_array_length(sv.options) > 0 then
-      select x into o from jsonb_array_elements(sv.options) x
-        where x->>'id' = (case when jsonb_typeof(p_options) = 'object' then p_options->>sv.id::text end);
-      if o is null then raise exception 'FALTA_OPCION'; end if;
+      v_key := _option_key(case when jsonb_typeof(p_options) = 'object' then p_options->sv.id::text end);
+      v_ids := string_to_array(v_key, ',');
+      if v_ids is null or cardinality(v_ids) = 0 or (cardinality(v_ids) > 1 and not sv.multi_options) then
+        raise exception 'FALTA_OPCION';
+      end if;
+      select string_agg(t.x->>'name', ' + ' order by t.ord), sum((t.x->>'price')::numeric), count(*)
+        into v_names, v_sum, v_n
+        from jsonb_array_elements(sv.options) with ordinality t(x, ord) where t.x->>'id' = any (v_ids);
+      if v_n <> cardinality(v_ids) then raise exception 'FALTA_OPCION'; end if;
     end if;
     service_id := sv.id;
-    option_id := o->>'id';
-    name := case when o is null then sv.name else sv.name || ' · ' || (o->>'name') end;
-    price := coalesce((o->>'price')::numeric, sv.price);
+    option_id := v_key;
+    name := case when v_names is null then sv.name else sv.name || ' · ' || v_names end;
+    price := coalesce(v_sum, sv.price);
     duration_min := sv.duration_min;
     is_extra := sv.is_extra;
     pos := sv.position;
@@ -2096,8 +2122,8 @@ begin
                         from appointment_services s where s.appointment_id = a.id), '{}')
             = (select array_agg(distinct x order by x) from unnest(p_service_ids) x)
         and not exists (select 1 from appointment_services s where s.appointment_id = a.id and s.option_id is not null
-                          and s.option_id is distinct from (case when jsonb_typeof(p_options) = 'object'
-                                                                 then p_options->>s.service_id::text end));
+                          and s.option_id is distinct from _option_key(case when jsonb_typeof(p_options) = 'object'
+                                                                            then p_options->s.service_id::text end));
   if v_same then
     v_dur := greatest(5, (extract(epoch from (a.ends_at - a.starts_at)) / 60)::int);
   else

@@ -1,6 +1,6 @@
 import { HelpTip } from '../../components/HelpTip'
 import { duration, price } from '../../lib/format'
-import { hasOptions, type OptionChoice } from '../../lib/serviceOptions'
+import { hasOptions, pickedOptions, toggleOption, type OptionChoice } from '../../lib/serviceOptions'
 import type { PublicService } from '../../lib/types'
 
 /** Servicios principales (al menos uno) y, debajo, los complementos opcionales */
@@ -8,7 +8,7 @@ export function ServicePicker({ services, selected, onChange, choice, onChoice, 
   services: PublicService[]
   selected: string[]
   onChange: (ids: string[]) => void
-  /** Opción de precio elegida en los servicios que tienen varias (ej. Niño / Adulto) */
+  /** Opciones de precio elegidas en los servicios que las tienen */
   choice: OptionChoice
   onChoice: (choice: OptionChoice) => void
   currency: string
@@ -19,7 +19,8 @@ export function ServicePicker({ services, selected, onChange, choice, onChoice, 
   const item = (s: PublicService) => {
     const on = selected.includes(s.id)
     const opts = hasOptions(s) ? s.options! : null
-    const picked = opts?.find((o) => o.id === choice[s.id])
+    const picked = pickedOptions(s, choice)
+    const pickedTotal = picked.reduce((a, o) => a + Number(o.price), 0)
     return (
       <div key={s.id} className={`card space-y-3 transition ${on ? 'border-brand bg-brand/5 ring-1 ring-brand' : 'hover:border-slate-300'}`}>
         <button
@@ -38,24 +39,26 @@ export function ServicePicker({ services, selected, onChange, choice, onChoice, 
             <span className="block text-sm text-slate-500">{s.is_extra ? `+${duration(s.duration_min)}` : duration(s.duration_min)}</span>
           </span>
           <span className={`shrink-0 text-right font-bold ${on ? 'text-brand' : ''}`}>
-            {picked ? price(picked.price, currency, rate) : opts ? <><span className="text-xs font-medium text-slate-500">desde </span>{price(s.price, currency, rate)}</> : price(s.price, currency, rate)}
+            {picked.length ? price(pickedTotal, currency, rate) : opts ? <><span className="text-xs font-medium text-slate-500">desde </span>{price(s.price, currency, rate)}</> : price(s.price, currency, rate)}
           </span>
         </button>
         {on && opts && (
           <div className="border-t border-brand/15 pt-3">
-            <p className={`mb-2 text-xs font-semibold ${picked ? 'text-slate-500' : 'text-brand'}`}>{picked ? 'Opción elegida' : 'Elige una opción'}</p>
+            <p className={`mb-2 text-xs font-semibold ${picked.length ? 'text-slate-500' : 'text-brand'}`}>
+              {s.multi_options ? 'Elige una o varias opciones' : picked.length ? 'Opción elegida' : 'Elige una opción'}
+            </p>
             <div className="flex flex-wrap gap-2">
               {opts.map((o) => {
-                const active = o.id === picked?.id
+                const active = picked.includes(o)
                 return (
                   <button
                     key={o.id}
                     type="button"
-                    onClick={() => onChoice({ ...choice, [s.id]: o.id })}
+                    onClick={() => onChoice(toggleOption(s, choice, o.id))}
                     aria-pressed={active}
                     className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ring-1 transition ${active ? 'bg-brand text-white ring-brand' : 'bg-white text-slate-700 ring-slate-300 hover:ring-brand'}`}
                   >
-                    {o.name} · {price(o.price, currency, rate)}
+                    {s.multi_options && active ? '✓ ' : ''}{o.name} · {price(o.price, currency, rate)}
                   </button>
                 )
               })}

@@ -241,7 +241,8 @@ function EditBooking({ booking, onClose, onDone }: {
   const original = booking.services.map((s) => s.id).filter((id): id is string => Boolean(id))
   const [biz, setBiz] = useState<PublicBusiness | null>(null)
   const [selected, setSelected] = useState<string[]>(original)
-  const originalChoice: OptionChoice = Object.fromEntries(booking.services.filter((s) => s.id && s.option_id).map((s) => [s.id!, s.option_id!]))
+  // option_id de la cita: "o1" o, si eligió varias, "o1,o3"
+  const originalChoice: OptionChoice = Object.fromEntries(booking.services.filter((s) => s.id && s.option_id).map((s) => [s.id!, s.option_id!.split(',')]))
   const [choice, setChoice] = useState<OptionChoice>(originalChoice)
   const [staffId, setStaffId] = useState<string | null>(booking.staff_id || null)
   const [date, setDate] = useState<string | null>(dateKey(booking.starts_at, tz))
@@ -257,7 +258,7 @@ function EditBooking({ booking, onClose, onDone }: {
 
   const services = biz?.services || []
   const same = selected.length === original.length && selected.every((id) => original.includes(id))
-    && Object.entries(originalChoice).every(([id, o]) => choice[id] === o)
+    && Object.entries(originalChoice).every(([id, o]) => [...(choice[id] || [])].sort().join(',') === [...o].sort().join(','))
   const chosen = applyOptions(services.filter((s) => selected.includes(s.id)), choice)
   const minutes = same ? booking.services.reduce((a, s) => a + s.duration_min, 0) : chosen.reduce((a, s) => a + s.duration_min, 0)
   const total = same ? Number(booking.total) : chosen.reduce((a, s) => a + Number(s.price), 0)

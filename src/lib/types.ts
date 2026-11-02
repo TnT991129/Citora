@@ -55,9 +55,11 @@ export interface Service {
   active: boolean
   is_extra: boolean
   options: ServiceOption[]
+  /** El cliente puede elegir varias opciones a la vez (se suman los precios) */
+  multi_options: boolean
 }
 
-/** Opción de precio de un servicio (ej. Corte: Niño / Adulto). Todas duran lo mismo. */
+/** Opción de precio dentro de un servicio. Todas duran lo mismo. */
 export interface ServiceOption {
   id: string
   name: string
@@ -237,6 +239,7 @@ export interface PublicService {
   duration_min: number
   is_extra?: boolean
   options?: ServiceOption[]
+  multi_options?: boolean
 }
 
 export interface PublicBusiness {

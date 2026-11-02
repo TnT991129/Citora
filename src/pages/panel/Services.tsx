@@ -10,7 +10,14 @@ import { RateCard } from './RateCard'
 
 // Las opciones nuevas no tienen id todavía: se lo pone la base de datos al guardar
 type EditingOption = Omit<ServiceOption, 'id'> & { id?: string }
-type Editing = Omit<Partial<Service>, 'options'> & { name: string; price: number; duration_min: number; is_extra: boolean; options: EditingOption[] }
+type Editing = Omit<Partial<Service>, 'options'> & {
+  name: string
+  price: number
+  duration_min: number
+  is_extra: boolean
+  options: EditingOption[]
+  multi_options: boolean
+}
 
 const MAX_OPTIONS = 12
 
@@ -35,7 +42,7 @@ export default function Services() {
     if (!editing.name.trim()) return setError('Escribe el nombre del servicio.')
     const options = editing.options.map((o) => ({ ...o, name: o.name.trim(), price: Math.max(0, Number(o.price) || 0) }))
     if (options.length === 1) return setError('Pon al menos 2 opciones, o quítalas y deja un solo precio.')
-    if (options.some((o) => !o.name)) return setError('Escribe el nombre de cada opción (por ejemplo, Niño o Adulto).')
+    if (options.some((o) => !o.name)) return setError('Escribe el nombre de cada opción.')
     setBusy(true)
     setError(null)
     const payload = {
@@ -46,7 +53,9 @@ export default function Services() {
       duration_min: editing.duration_min,
       is_extra: editing.is_extra,
       // Solo si tiene o tenía opciones: así guardar un servicio normal vale también con un schema.sql anterior
-      ...(options.length || services.find((s) => s.id === editing.id)?.options?.length ? { options } : {}),
+      ...(options.length || services.find((s) => s.id === editing.id)?.options?.length
+        ? { options, multi_options: options.length > 0 && editing.multi_options }
+        : {}),
     }
     const { error } = editing.id
       ? await supabase.from('services').update(payload).eq('id', editing.id)
@@ -122,10 +131,12 @@ export default function Services() {
         </button>
       </div>
       {s.photo_url && <img src={s.photo_url} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" />}
-      <button className="min-w-0 flex-1 text-left" onClick={() => open({ ...s, options: s.options || [] })}>
+      <button className="min-w-0 flex-1 text-left" onClick={() => open({ ...s, options: s.options || [], multi_options: Boolean(s.multi_options) })}>
         <p className="truncate font-semibold">{s.is_extra ? '+ ' : ''}{s.name}</p>
         <p className="text-sm text-slate-500">
-          {s.options?.length ? `${s.options.length} opciones · desde ${price(s.price, business.currency, rate)}` : price(s.price, business.currency, rate)} · {duration(s.duration_min)}
+          {s.options?.length
+            ? `${s.options.length} opciones${s.multi_options ? ' (puede elegir varias)' : ''} · desde ${price(s.price, business.currency, rate)}`
+            : price(s.price, business.currency, rate)} · {duration(s.duration_min)}
         </p>
       </button>
       <Toggle checked={s.active} onChange={(v) => toggle(s, v)} label={s.active ? 'Visible' : 'Oculto'} />
@@ -136,7 +147,7 @@ export default function Services() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-extrabold">Servicios</h1>
-        <Button size="sm" onClick={() => open({ name: '', price: 0, duration_min: 60, is_extra: false, options: [] })}>+ Servicio</Button>
+        <Button size="sm" onClick={() => open({ name: '', price: 0, duration_min: 60, is_extra: false, options: [], multi_options: false })}>+ Servicio</Button>
       </div>
       <p className="text-sm text-slate-500">Los servicios ocultos no aparecen en tu web, pero se guardan. Las citas ya hechas mantienen su precio.</p>
 
@@ -151,7 +162,7 @@ export default function Services() {
             <h2 className="text-lg font-bold">Complementos</h2>
             <p className="text-sm text-slate-500">Extras opcionales que el cliente añade a un servicio, como un lavado o un diseño.</p>
           </div>
-          <Button size="sm" variant="secondary" onClick={() => open({ name: '', price: 0, duration_min: 15, is_extra: true, options: [] })}>+ Complemento</Button>
+          <Button size="sm" variant="secondary" onClick={() => open({ name: '', price: 0, duration_min: 15, is_extra: true, options: [], multi_options: false })}>+ Complemento</Button>
         </div>
         {extras.length === 0 && <p className="rounded-2xl bg-white/60 px-4 py-3 text-sm text-slate-500 ring-1 ring-slate-200">Todavía no tienes complementos.</p>}
         <div className="space-y-2">{extras.map(row(extras))}</div>
@@ -232,7 +243,7 @@ export default function Services() {
   )
 }
 
-/** Varias opciones de precio para un mismo servicio (ej. Corte: Niño 500 · Adulto 800). Duran lo mismo. */
+/** Varias opciones de precio dentro de un mismo servicio; el cliente elige una (o varias, si se permite). Duran lo mismo. */
 function PriceOptions({ editing, setEditing, currency }: {
   editing: Editing
   setEditing: (e: Editing) => void
@@ -244,7 +255,7 @@ function PriceOptions({ editing, setEditing, currency }: {
     return (
       <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-3">
         <p className="text-sm font-semibold">¿El precio cambia según el caso?</p>
-        <p className="text-xs text-slate-500">Por ejemplo: Niño, Adulto y Con barba. El cliente elige una al reservar.</p>
+        <p className="text-xs text-slate-500">Pon cada variante con su nombre y su precio. El cliente elige al reservar.</p>
         <Button
           size="sm"
           variant="secondary"
@@ -266,7 +277,7 @@ function PriceOptions({ editing, setEditing, currency }: {
         <div key={o.id || `nueva-${i}`} className="flex items-center gap-2">
           <input
             className="input min-w-0 flex-1"
-            placeholder={['Niño', 'Adulto', 'Con barba'][i] || 'Nombre'}
+            placeholder="Nombre del servicio"
             aria-label={`Nombre de la opción ${i + 1}`}
             value={o.name}
             maxLength={40}
@@ -295,6 +306,18 @@ function PriceOptions({ editing, setEditing, currency }: {
       {opts.length < MAX_OPTIONS && (
         <Button size="sm" variant="ghost" onClick={() => set([...opts, { name: '', price: 0 }])}>+ Otra opción</Button>
       )}
+      <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-white px-3 py-2.5 ring-1 ring-slate-200">
+        <input
+          type="checkbox"
+          className="mt-0.5 h-5 w-5 shrink-0 accent-brand"
+          checked={editing.multi_options}
+          onChange={(e) => setEditing({ ...editing, multi_options: e.target.checked })}
+        />
+        <span>
+          <span className="block text-sm font-semibold">El cliente puede elegir varias</span>
+          <span className="block text-xs text-slate-500">Se suman los precios de las que elija. Si no, elige solo una.</span>
+        </span>
+      </label>
       <p className="text-xs text-slate-500">Precios en {currency}. Todas duran lo mismo. Las citas ya hechas mantienen su precio.</p>
     </div>
   )
