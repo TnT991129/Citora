@@ -76,7 +76,7 @@ export default function AdminStats() {
       {s.expiring.length > 0 && (
         <section className="card">
           <h2 className="font-bold">Para escribir hoy</h2>
-          <p className="text-sm text-slate-500">Planes que vencen en 7 días y pruebas que terminan en 2.</p>
+          <p className="text-sm text-slate-500">Planes que vencen en 7 días y pruebas que terminan en 3.</p>
           <ul className="mt-2 divide-y divide-slate-100">
             {s.expiring.map((b) => (
               <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">

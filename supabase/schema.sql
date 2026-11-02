@@ -875,26 +875,50 @@ returns void language sql security definer set search_path = public as $$
   where status in ('pendiente', 'confirmada') and ends_at < now() - interval '3 hours';
 $$;
 
--- Avisa al dueño (push) cuando le quedan 3 días o menos de prueba o de mensualidad pagada, para
--- que no se le venza sin darse cuenta. Se llama cada hora y a cada negocio le toca a las 9:00 de su
--- zona horaria, con la fecha también en su zona.
+-- Título y texto del aviso de que se acaba la prueba gratis o la mensualidad, según los días que
+-- faltan contados en la zona horaria del negocio: {título, texto}.
+create or replace function public._expiry_push_text(p_status text, p_expires timestamptz, p_tz text, p_name text,
+                                                    p_now timestamptz default now())
+returns text[] language plpgsql stable set search_path = public as $$
+declare
+  v_days int := (p_expires at time zone p_tz)::date - (p_now at time zone p_tz)::date;
+  v_when text := case v_days when 0 then 'hoy' when 1 then 'mañana' else 'en ' || v_days || ' días' end;
+  v_day text := case when v_days <= 1 then v_when || ' a las ' || to_char(p_expires at time zone p_tz, 'HH24:MI')
+                     else 'el ' || to_char(p_expires at time zone p_tz, 'DD/MM') end;
+begin
+  if p_status = 'prueba' then
+    return array[
+      case when v_days >= 2 then 'Te quedan ' || v_days || ' días de prueba gratis'
+           else initcap(v_when) || ' termina tu prueba gratis' end,
+      'Tu prueba gratis termina ' || v_day || '. Suscríbete en Más → Mensualidad para que tus clientes '
+        || 'sigan reservando en ' || p_name || '.'];
+  end if;
+  return array[
+    case when v_days >= 2 then 'Tu mensualidad vence en ' || v_days || ' días'
+         else initcap(v_when) || ' vence tu mensualidad' end,
+    'Vence ' || v_day || '. Paga en Más → Mensualidad para que tus clientes sigan reservando en ' || p_name || '.'];
+end;
+$$;
+
+-- Avisa al dueño (push) cada día de los 3 últimos de su prueba gratis o de su mensualidad pagada,
+-- para que se suscriba a tiempo. Se llama cada hora y a cada negocio le toca a las 9:00 de su zona
+-- horaria. A quien no tiene los avisos puestos le escribe el administrador desde Estadísticas.
 create or replace function public._send_expiry_reminders()
 returns void language plpgsql security definer set search_path = public as $$
 declare
   r record;
+  v_text text[];
 begin
   for r in
-    select b.id, b.timezone, business_status(b.plan, b.trial_ends_at, b.paid_until) as st,
+    select b.id, b.name, b.timezone, business_status(b.plan, b.trial_ends_at, b.paid_until) as st,
       case when business_status(b.plan, b.trial_ends_at, b.paid_until) = 'activo' then b.paid_until else b.trial_ends_at end as expires_at
     from businesses b
     where business_effective_plan(b.plan, b.trial_ends_at, b.paid_until) is not null
       and extract(hour from now() at time zone b.timezone) = 9
   loop
     if r.expires_at between now() and now() + interval '3 days' then
-      perform _notify_push(r.id, 'owner',
-        null,
-        case when r.st = 'activo' then 'Tu mensualidad vence pronto' else 'Tu prueba gratis termina pronto' end,
-        'El ' || to_char(r.expires_at at time zone r.timezone, 'DD/MM') || '. Entra a Más → Mensualidad para pagar y que tus clientes sigan reservando.');
+      v_text := _expiry_push_text(r.st, r.expires_at, r.timezone, r.name);
+      perform _notify_push(r.id, 'owner', null, v_text[1], v_text[2]);
     end if;
   end loop;
 end;
@@ -2829,7 +2853,7 @@ begin
             from appointments a join businesses b on b.id = a.business_id
             where a.created_at > now() - interval '30 days'
             group by b.id order by count(*) desc limit 10) t),
-    -- A quién escribir: planes que vencen en 7 días y pruebas que terminan en 2
+    -- A quién escribir: planes que vencen en 7 días y pruebas que terminan en 3
     'expiring', (select coalesce(jsonb_agg(jsonb_build_object(
         'id', b.id, 'name', b.name, 'code', b.code, 'whatsapp', b.whatsapp, 'timezone', b.timezone,
         'kind', business_status(b.plan, b.trial_ends_at, b.paid_until),
@@ -2839,7 +2863,7 @@ begin
                       then b.paid_until else b.trial_ends_at end), '[]'::jsonb)
       from businesses b
       where (business_status(b.plan, b.trial_ends_at, b.paid_until) = 'activo' and b.paid_until < now() + interval '7 days')
-         or (business_status(b.plan, b.trial_ends_at, b.paid_until) = 'prueba' and b.trial_ends_at < now() + interval '2 days')),
+         or (business_status(b.plan, b.trial_ends_at, b.paid_until) = 'prueba' and b.trial_ends_at < now() + interval '3 days')),
     'recent_payments', (select coalesce(jsonb_agg(jsonb_build_object(
         'name', t.name, 'code', t.code, 'plan', t.plan, 'months', t.months, 'amount', t.amount,
         'note', t.note, 'created_at', t.created_at) order by t.created_at desc), '[]'::jsonb)
@@ -3184,6 +3208,7 @@ revoke execute on function public._notify_push(uuid, text, uuid, text, text) fro
 revoke execute on function public._send_daily_reminders() from anon, authenticated;
 revoke execute on function public._auto_mark_no_shows() from anon, authenticated;
 revoke execute on function public._send_expiry_reminders() from anon, authenticated;
+revoke execute on function public._expiry_push_text(text, timestamptz, text, text, timestamptz) from anon, authenticated;
 revoke execute on function public._notify_moderation(uuid, text) from anon, authenticated;
 revoke execute on function public._notify_admin_push(text, text) from anon, authenticated;
 revoke execute on function public._approve_unmoderated_photos() from anon, authenticated;

@@ -374,6 +374,15 @@ function StatusBanner({ status, planLink }: { status: MyStatus; planLink: string
   if (status.status === 'prueba') {
     const h = hoursLeft(status.trial_ends_at)
     const left = h > 24 ? `${daysLeft(status.trial_ends_at)} días` : `${h} horas`
+    // Últimos 3 días: más visible, igual que la notificación que le llega ese día
+    if (h <= 72) {
+      return box(
+        'border-amber-200 bg-amber-50 text-amber-900',
+        'clock',
+        <>Tu prueba gratis termina en <b>{left}</b>. Suscríbete para que tus clientes sigan reservando.</>,
+        <Link to={planLink} className="rounded-full bg-amber-500 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-amber-600">Suscribirme</Link>,
+      )
+    }
     return box(
       'border-violet-200 bg-violet-50 text-violet-900',
       'gift',

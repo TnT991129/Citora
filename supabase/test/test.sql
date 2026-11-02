@@ -797,6 +797,26 @@ update platform_settings set default_timezone = 'America/Havana';
 delete from auth.users where id in ('33333333-3333-3333-3333-333333333333', '44444444-4444-4444-4444-444444444444');
 set role authenticated;
 
+-- ===== Aviso de que se acaba la prueba gratis =====
+reset role;
+do $$ declare
+  hoy timestamptz := '2026-11-10 13:00+00';  -- 8:00 en Cuba
+  t text[];
+begin
+  t := _expiry_push_text('prueba', '2026-11-13 20:00+00', 'America/Havana', 'Spa Mar', hoy);
+  assert t[1] = 'Te quedan 3 días de prueba gratis', t[1];
+  assert t[2] = 'Tu prueba gratis termina el 13/11. Suscríbete en Más → Mensualidad para que tus clientes sigan reservando en Spa Mar.', t[2];
+  t := _expiry_push_text('prueba', '2026-11-11 20:00+00', 'America/Havana', 'Spa Mar', hoy);
+  assert t[1] = 'Mañana termina tu prueba gratis' and t[2] like 'Tu prueba gratis termina mañana a las 15:00.%', t::text;
+  -- A las 2:00 UTC del día 11 en Cuba todavía es el día 10
+  t := _expiry_push_text('prueba', '2026-11-11 02:00+00', 'America/Havana', 'Spa Mar', hoy);
+  assert t[1] = 'Hoy termina tu prueba gratis' and t[2] like '%hoy a las 21:00.%', t::text;
+  t := _expiry_push_text('activo', '2026-11-12 20:00+00', 'America/Havana', 'Spa Mar', hoy);
+  assert t[1] = 'Tu mensualidad vence en 2 días' and t[2] like 'Vence el 12/11. Paga en Más → Mensualidad%', t::text;
+end $$;
+set role authenticated;
+select expect_error($$select _expiry_push_text('prueba', now(), 'UTC', 'x')$$, 'permission denied');
+
 -- ===== Encuestas a los dueños =====
 set role authenticated;
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
