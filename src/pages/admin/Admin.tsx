@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
+import { RefreshButton } from '../../components/RefreshButton'
 import { ThemeToggle } from '../../components/ThemeToggle'
 import { Alert, Button, CitoraLogo, Field, LinkButton, Modal, PageLoader, StatusBadge, Toggle, WhatsAppIcon, flash } from '../../components/ui'
 import { useSession } from '../../lib/auth'
@@ -61,7 +62,16 @@ interface Settings {
 export default function Admin() {
   const session = useSession()
   const [isAdmin, setIsAdmin] = useState<boolean | undefined>(undefined)
-  const [tab, setTab] = useState<AdminTab>('inicio')
+  const [tab, setTabState] = useState<AdminTab>(savedTab)
+  const setTab = useCallback((t: AdminTab) => {
+    setTabState(t)
+    // Al pulsar "Actualizar" se vuelve a la misma pestaña
+    try {
+      sessionStorage.setItem(TAB_KEY, t)
+    } catch {
+      /* sin almacenamiento se vuelve a Inicio */
+    }
+  }, [])
 
   useEffect(() => {
     setBrandColor(null)
@@ -115,6 +125,7 @@ export default function Admin() {
             ))}
           </nav>
           <div className="flex items-center gap-1">
+            <RefreshButton onImage />
             <ThemeToggle onImage />
             <button onClick={() => supabase.auth.signOut()} className="ml-1 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-white/70 transition hover:bg-white/10 hover:text-white">Salir</button>
           </div>
@@ -152,6 +163,18 @@ const TABS = [
 ] as const
 
 export type AdminTab = (typeof TABS)[number]['key']
+
+const TAB_KEY = 'citora:admin-pestana'
+
+function savedTab(): AdminTab {
+  try {
+    const t = sessionStorage.getItem(TAB_KEY)
+    if (TABS.some((x) => x.key === t)) return t as AdminTab
+  } catch {
+    /* sin almacenamiento se empieza en Inicio */
+  }
+  return 'inicio'
+}
 
 type Filter = 'todos' | BusinessStatus | 'sin_negocio'
 type Sort = 'recientes' | 'pago'
