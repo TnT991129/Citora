@@ -30,6 +30,9 @@ body { min-height: 100dvh; }
 }
 
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+/* Tiras que se deslizan de lado (ej. los días en "Nueva cita"): sin barra de desplazamiento visible */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
 
 /* Movimiento de la interfaz: al cambiar de pantalla, al abrir una ventana y los avisos breves */
 @keyframes ui-page { from { opacity: 0; transform: translate3d(0, 10px, 0); } to { opacity: 1; transform: none; } }

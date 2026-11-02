@@ -130,7 +130,7 @@ export function Modal({ open, onClose, title, children, footer }: {
   return createPortal(
     <div className="ui-fade fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 backdrop-blur-[2px] sm:items-center sm:p-4" onClick={onClose}>
       <div
-        className="ui-sheet flex max-h-[92dvh] w-full flex-col rounded-t-3xl bg-white shadow-2xl shadow-slate-900/20 sm:max-w-lg sm:rounded-3xl"
+        className="ui-sheet flex max-h-[92dvh] w-full min-w-0 flex-col rounded-t-3xl bg-white shadow-2xl shadow-slate-900/20 sm:max-w-lg sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
