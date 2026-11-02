@@ -24,17 +24,19 @@ export interface AdminStatsData {
   by_plan: Record<PlanKey | 'prueba' | 'vencido' | 'cortesia', number>
   by_type: { type: string; count: number }[]
   top_businesses: { name: string; slug: string; code: string; count: number }[]
-  expiring: { id: string; name: string; code: string; whatsapp: string; kind: 'activo' | 'prueba'; ends_at: string }[]
+  expiring: { id: string; name: string; code: string; whatsapp: string; timezone?: string; kind: 'activo' | 'prueba'; ends_at: string }[]
   recent_payments: { name: string; code: string; plan: PlanKey; months: number; amount: number | null; note: string | null; created_at: string }[]
 }
 
 const TZ = 'America/Havana'
 
 /** Mensaje de WhatsApp para un dueño cuyo plan vence o cuya prueba termina pronto */
-export function expiringMessage(b: { name: string; kind: 'activo' | 'prueba'; ends_at: string }): string {
+/** Mensaje para avisar a un dueño de que se le vence el plan, con la fecha en la hora de su negocio */
+export function expiringMessage(b: { name: string; kind: 'activo' | 'prueba'; ends_at: string; timezone?: string }): string {
+  const day = fullDateFromIso(b.ends_at, b.timezone || TZ)
   return b.kind === 'activo'
-    ? `Hola, te escribo de Citora. El plan de ${b.name} vence el ${fullDateFromIso(b.ends_at, TZ)}. Para renovarlo entra en tu panel > Mensualidad. ¡Gracias!`
-    : `Hola, te escribo de Citora. Tu prueba gratis de ${b.name} termina el ${fullDateFromIso(b.ends_at, TZ)}. Para seguir recibiendo reservas entra en tu panel > Mensualidad. ¿Te ayudo con algo?`
+    ? `Hola, te escribo de Citora. El plan de ${b.name} vence el ${day}. Para renovarlo entra en tu panel > Mensualidad. ¡Gracias!`
+    : `Hola, te escribo de Citora. Tu prueba gratis de ${b.name} termina el ${day}. Para seguir recibiendo reservas entra en tu panel > Mensualidad. ¿Te ayudo con algo?`
 }
 
 function monthLabel(m: string, long = false): string {

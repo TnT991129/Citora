@@ -820,8 +820,9 @@ begin
 end;
 $$;
 
--- Aviso a los clientes con cita mañana (misma hora de negocio) que hayan aceptado notificaciones.
--- Se llama una vez al día (ver tarea programada en la sección 3).
+-- Aviso a los clientes con cita mañana que hayan aceptado notificaciones. Se llama cada hora (ver
+-- tarea programada en la sección 3) y a cada negocio le toca cuando en su zona horaria son las 18:00:
+-- así llega a buena hora en Cuba, en España o donde esté.
 create or replace function public._send_daily_reminders()
 returns void language plpgsql security definer set search_path = public as $$
 declare
@@ -831,6 +832,7 @@ begin
     select ap.id, ap.business_id, ap.customer_name, b.name, to_char(ap.starts_at at time zone b.timezone, 'HH12:MI AM') as hora
     from appointments ap join businesses b on b.id = ap.business_id
     where ap.status in ('pendiente', 'confirmada')
+      and extract(hour from now() at time zone b.timezone) = 18
       and (ap.starts_at at time zone b.timezone)::date = ((now() at time zone b.timezone)::date + 1)
       and exists (select 1 from push_subscriptions ps where ps.kind = 'customer' and ps.appointment_id = ap.id)
   loop
@@ -849,23 +851,25 @@ returns void language sql security definer set search_path = public as $$
 $$;
 
 -- Avisa al dueño (push) cuando le quedan 3 días o menos de prueba o de mensualidad pagada, para
--- que no se le venza sin darse cuenta. Se llama una vez al día.
+-- que no se le venza sin darse cuenta. Se llama cada hora y a cada negocio le toca a las 9:00 de su
+-- zona horaria, con la fecha también en su zona.
 create or replace function public._send_expiry_reminders()
 returns void language plpgsql security definer set search_path = public as $$
 declare
   r record;
 begin
   for r in
-    select b.id, business_status(b.plan, b.trial_ends_at, b.paid_until) as st,
+    select b.id, b.timezone, business_status(b.plan, b.trial_ends_at, b.paid_until) as st,
       case when business_status(b.plan, b.trial_ends_at, b.paid_until) = 'activo' then b.paid_until else b.trial_ends_at end as expires_at
     from businesses b
     where business_effective_plan(b.plan, b.trial_ends_at, b.paid_until) is not null
+      and extract(hour from now() at time zone b.timezone) = 9
   loop
     if r.expires_at between now() and now() + interval '3 days' then
       perform _notify_push(r.id, 'owner',
         null,
         case when r.st = 'activo' then 'Tu mensualidad vence pronto' else 'Tu prueba gratis termina pronto' end,
-        'El ' || to_char(r.expires_at, 'DD/MM') || '. Entra a Más → Mensualidad para pagar y que tus clientes sigan reservando.');
+        'El ' || to_char(r.expires_at at time zone r.timezone, 'DD/MM') || '. Entra a Más → Mensualidad para pagar y que tus clientes sigan reservando.');
     end if;
   end loop;
 end;
@@ -1303,7 +1307,7 @@ drop trigger if exists gallery_photos_notify on public.gallery_photos;
 create trigger gallery_photos_notify after insert on public.gallery_photos
   for each row execute function public._gallery_photos_notify();
 
--- Tarea diaria: recordatorios push a clientes con cita mañana (ver _send_daily_reminders). Si el
+-- Tareas programadas: recordatorios push a clientes con cita mañana (ver _send_daily_reminders). Si el
 -- plan de Supabase no admite pg_cron, no pasa nada: solo faltarán los recordatorios automáticos.
 do $$
 begin
@@ -1311,8 +1315,8 @@ begin
   if exists (select 1 from cron.job where jobname = 'citora-recordatorios') then
     perform cron.unschedule('citora-recordatorios');
   end if;
-  -- 23:00 UTC ≈ 18:00-19:00 en Cuba (hora aproximada; se puede ajustar aquí si hace falta)
-  perform cron.schedule('citora-recordatorios', '0 23 * * *', $cron$select public._send_daily_reminders();$cron$);
+  -- Cada hora: cada negocio recibe los suyos a las 18:00 de su zona horaria
+  perform cron.schedule('citora-recordatorios', '0 * * * *', $cron$select public._send_daily_reminders();$cron$);
   if exists (select 1 from cron.job where jobname = 'citora-no-asistio') then
     perform cron.unschedule('citora-no-asistio');
   end if;
@@ -1324,8 +1328,8 @@ begin
   if exists (select 1 from cron.job where jobname = 'citora-vencimiento') then
     perform cron.unschedule('citora-vencimiento');
   end if;
-  -- 13:00 UTC ≈ 8:00-9:00 en Cuba
-  perform cron.schedule('citora-vencimiento', '0 13 * * *', $cron$select public._send_expiry_reminders();$cron$);
+  -- Cada hora: a cada negocio le llega a las 9:00 de su zona horaria
+  perform cron.schedule('citora-vencimiento', '0 * * * *', $cron$select public._send_expiry_reminders();$cron$);
   if exists (select 1 from cron.job where jobname = 'citora-limpiar-visitas') then
     perform cron.unschedule('citora-limpiar-visitas');
   end if;
@@ -2744,7 +2748,7 @@ begin
             group by b.id order by count(*) desc limit 10) t),
     -- A quién escribir: planes que vencen en 7 días y pruebas que terminan en 2
     'expiring', (select coalesce(jsonb_agg(jsonb_build_object(
-        'id', b.id, 'name', b.name, 'code', b.code, 'whatsapp', b.whatsapp,
+        'id', b.id, 'name', b.name, 'code', b.code, 'whatsapp', b.whatsapp, 'timezone', b.timezone,
         'kind', business_status(b.plan, b.trial_ends_at, b.paid_until),
         'ends_at', case when business_status(b.plan, b.trial_ends_at, b.paid_until) = 'activo'
                         then b.paid_until else b.trial_ends_at end)
