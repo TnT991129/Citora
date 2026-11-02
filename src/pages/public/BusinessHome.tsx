@@ -4,6 +4,7 @@ import { InstallReminder } from '../../components/InstallReminder'
 import { Tour, useTour } from '../../components/Tour'
 import { LinkButton, PageLoader, StatusBadge, WhatsAppIcon } from '../../components/ui'
 import { cupRate, dateKey, duration, money, price, timeOf, WEEKDAYS, WEEKDAYS_SHORT, weekdayOf, dayTitle } from '../../lib/format'
+import { hasOptions } from '../../lib/serviceOptions'
 import { savedBookings, type SavedBooking } from '../../lib/storage'
 import { waLink } from '../../lib/whatsapp'
 import { supabase } from '../../lib/supabase'
@@ -101,7 +102,7 @@ export default function BusinessHome() {
           ) : (
             <div className="card divide-y divide-slate-100 overflow-hidden p-0 sm:p-0">
               {main.map((s) => (
-                <ServiceCard key={s.id} s={s} to={book(s.id)} price={showPrices ? price(s.price, currency, rate) : null} showDuration={showDurations} />
+                <ServiceCard key={s.id} s={s} to={book(s.id)} price={showPrices ? `${hasOptions(s) ? 'desde ' : ''}${price(s.price, currency, rate)}` : null} showDuration={showDurations} />
               ))}
             </div>
           )}
@@ -113,7 +114,7 @@ export default function BusinessHome() {
                 {extras.map((s) => (
                   <span key={s.id} className="inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-3 py-1.5 text-sm font-semibold text-brand">
                     + {s.name}
-                    {showPrices && <span className="font-normal opacity-80">· {price(s.price, currency, rate)}</span>}
+                    {showPrices && <span className="font-normal opacity-80">· {hasOptions(s) ? 'desde ' : ''}{price(s.price, currency, rate)}</span>}
                   </span>
                 ))}
               </div>

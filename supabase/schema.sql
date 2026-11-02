@@ -336,6 +336,13 @@ alter table public.services add column if not exists is_extra boolean not null d
 -- Foto de cada servicio (mismo almacén "logos", carpeta del negocio): ayuda a vender en la web
 alter table public.services add column if not exists photo_url text;
 
+-- Opciones de precio de un servicio (ej. Corte: Niño 500 · Adulto 800 · Con barba 1000). Todas duran
+-- lo mismo; el cliente elige una al reservar. [{"id": "o1", "name": "Niño", "price": 500}, ...];
+-- vacío = precio único. services.price guarda la más barata ("desde"). Ver services_guard.
+alter table public.services add column if not exists options jsonb not null default '[]'::jsonb;
+-- La opción elegida en cada cita (el nombre y el precio ya quedan copiados en name y price)
+alter table public.appointment_services add column if not exists option_id text;
+
 -- Depósito opcional al reservar (protege de quienes no asisten). No hay pasarela de pago para
 -- Cuba, así que es informativo: el cliente transfiere por su cuenta (Transfermóvil/EnZona) y manda
 -- la captura por WhatsApp; el dueño confirma la cita como siempre (sigue quedando "pendiente").
@@ -1006,6 +1013,52 @@ begin
   return new;
 end;
 $$;
+-- Limpia las opciones de precio que guarda el dueño: de 2 a 12, con nombre (1 a 40 letras) y precio.
+-- Cada opción conserva su id al editarla (las citas lo guardan); las nuevas reciben el siguiente.
+-- El precio del servicio pasa a ser el de la opción más barata.
+create or replace function public.services_guard()
+returns trigger language plpgsql set search_path = public as $$
+declare
+  o jsonb;
+  v_out jsonb := '[]'::jsonb;
+  v_ids text[] := '{}';
+  v_next int;
+  v_id text;
+  v_name text;
+  v_price numeric;
+begin
+  if new.options is null or jsonb_typeof(new.options) <> 'array' then new.options := '[]'::jsonb; end if;
+  if jsonb_array_length(new.options) = 0 then return new; end if;
+  if jsonb_array_length(new.options) not between 2 and 12 then raise exception 'OPCIONES_INVALIDAS'; end if;
+  select coalesce(max(substring(x->>'id' from '^o([0-9]{1,4})$')::int), 0) + 1 into v_next
+    from jsonb_array_elements(new.options) x;
+  for o in select x from jsonb_array_elements(new.options) x loop
+    v_name := btrim(coalesce(o->>'name', ''));
+    begin
+      v_price := (o->>'price')::numeric;
+    exception when others then
+      v_price := null;
+    end;
+    if char_length(v_name) not between 1 and 40 or v_price is null or v_price < 0 or v_price > 99999999 then
+      raise exception 'OPCIONES_INVALIDAS';
+    end if;
+    v_id := o->>'id';
+    if v_id is null or v_id !~ '^o[0-9]{1,4}$' or v_id = any (v_ids) then
+      v_id := 'o' || v_next;
+      v_next := v_next + 1;
+    end if;
+    v_ids := v_ids || v_id;
+    v_out := v_out || jsonb_build_object('id', v_id, 'name', v_name, 'price', round(v_price, 2));
+  end loop;
+  new.options := v_out;
+  new.price := (select min((x->>'price')::numeric) from jsonb_array_elements(v_out) x);
+  return new;
+end;
+$$;
+drop trigger if exists services_guard on public.services;
+create trigger services_guard before insert or update on public.services
+  for each row execute function public.services_guard();
+
 drop trigger if exists staff_services_guard on public.staff_services;
 create trigger staff_services_guard before insert or update on public.staff_services
   for each row execute function public.staff_services_guard();
@@ -1447,7 +1500,7 @@ begin
     'services', coalesce((
       select jsonb_agg(jsonb_build_object(
         'id', s.id, 'name', s.name, 'description', s.description, 'photo_url', s.photo_url,
-        'price', s.price, 'duration_min', s.duration_min, 'is_extra', s.is_extra)
+        'price', s.price, 'duration_min', s.duration_min, 'is_extra', s.is_extra, 'options', s.options)
         order by s.position, s.created_at)
       from services s where s.business_id = b.id and s.active), '[]'::jsonb),
     'schedule', coalesce((
@@ -1722,8 +1775,44 @@ begin
 end;
 $$;
 
+-- Los servicios elegidos con su precio, ya con la opción elegida de cada uno (p_options:
+-- {"<id del servicio>": "<id de la opción>"}). Un servicio con opciones necesita una válida.
+-- Es la única forma de calcular precios al reservar: el precio nunca viene del navegador.
+create or replace function public._chosen_services(p_business uuid, p_service_ids uuid[], p_options jsonb,
+                                                   p_active_only boolean default true)
+returns table (service_id uuid, option_id text, name text, price numeric, duration_min int, is_extra boolean, pos int)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  sv services;
+  o jsonb;
+begin
+  for sv in
+    select x.* from services x
+    where x.business_id = p_business and x.id = any (coalesce(p_service_ids, '{}'))
+      and (x.active or not p_active_only)
+    order by x.is_extra, x.position, x.created_at
+  loop
+    o := null;
+    if jsonb_array_length(sv.options) > 0 then
+      select x into o from jsonb_array_elements(sv.options) x
+        where x->>'id' = (case when jsonb_typeof(p_options) = 'object' then p_options->>sv.id::text end);
+      if o is null then raise exception 'FALTA_OPCION'; end if;
+    end if;
+    service_id := sv.id;
+    option_id := o->>'id';
+    name := case when o is null then sv.name else sv.name || ' · ' || (o->>'name') end;
+    price := coalesce((o->>'price')::numeric, sv.price);
+    duration_min := sv.duration_min;
+    is_extra := sv.is_extra;
+    pos := sv.position;
+    return next;
+  end loop;
+end;
+$$;
+
 -- Comprueba un cupón antes de reservar (no lo gasta)
-create or replace function public.check_discount(p_slug text, p_code text, p_service_ids uuid[])
+drop function if exists public.check_discount(text, text, uuid[]);
+create or replace function public.check_discount(p_slug text, p_code text, p_service_ids uuid[], p_options jsonb default null)
 returns jsonb language plpgsql volatile security definer set search_path = public as $$
 declare
   b businesses;
@@ -1734,8 +1823,7 @@ begin
   if not found or business_effective_plan(b.plan, b.trial_ends_at, b.paid_until) is null then
     raise exception 'NEGOCIO_INACTIVO';
   end if;
-  select coalesce(sum(price), 0) into v_sub
-    from services where business_id = b.id and active and id = any (coalesce(p_service_ids, '{}'));
+  select coalesce(sum(c.price), 0) into v_sub from _chosen_services(b.id, p_service_ids, p_options) c;
   select * into r from _discount_for(b.id, p_code, v_sub);
   return jsonb_build_object('code', r.code, 'percent', r.percent, 'amount', r.amount,
                             'subtotal', v_sub, 'discount', r.discount, 'total', v_sub - r.discount);
@@ -1745,9 +1833,11 @@ $$;
 -- Reserva desde la web pública
 drop function if exists public.create_booking(text, uuid[], date, text, text, text, text);
 drop function if exists public.create_booking(text, uuid[], date, text, text, text, text, text);
+drop function if exists public.create_booking(text, uuid[], date, text, text, text, text, text, uuid);
 create or replace function public.create_booking(
   p_slug text, p_service_ids uuid[], p_date date, p_time text,
-  p_name text, p_phone text, p_note text default null, p_code text default null, p_staff uuid default null)
+  p_name text, p_phone text, p_note text default null, p_code text default null, p_staff uuid default null,
+  p_options jsonb default null)
 returns text language plpgsql volatile security definer set search_path = public as $$
 declare
   b businesses;
@@ -1782,8 +1872,8 @@ begin
   if p_service_ids is null or cardinality(p_service_ids) = 0 or cardinality(p_service_ids) > 10 then
     raise exception 'SERVICIOS_INVALIDOS';
   end if;
-  select count(*), sum(duration_min), sum(price) into v_count, v_dur, v_total
-    from services where business_id = b.id and active and id = any (p_service_ids);
+  select count(*), sum(c.duration_min), sum(c.price) into v_count, v_dur, v_total
+    from _chosen_services(b.id, p_service_ids, p_options) c;
   if v_count = 0 or v_count <> (select count(distinct x) from unnest(p_service_ids) x) then
     raise exception 'SERVICIOS_INVALIDOS';
   end if;
@@ -1830,15 +1920,13 @@ begin
     raise exception 'TURNO_OCUPADO';
   end;
 
-  insert into appointment_services (appointment_id, service_id, name, price, duration_min)
-  select v_id, s.id, s.name, s.price, s.duration_min
-    from services s where s.business_id = b.id and s.id = any (p_service_ids)
-    order by s.is_extra, s.position;
+  insert into appointment_services (appointment_id, service_id, option_id, name, price, duration_min)
+  select v_id, c.service_id, c.option_id, c.name, c.price, c.duration_min
+    from _chosen_services(b.id, p_service_ids, p_options) c;
 
   -- Aviso al dueño con los datos de la reserva (aquí, y no en el disparador, porque aquí sí se
   -- tienen a mano los servicios y el teléfono)
-  select string_agg(s.name, ', ' order by s.is_extra, s.position) into v_services
-    from services s where s.business_id = b.id and s.id = any (p_service_ids);
+  select string_agg(s.name, ', ') into v_services from appointment_services s where s.appointment_id = v_id;
   perform _notify_push(b.id, 'owner', null, 'Nueva cita: ' || v_name,
     to_char(v_start at time zone b.timezone, 'DD/MM HH12:MI AM') || chr(10) ||
     v_services || ' · ' || trim(to_char(v_total - v_disc, 'FM999G999G990')) || ' ' || b.currency || chr(10) ||
@@ -1870,8 +1958,8 @@ returns jsonb language sql stable security definer set search_path = public as $
        and a.starts_at > now() + make_interval(hours => b.cancel_notice_hours),
     'can_edit', a.status in ('pendiente', 'confirmada')
        and a.starts_at > now() + make_interval(hours => b.reschedule_notice_hours),
-    'services', coalesce((select jsonb_agg(jsonb_build_object('id', s.service_id, 'name', s.name, 'price', s.price,
-                 'duration_min', s.duration_min)) from appointment_services s
+    'services', coalesce((select jsonb_agg(jsonb_build_object('id', s.service_id, 'option_id', s.option_id,
+                 'name', s.name, 'price', s.price, 'duration_min', s.duration_min)) from appointment_services s
                  where s.appointment_id = a.id), '[]'::jsonb),
     'can_review', plan_has(business_effective_plan(b.plan, b.trial_ends_at, b.paid_until), 'opiniones')
        and _appt_done(a.status, a.ends_at)
@@ -1960,9 +2048,10 @@ $$;
 -- El cliente cambia su cita desde su enlace: servicios, día y hora, profesional, nombre y nota.
 -- Se puede cambiar las veces que quiera hasta el plazo de aviso del negocio. Si cambia algo más que
 -- el nombre o la nota, la cita vuelve a quedar pendiente de que el negocio la confirme.
+drop function if exists public.edit_booking(text, uuid[], date, text, text, text, uuid);
 create or replace function public.edit_booking(
   p_token text, p_service_ids uuid[], p_date date, p_time text, p_name text,
-  p_note text default null, p_staff uuid default null)
+  p_note text default null, p_staff uuid default null, p_options jsonb default null)
 returns void language plpgsql volatile security definer set search_path = public as $$
 declare
   a appointments;
@@ -2002,15 +2091,18 @@ begin
     raise exception 'TURNO_INVALIDO';
   end;
 
-  -- Mismos servicios: se mantienen el precio y la duración con los que se reservó
+  -- Mismos servicios (y opciones): se mantienen el precio y la duración con los que se reservó
   v_same := coalesce((select array_agg(distinct s.service_id order by s.service_id)
                         from appointment_services s where s.appointment_id = a.id), '{}')
-            = (select array_agg(distinct x order by x) from unnest(p_service_ids) x);
+            = (select array_agg(distinct x order by x) from unnest(p_service_ids) x)
+        and not exists (select 1 from appointment_services s where s.appointment_id = a.id and s.option_id is not null
+                          and s.option_id is distinct from (case when jsonb_typeof(p_options) = 'object'
+                                                                 then p_options->>s.service_id::text end));
   if v_same then
     v_dur := greatest(5, (extract(epoch from (a.ends_at - a.starts_at)) / 60)::int);
   else
-    select count(*), sum(duration_min), sum(price) into v_count, v_dur, v_total
-      from services where business_id = b.id and active and id = any (p_service_ids);
+    select count(*), sum(c.duration_min), sum(c.price) into v_count, v_dur, v_total
+      from _chosen_services(b.id, p_service_ids, p_options) c;
     if v_count = 0 or v_count <> (select count(distinct x) from unnest(p_service_ids) x) then
       raise exception 'SERVICIOS_INVALIDOS';
     end if;
@@ -2060,10 +2152,9 @@ begin
 
   if not v_same then
     delete from appointment_services where appointment_id = a.id;
-    insert into appointment_services (appointment_id, service_id, name, price, duration_min)
-    select a.id, s.id, s.name, s.price, s.duration_min
-      from services s where s.business_id = b.id and s.id = any (p_service_ids)
-      order by s.is_extra, s.position;
+    insert into appointment_services (appointment_id, service_id, option_id, name, price, duration_min)
+    select a.id, c.service_id, c.option_id, c.name, c.price, c.duration_min
+      from _chosen_services(b.id, p_service_ids, p_options) c;
   end if;
 end;
 $$;
@@ -2269,9 +2360,10 @@ $$;
 
 -- Cita creada por el dueño desde su agenda (puede ser a cualquier hora)
 drop function if exists public.owner_create_appointment(uuid[], date, text, text, text, text);
+drop function if exists public.owner_create_appointment(uuid[], date, text, text, text, text, uuid);
 create or replace function public.owner_create_appointment(
   p_service_ids uuid[], p_date date, p_time text, p_name text, p_phone text, p_note text default null,
-  p_staff uuid default null)
+  p_staff uuid default null, p_options jsonb default null)
 returns uuid language plpgsql volatile security definer set search_path = public as $$
 declare
   b businesses;
@@ -2291,8 +2383,8 @@ begin
     raise exception 'PROFESIONAL_INVALIDO';
   end if;
 
-  select coalesce(sum(duration_min), 0), coalesce(sum(price), 0) into v_dur, v_total
-    from services where business_id = b.id and id = any (coalesce(p_service_ids, '{}'));
+  select coalesce(sum(c.duration_min), 0), coalesce(sum(c.price), 0) into v_dur, v_total
+    from _chosen_services(b.id, p_service_ids, p_options, false) c;
   if v_dur = 0 then v_dur := 60; end if;
 
   v_start := (p_date + p_time::time) at time zone b.timezone;
@@ -2310,10 +2402,9 @@ begin
     raise exception 'TURNO_OCUPADO';
   end;
 
-  insert into appointment_services (appointment_id, service_id, name, price, duration_min)
-  select v_id, s.id, s.name, s.price, s.duration_min
-    from services s where s.business_id = b.id and s.id = any (coalesce(p_service_ids, '{}'))
-    order by s.is_extra, s.position;
+  insert into appointment_services (appointment_id, service_id, option_id, name, price, duration_min)
+  select v_id, c.service_id, c.option_id, c.name, c.price, c.duration_min
+    from _chosen_services(b.id, p_service_ids, p_options, false) c;
   return v_id;
 end;
 $$;
@@ -3124,15 +3215,15 @@ revoke execute on all functions in schema public from public;
 grant execute on function public.get_public_prices() to anon, authenticated;
 grant execute on function public.get_public_business(text) to anon, authenticated;
 grant execute on function public.get_available_slots(text, date, int, uuid, text, uuid[]) to anon, authenticated;
-grant execute on function public.create_booking(text, uuid[], date, text, text, text, text, text, uuid) to anon, authenticated;
-grant execute on function public.check_discount(text, text, uuid[]) to anon, authenticated;
+grant execute on function public.create_booking(text, uuid[], date, text, text, text, text, text, uuid, jsonb) to anon, authenticated;
+grant execute on function public.check_discount(text, text, uuid[], jsonb) to anon, authenticated;
 grant execute on function public.join_waitlist(text, date, text, text, text) to anon, authenticated;
 grant execute on function public.save_customer_push_subscription(text, text, text, text) to anon, authenticated;
 grant execute on function public.delete_push_subscription(text) to anon, authenticated;
 grant execute on function public.get_booking(text) to anon, authenticated;
 grant execute on function public.cancel_booking(text) to anon, authenticated;
 grant execute on function public.reschedule_booking(text, date, text) to anon, authenticated;
-grant execute on function public.edit_booking(text, uuid[], date, text, text, text, uuid) to anon, authenticated;
+grant execute on function public.edit_booking(text, uuid[], date, text, text, text, uuid, jsonb) to anon, authenticated;
 grant execute on function public.check_slug_available(text) to anon, authenticated;
 
 grant execute on function public.create_business(text, text, text, text, text, text, jsonb, jsonb, text, boolean, numeric) to authenticated;
@@ -3140,7 +3231,7 @@ grant execute on function public.get_my_business_status() to authenticated;
 grant execute on function public.get_payment_info() to authenticated;
 grant execute on function public.submit_payment_claim(int, numeric, text, text) to authenticated;
 grant execute on function public.save_owner_push_subscription(text, text, text) to authenticated;
-grant execute on function public.owner_create_appointment(uuid[], date, text, text, text, text, uuid) to authenticated;
+grant execute on function public.owner_create_appointment(uuid[], date, text, text, text, text, uuid, jsonb) to authenticated;
 grant execute on function public.owner_reschedule_appointment(uuid, date, text) to authenticated;
 grant execute on function public.is_platform_admin() to authenticated;
 grant execute on function public.admin_list_businesses() to authenticated;
@@ -3192,6 +3283,7 @@ grant execute on function public._gallery_photos_notify() to authenticated;
 grant execute on function public.schedule_days_normalize() to authenticated;
 grant execute on function public.staff_schedule_days_normalize() to authenticated;
 grant execute on function public.staff_services_guard() to authenticated;
+grant execute on function public.services_guard() to authenticated;
 
 -- Funciones internas: nadie las llama desde fuera
 revoke execute on function public._is_range_free(uuid, timestamptz, timestamptz, uuid) from anon, authenticated;
@@ -3216,6 +3308,8 @@ revoke execute on function public._purge_analytics() from anon, authenticated;
 revoke execute on function public._clean_survey_questions(jsonb) from anon, authenticated;
 revoke execute on function public._appointments_notify() from anon;
 revoke execute on function public.staff_services_guard() from anon;
+revoke execute on function public.services_guard() from anon;
+revoke execute on function public._chosen_services(uuid, uuid[], jsonb, boolean) from anon, authenticated;
 revoke execute on function public.staff_schedule_days_normalize() from anon;
 
 -- Las tablas: sin acceso directo para visitantes anónimos

@@ -12,6 +12,7 @@ import { supabase } from '../../lib/supabase'
 import { clientPath } from '../../lib/url'
 import NotFound from '../NotFound'
 import { hasMainService, ServicePicker } from './ServicePicker'
+import { applyOptions, missingOption, optionsFor, type OptionChoice } from '../../lib/serviceOptions'
 import { Closed, PublicHeader, usePublicBusiness } from './shared'
 
 type StepKey = 'servicio' | 'equipo' | 'fecha' | 'datos' | 'confirmar'
@@ -33,6 +34,7 @@ export default function BookingFlow() {
   // ?s=<id>: viene de tocar un servicio en la web del negocio
   const [params] = useSearchParams()
   const [selected, setSelected] = useState<string[]>(() => (params.get('s') ? [params.get('s')!] : []))
+  const [choice, setChoice] = useState<OptionChoice>({})
   const [date, setDate] = useState<string | null>(null)
   const [time, setTime] = useState<string | null>(null)
   const [name, setName] = useState(saved.name)
@@ -46,7 +48,7 @@ export default function BookingFlow() {
   const [error, setError] = useState<string | null>(null)
 
   const services = useMemo(() => business?.services || [], [business])
-  const chosen = useMemo(() => services.filter((s) => selected.includes(s.id)), [services, selected])
+  const chosen = useMemo(() => applyOptions(services.filter((s) => selected.includes(s.id)), choice), [services, selected, choice])
   const total = chosen.reduce((a, s) => a + Number(s.price), 0)
   const minutes = chosen.reduce((a, s) => a + s.duration_min, 0)
 
@@ -55,7 +57,7 @@ export default function BookingFlow() {
   }, [business?.accepting, business?.slug])
 
   // Si cambian los servicios, el descuento se vuelve a calcular
-  useEffect(() => setCoupon(null), [selected])
+  useEffect(() => setCoupon(null), [selected, choice])
 
   if (business === undefined) return <PageLoader />
   if (business === null) return <NotFound />
@@ -102,6 +104,8 @@ export default function BookingFlow() {
     if (cur === 'servicio' && !hasMainService(services, selected)) {
       return setError(chosen.length ? 'Elige también un servicio principal: los complementos se añaden a un servicio.' : 'Elige al menos un servicio.')
     }
+    const noOption = cur === 'servicio' && missingOption(services, selected, choice)
+    if (noOption) return setError(`Elige una opción de «${noOption.name}».`)
     if (cur === 'fecha' && (!date || !time)) return setError('Elige el día y la hora.')
     if (cur === 'datos') {
       if (name.trim().length < 2) return setError('Escribe tu nombre.')
@@ -125,6 +129,7 @@ export default function BookingFlow() {
       p_note: note.trim() || null,
       p_code: coupon?.code || null,
       p_staff: person?.id ?? null,
+      p_options: optionsFor(selected, choice),
     })
     setBusy(false)
     if (error) {
@@ -157,9 +162,9 @@ export default function BookingFlow() {
 
         {cur === 'servicio' && (
           <div className="mt-4 space-y-4">
-            <ServicePicker services={services} selected={selected} onChange={changeServices} currency={currency} rate={rate} />
+            <ServicePicker services={services} selected={selected} onChange={changeServices} choice={choice} onChoice={setChoice} currency={currency} rate={rate} />
             {hasModule(business.plan, 'descuentos') && chosen.length > 0 && (
-              <CouponBox slug={business.slug} serviceIds={selected} applied={coupon} onApplied={setCoupon} />
+              <CouponBox slug={business.slug} serviceIds={selected} options={optionsFor(selected, choice)} applied={coupon} onApplied={setCoupon} />
             )}
           </div>
         )}
@@ -345,9 +350,10 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
   )
 }
 
-function CouponBox({ slug, serviceIds, applied, onApplied }: {
+function CouponBox({ slug, serviceIds, options, applied, onApplied }: {
   slug: string
   serviceIds: string[]
+  options: OptionChoice
   applied: { code: string } | null
   onApplied: (c: Coupon | null) => void
 }) {
@@ -379,7 +385,7 @@ function CouponBox({ slug, serviceIds, applied, onApplied }: {
     if (!code.trim()) return
     setBusy(true)
     setError(null)
-    const { data, error } = await supabase.rpc('check_discount', { p_slug: slug, p_code: code.trim(), p_service_ids: serviceIds })
+    const { data, error } = await supabase.rpc('check_discount', { p_slug: slug, p_code: code.trim(), p_service_ids: serviceIds, p_options: options })
     setBusy(false)
     if (error) return setError(errorMessage(error))
     const d = data as { code: string; percent: number | null; discount: number; total: number }

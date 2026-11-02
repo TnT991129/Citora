@@ -39,6 +39,8 @@ const MESSAGES: Record<string, string> = {
   ENCUESTA_SIN_DESTINO: 'Elige al menos un negocio para la encuesta.',
   ENCUESTA_CERRADA:'Esta encuesta ya está cerrada. ¡Gracias de todos modos!',
   RESPUESTA_INVALIDA: 'Responde las preguntas de estrellas y de Sí/No.',
+  FALTA_OPCION: 'Elige una de las opciones del servicio (por ejemplo, Niño o Adulto).',
+  OPCIONES_INVALIDAS: 'Revisa las opciones: pon de 2 a 12, cada una con su nombre y su precio.',
   CITAS_SE_SOLAPAN: 'Al pasar a esa zona, dos citas de este negocio se pisarían. Muévelas antes o cambia la zona sin mantener la hora de las citas.',
 }
 

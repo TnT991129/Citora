@@ -5,6 +5,7 @@ import { addDays, cupRate, dayTitle, duration, price, shortDate, time12, todayKe
 import { supabase } from '../../lib/supabase'
 import type { CustomerSummary } from '../../lib/types'
 import { ServicePicker } from '../public/ServicePicker'
+import { applyOptions, missingOption, optionsFor, type OptionChoice } from '../../lib/serviceOptions'
 import { usePanel } from './context'
 
 /** Cita añadida por el dueño (por ejemplo, alguien que llamó). Puede ser a cualquier hora. */
@@ -13,6 +14,7 @@ export function NewAppointment({ defaultDate, onClose, onCreated }: { defaultDat
   const team = staff.filter((s) => s.active)
   const active = useMemo(() => services.filter((s) => s.active), [services])
   const [selected, setSelected] = useState<string[]>([])
+  const [choice, setChoice] = useState<OptionChoice>({})
   const [date, setDate] = useState(defaultDate)
   const [time, setTime] = useState('')
   const [name, setName] = useState('')
@@ -22,13 +24,15 @@ export function NewAppointment({ defaultDate, onClose, onCreated }: { defaultDat
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const chosen = active.filter((s) => selected.includes(s.id))
+  const chosen = applyOptions(active.filter((s) => selected.includes(s.id)), choice)
   const total = chosen.reduce((a, s) => a + Number(s.price), 0)
   const minutes = chosen.reduce((a, s) => a + s.duration_min, 0) || 60
   const rate = cupRate(business)
 
   const save = async () => {
     if (name.trim().length < 2) return setError('Escribe el nombre del cliente.')
+    const noOption = missingOption(active, selected, choice)
+    if (noOption) return setError(`Elige una opción de «${noOption.name}».`)
     if (team.length > 0 && !staffId) return setError('Elige con quién es la cita.')
     if (!date) return setError('Elige el día.')
     if (!/^\d{2}:\d{2}$/.test(time)) return setError('Elige la hora.')
@@ -42,6 +46,7 @@ export function NewAppointment({ defaultDate, onClose, onCreated }: { defaultDat
       p_phone: phone,
       p_note: note.trim() || null,
       p_staff: staffId || null,
+      p_options: optionsFor(selected, choice),
     })
     setBusy(false)
     if (error) setError(errorMessage(error))
@@ -72,7 +77,7 @@ export function NewAppointment({ defaultDate, onClose, onCreated }: { defaultDat
         <Section n={++n} title="Servicios" aside={chosen.length > 0 ? duration(minutes) : undefined}>
           {active.length === 0
             ? <p className="text-sm text-slate-500">Todavía no tienes servicios. La cita durará 1 hora.</p>
-            : <ServicePicker services={active} selected={selected} onChange={setSelected} currency={business.currency} rate={rate} />}
+            : <ServicePicker services={active} selected={selected} onChange={setSelected} choice={choice} onChoice={setChoice} currency={business.currency} rate={rate} />}
           {active.length > 0 && chosen.length === 0 && <p className="text-xs text-slate-500">Si no eliges ninguno, la cita durará 1 hora.</p>}
         </Section>
 

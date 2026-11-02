@@ -17,6 +17,7 @@ import type { PublicBooking, PublicBusiness } from '../../lib/types'
 import { bookingUrl, clientPath } from '../../lib/url'
 import { waLink } from '../../lib/whatsapp'
 import { hasMainService, ServicePicker } from './ServicePicker'
+import { applyOptions, missingOption, optionsFor, type OptionChoice } from '../../lib/serviceOptions'
 import { Centered, PoweredBy, PublicHeader, Stars } from './shared'
 
 export default function BookingPage() {
@@ -240,6 +241,8 @@ function EditBooking({ booking, onClose, onDone }: {
   const original = booking.services.map((s) => s.id).filter((id): id is string => Boolean(id))
   const [biz, setBiz] = useState<PublicBusiness | null>(null)
   const [selected, setSelected] = useState<string[]>(original)
+  const originalChoice: OptionChoice = Object.fromEntries(booking.services.filter((s) => s.id && s.option_id).map((s) => [s.id!, s.option_id!]))
+  const [choice, setChoice] = useState<OptionChoice>(originalChoice)
   const [staffId, setStaffId] = useState<string | null>(booking.staff_id || null)
   const [date, setDate] = useState<string | null>(dateKey(booking.starts_at, tz))
   const [time, setTime] = useState<string | null>(timeOf(booking.starts_at, tz))
@@ -254,7 +257,8 @@ function EditBooking({ booking, onClose, onDone }: {
 
   const services = biz?.services || []
   const same = selected.length === original.length && selected.every((id) => original.includes(id))
-  const chosen = services.filter((s) => selected.includes(s.id))
+    && Object.entries(originalChoice).every(([id, o]) => choice[id] === o)
+  const chosen = applyOptions(services.filter((s) => selected.includes(s.id)), choice)
   const minutes = same ? booking.services.reduce((a, s) => a + s.duration_min, 0) : chosen.reduce((a, s) => a + s.duration_min, 0)
   const total = same ? Number(booking.total) : chosen.reduce((a, s) => a + Number(s.price), 0)
   const rate = same ? booking.usd_rate : biz ? cupRate(biz) : null
@@ -265,6 +269,8 @@ function EditBooking({ booking, onClose, onDone }: {
 
   const save = async () => {
     if (!same && !hasMainService(services, selected)) return setError('Elige al menos un servicio principal.')
+    const noOption = !same && missingOption(services, selected, choice)
+    if (noOption) return setError(`Elige una opción de «${noOption.name}».`)
     if (!date || !time) return setError('Elige el día y la hora.')
     if (name.trim().length < 2) return setError('Escribe tu nombre.')
     setBusy(true)
@@ -277,6 +283,7 @@ function EditBooking({ booking, onClose, onDone }: {
       p_name: name.trim(),
       p_note: note.trim() || null,
       p_staff: staffId,
+      p_options: optionsFor(selected, choice),
     })
     setBusy(false)
     if (error) {
@@ -314,6 +321,8 @@ function EditBooking({ booking, onClose, onDone }: {
                   setTime(null)
                 }
               }}
+              choice={choice}
+              onChoice={setChoice}
               currency={booking.business.currency}
               rate={cupRate(biz)}
             />

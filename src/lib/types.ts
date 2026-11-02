@@ -54,6 +54,14 @@ export interface Service {
   position: number
   active: boolean
   is_extra: boolean
+  options: ServiceOption[]
+}
+
+/** Opción de precio de un servicio (ej. Corte: Niño / Adulto). Todas duran lo mismo. */
+export interface ServiceOption {
+  id: string
+  name: string
+  price: number
 }
 
 export interface ScheduleDay {
@@ -80,6 +88,7 @@ export interface ClosedSlot {
 
 export interface AppointmentService {
   id?: string | null
+  option_id?: string | null
   name: string
   price: number
   duration_min: number
@@ -227,6 +236,7 @@ export interface PublicService {
   price: number
   duration_min: number
   is_extra?: boolean
+  options?: ServiceOption[]
 }
 
 export interface PublicBusiness {
