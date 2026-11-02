@@ -93,7 +93,7 @@ do $$ declare j jsonb := get_booking((select v from ctx where k='t1')); begin
   assert (j->>'can_cancel')::boolean and (j->>'can_edit')::boolean;
   assert j->'business'->>'name' = 'Barbería Leo';
   -- Las 10:00 en Cuba (UTC−4 todo el año: no cambia la hora en invierno)
-  assert (select timezone from businesses where slug = 'barberia-leo') = 'Etc/GMT+4', 'Cuba por defecto';
+  assert j->'business'->>'timezone' = 'Etc/GMT+4', 'Cuba por defecto: ' || (j->'business')::text;
   assert to_char((j->>'starts_at')::timestamptz at time zone 'UTC', 'HH24:MI') = '14:00', 'guardada en UTC: ' || (j->>'starts_at');
 end $$;
 select reschedule_booking((select v from ctx where k='t1'), (select v from ctx where k='day')::date, '11:00');
