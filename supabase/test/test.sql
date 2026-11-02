@@ -720,12 +720,12 @@ select _purge_analytics();
 do $$ begin assert (select count(*) from analytics_events) > 0, 'la limpieza solo borra lo de hace más de 13 meses'; end $$;
 set role authenticated;
 
--- ===== Opciones de precio de un servicio =====
+-- ===== Opciones de precio de un servicio (Spa Mar: abre a las 10 y 11, con dos profesionales) =====
 set role authenticated;
-set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 with n as (
   insert into services (business_id, name, price, duration_min, position, options)
-  values ((select v from ctx where k = 'biz1')::uuid, 'Corte a elegir', 0, 30, 50,
+  values (my_business_id(), 'Corte a elegir', 0, 30, 50,
           '[{"name":" Niño ","price":400},{"name":"Adulto","price":600},{"id":"o9","name":"Con barba","price":"800"}]')
   returning id)
 insert into ctx select 'opc', id::text from n;
@@ -741,16 +741,16 @@ reset request.jwt.claim.sub;
 set role anon;
 insert into ctx values ('dia_opc', ((now() at time zone 'America/Havana')::date + 40)::text);
 do $$ begin
-  assert jsonb_array_length((select x from jsonb_array_elements(get_public_business('barberia-leo')->'services') x
+  assert jsonb_array_length((select x from jsonb_array_elements(get_public_business('spa-mar')->'services') x
                              where x->>'name' = 'Corte a elegir')->'options') = 3, 'la web pública ve las opciones';
 end $$;
-select expect_error($$select create_booking('barberia-leo', array['$$ || (select v from ctx where k = 'opc') || $$'::uuid], '$$ || (select v from ctx where k = 'dia_opc') || $$', '09:00', 'Olga Opción', '5355551212')$$, 'FALTA_OPCION');
-select expect_error($$select create_booking('barberia-leo', array['$$ || (select v from ctx where k = 'opc') || $$'::uuid], '$$ || (select v from ctx where k = 'dia_opc') || $$', '09:00', 'Olga Opción', '5355551212', p_options => '{"$$ || (select v from ctx where k = 'opc') || $$":"o99"}')$$, 'FALTA_OPCION');
-insert into ctx select 'topc', create_booking('barberia-leo', array[(select v from ctx where k = 'opc')::uuid, (select v from ctx where k = 'barba')::uuid],
-  (select v from ctx where k = 'dia_opc')::date, '09:00', 'Olga Opción', '5355551212',
+select expect_error($$select create_booking('spa-mar', array['$$ || (select v from ctx where k = 'opc') || $$'::uuid], '$$ || (select v from ctx where k = 'dia_opc') || $$', '10:00', 'Olga Opción', '5355551212')$$, 'FALTA_OPCION');
+select expect_error($$select create_booking('spa-mar', array['$$ || (select v from ctx where k = 'opc') || $$'::uuid], '$$ || (select v from ctx where k = 'dia_opc') || $$', '10:00', 'Olga Opción', '5355551212', p_options => '{"$$ || (select v from ctx where k = 'opc') || $$":"o99"}')$$, 'FALTA_OPCION');
+insert into ctx select 'topc', create_booking('spa-mar', array[(select v from ctx where k = 'opc')::uuid, (select v from ctx where k = 'masaje')::uuid],
+  (select v from ctx where k = 'dia_opc')::date, '10:00', 'Olga Opción', '5355551212',
   p_options => jsonb_build_object((select v from ctx where k = 'opc'), 'o11'));
 do $$ declare b jsonb := get_booking((select v from ctx where k = 'topc')); begin
-  assert (b->>'total')::numeric = 900, 'Adulto 600 + Barba 300: ' || (b->>'total');
+  assert (b->>'total')::numeric = 1600, 'Adulto 600 + Masaje 1000: ' || (b->>'total');
   assert exists (select 1 from jsonb_array_elements(b->'services') x
                  where x->>'name' = 'Corte a elegir · Adulto' and x->>'option_id' = 'o11' and (x->>'price')::numeric = 600), b::text;
 end $$;
@@ -760,12 +760,12 @@ reset role;
 update services set options = '[{"id":"o10","name":"Niño","price":400},{"id":"o11","name":"Adulto","price":700},{"id":"o9","name":"Con barba","price":800}]'
   where id = (select v from ctx where k = 'opc')::uuid;
 set role anon;
-select edit_booking((select v from ctx where k = 'topc'), array[(select v from ctx where k = 'opc')::uuid, (select v from ctx where k = 'barba')::uuid],
-  (select v from ctx where k = 'dia_opc')::date, '09:00', 'Olga Opción', 'nota',
+select edit_booking((select v from ctx where k = 'topc'), array[(select v from ctx where k = 'opc')::uuid, (select v from ctx where k = 'masaje')::uuid],
+  (select v from ctx where k = 'dia_opc')::date, '10:00', 'Olga Opción', 'nota',
   p_options => jsonb_build_object((select v from ctx where k = 'opc'), 'o11'));
-do $$ begin assert (get_booking((select v from ctx where k = 'topc'))->>'total')::numeric = 900, 'misma opción, mismo precio'; end $$;
+do $$ begin assert (get_booking((select v from ctx where k = 'topc'))->>'total')::numeric = 1600, 'misma opción, mismo precio'; end $$;
 select edit_booking((select v from ctx where k = 'topc'), array[(select v from ctx where k = 'opc')::uuid],
-  (select v from ctx where k = 'dia_opc')::date, '09:00', 'Olga Opción', 'nota',
+  (select v from ctx where k = 'dia_opc')::date, '10:00', 'Olga Opción', 'nota',
   p_options => jsonb_build_object((select v from ctx where k = 'opc'), 'o10'));
 do $$ declare b jsonb := get_booking((select v from ctx where k = 'topc')); begin
   assert (b->>'total')::numeric = 400, 'cambia a Niño: ' || (b->>'total');
@@ -774,7 +774,7 @@ end $$;
 
 -- Cita a mano del dueño con una opción
 set role authenticated;
-set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 select expect_error($$select owner_create_appointment(array['$$ || (select v from ctx where k = 'opc') || $$'::uuid], '$$ || (select v from ctx where k = 'dia_opc') || $$', '16:00', 'Mano Opción', '5355551313')$$, 'FALTA_OPCION');
 insert into ctx select 'mopc', owner_create_appointment(array[(select v from ctx where k = 'opc')::uuid],
   (select v from ctx where k = 'dia_opc')::date, '16:00', 'Mano Opción', '5355551313',
