@@ -17,6 +17,7 @@ import { publicUrl } from '../../lib/url'
 import { waLink } from '../../lib/whatsapp'
 import { ago, AdminHome, OwnerAvatar } from './AdminHome'
 import AdminStats from './AdminStats'
+import Surveys from './Surveys'
 import { Icon } from '../panel/Panel'
 
 // Una cuenta de dueño. Los campos del negocio son null si se registró pero no terminó de crearlo.
@@ -120,9 +121,9 @@ export default function Admin() {
         </div>
       </header>
       <main key={tab} className="ui-page mx-auto max-w-5xl px-4 py-6">
-        {tab === 'inicio' ? <AdminHome go={setTab} /> : tab === 'duenos' ? <Owners /> : tab === 'pagos' ? <PaymentClaims /> : tab === 'estadisticas' ? <AdminStats /> : <SettingsForm />}
+        {tab === 'inicio' ? <AdminHome go={setTab} /> : tab === 'duenos' ? <Owners /> : tab === 'pagos' ? <PaymentClaims /> : tab === 'estadisticas' ? <AdminStats /> : tab === 'encuestas' ? <Surveys /> : <SettingsForm />}
       </main>
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white/90 backdrop-blur-lg safe-bottom md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-slate-200 bg-white/90 backdrop-blur-lg safe-bottom md:hidden">
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -146,6 +147,7 @@ const TABS = [
   { key: 'duenos', label: 'Dueños', icon: 'users' },
   { key: 'pagos', label: 'Pagos', icon: 'card' },
   { key: 'estadisticas', label: 'Estadísticas', icon: 'chart' },
+  { key: 'encuestas', label: 'Encuestas', icon: 'star' },
   { key: 'ajustes', label: 'Ajustes', icon: 'gear' },
 ] as const
 

@@ -574,6 +574,29 @@ create index if not exists analytics_events_slug_idx on public.analytics_events 
 alter table public.analytics_events enable row level security;
 -- Sin políticas: nadie la lee ni la escribe directamente.
 
+-- Encuestas a los dueños: el administrador pregunta (ej. "¿Te está gustando Citora?") y cada negocio
+-- responde una vez desde su panel. Sin políticas: todo pasa por las funciones de las secciones 6 y 7.
+-- questions: [{ "id": "p1", "type": "estrellas" | "si_no" | "texto", "text": "..." }] (ver _clean_survey_questions)
+create table if not exists public.owner_surveys (
+  id uuid primary key default gen_random_uuid(),
+  title text not null check (char_length(title) between 3 and 80),
+  intro text check (char_length(intro) <= 300),
+  questions jsonb not null,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+alter table public.owner_surveys enable row level security;
+
+-- answers: { "p1": 5, "p2": true, "p3": "texto" } (ver submit_survey_answer)
+create table if not exists public.owner_survey_answers (
+  survey_id uuid not null references public.owner_surveys(id) on delete cascade,
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  answers jsonb not null,
+  created_at timestamptz not null default now(),
+  primary key (survey_id, business_id)
+);
+alter table public.owner_survey_answers enable row level security;
+
 -- ---------------------------------------------------------------------
 -- 2. FUNCIONES DE APOYO
 -- ---------------------------------------------------------------------
@@ -2432,6 +2455,62 @@ begin
 end;
 $$;
 
+-- La encuesta que le toca responder al dueño: la más reciente abierta que todavía no respondió (o null)
+create or replace function public.get_my_survey()
+returns jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('id', s.id, 'title', s.title, 'intro', s.intro, 'questions', s.questions)
+  from owner_surveys s
+  where s.active and my_business_id() is not null
+    and not exists (select 1 from owner_survey_answers a where a.survey_id = s.id and a.business_id = my_business_id())
+  order by s.created_at desc
+  limit 1;
+$$;
+
+-- El dueño responde una encuesta. Estrellas (1 a 5) y Sí/No son obligatorias; el texto, opcional.
+-- Solo se guardan las preguntas de la encuesta, limpias. Si vuelve a responder, se cambia su respuesta.
+create or replace function public.submit_survey_answer(p_survey uuid, p_answers jsonb)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_business uuid := my_business_id();
+  s owner_surveys;
+  q jsonb;
+  v jsonb;
+  r jsonb := '{}'::jsonb;
+  v_name text;
+  v_code text;
+begin
+  if v_business is null then raise exception 'SIN_NEGOCIO'; end if;
+  select * into s from owner_surveys where id = p_survey;
+  if not found or not s.active then raise exception 'ENCUESTA_CERRADA'; end if;
+  if p_answers is null or jsonb_typeof(p_answers) <> 'object' then raise exception 'RESPUESTA_INVALIDA'; end if;
+
+  for q in select * from jsonb_array_elements(s.questions) loop
+    v := p_answers -> (q ->> 'id');
+    if q ->> 'type' = 'estrellas' then
+      if v is null or jsonb_typeof(v) <> 'number' or v::text not in ('1', '2', '3', '4', '5') then
+        raise exception 'RESPUESTA_INVALIDA';
+      end if;
+    elsif q ->> 'type' = 'si_no' then
+      if v is null or jsonb_typeof(v) <> 'boolean' then raise exception 'RESPUESTA_INVALIDA'; end if;
+    else
+      if v is null or jsonb_typeof(v) = 'null' then continue; end if;
+      if jsonb_typeof(v) <> 'string' then raise exception 'RESPUESTA_INVALIDA'; end if;
+      v := to_jsonb(left(btrim(v #>> '{}'), 1000));
+      if v #>> '{}' = '' then continue; end if;
+    end if;
+    r := r || jsonb_build_object(q ->> 'id', v);
+  end loop;
+  if r = '{}'::jsonb then raise exception 'RESPUESTA_INVALIDA'; end if;
+
+  insert into owner_survey_answers (survey_id, business_id, answers)
+  values (s.id, v_business, r)
+  on conflict (survey_id, business_id) do update set answers = excluded.answers, created_at = now();
+
+  select name, code into v_name, v_code from businesses where id = v_business;
+  perform _notify_admin_push('Opinión recibida', v_name || ' (' || v_code || ') respondió "' || s.title || '".');
+end;
+$$;
+
 -- ---------------------------------------------------------------------
 -- 7. FUNCIONES DEL ADMINISTRADOR
 -- ---------------------------------------------------------------------
@@ -2903,6 +2982,101 @@ begin
 end;
 $$;
 
+-- Deja las preguntas de una encuesta limpias y numeradas (p1, p2...). De 1 a 10 preguntas.
+create or replace function public._clean_survey_questions(p jsonb)
+returns jsonb language plpgsql immutable as $$
+declare
+  r jsonb := '[]'::jsonb;
+  q jsonb;
+  i int := 0;
+begin
+  if p is null or jsonb_typeof(p) <> 'array' or jsonb_array_length(p) not between 1 and 10 then
+    raise exception 'ENCUESTA_INVALIDA';
+  end if;
+  for q in select * from jsonb_array_elements(p) loop
+    i := i + 1;
+    if coalesce(q ->> 'type', '') not in ('estrellas', 'si_no', 'texto')
+       or char_length(btrim(coalesce(q ->> 'text', ''))) not between 3 and 200 then
+      raise exception 'ENCUESTA_INVALIDA';
+    end if;
+    r := r || jsonb_build_array(jsonb_build_object('id', 'p' || i, 'type', q ->> 'type', 'text', btrim(q ->> 'text')));
+  end loop;
+  return r;
+end;
+$$;
+
+-- El administrador publica una encuesta para todos los dueños. Las preguntas no se pueden cambiar
+-- después (las respuestas quedarían descolocadas): se cierra o se borra y se hace otra.
+-- Con p_notify, avisa con una notificación push a los dueños activos que tienen los avisos puestos.
+create or replace function public.admin_create_survey(p_title text, p_intro text, p_questions jsonb, p_notify boolean default true)
+returns uuid language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_title text := btrim(coalesce(p_title, ''));
+  v_id uuid;
+  b record;
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  if char_length(v_title) not between 3 and 80 then raise exception 'ENCUESTA_INVALIDA'; end if;
+  insert into owner_surveys (title, intro, questions)
+  values (v_title, nullif(left(btrim(coalesce(p_intro, '')), 300), ''), _clean_survey_questions(p_questions))
+  returning id into v_id;
+  if coalesce(p_notify, false) then
+    for b in
+      select distinct ps.business_id from push_subscriptions ps join businesses x on x.id = ps.business_id
+      where ps.kind = 'owner' and business_effective_plan(x.plan, x.trial_ends_at, x.paid_until) is not null
+    loop
+      perform _notify_push(b.business_id, 'owner', null, 'Citora quiere saber tu opinión',
+        v_title || ' · Son menos de 2 minutos: ábrela en tu panel.');
+    end loop;
+  end if;
+  return v_id;
+end;
+$$;
+
+-- Encuestas con sus respuestas (y el negocio de cada una) y los negocios activos que faltan por responder
+create or replace function public.admin_list_surveys()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', s.id, 'title', s.title, 'intro', s.intro, 'questions', s.questions, 'active', s.active,
+      'created_at', s.created_at,
+      'answers', (select coalesce(jsonb_agg(jsonb_build_object(
+          'business_id', b.id, 'name', b.name, 'code', b.code, 'slug', b.slug, 'whatsapp', b.whatsapp,
+          'answers', a.answers, 'created_at', a.created_at) order by a.created_at desc), '[]'::jsonb)
+        from owner_survey_answers a join businesses b on b.id = a.business_id
+        where a.survey_id = s.id),
+      'pending', (select coalesce(jsonb_agg(jsonb_build_object(
+          'business_id', b.id, 'name', b.name, 'code', b.code, 'slug', b.slug, 'whatsapp', b.whatsapp) order by b.name), '[]'::jsonb)
+        from businesses b
+        where business_effective_plan(b.plan, b.trial_ends_at, b.paid_until) is not null
+          and not exists (select 1 from owner_survey_answers a where a.survey_id = s.id and a.business_id = b.id))
+    ) order by s.created_at desc)
+    from owner_surveys s), '[]'::jsonb);
+end;
+$$;
+
+-- Cierra (deja de mostrarse a los dueños) o vuelve a abrir una encuesta
+create or replace function public.admin_set_survey_active(p_survey uuid, p_active boolean)
+returns void language plpgsql volatile security definer set search_path = public as $$
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  update owner_surveys set active = coalesce(p_active, false) where id = p_survey;
+  if not found then raise exception 'NO_DISPONIBLE'; end if;
+end;
+$$;
+
+-- Borra una encuesta con todas sus respuestas
+create or replace function public.admin_delete_survey(p_survey uuid)
+returns void language plpgsql volatile security definer set search_path = public as $$
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  delete from owner_surveys where id = p_survey;
+  if not found then raise exception 'NO_DISPONIBLE'; end if;
+end;
+$$;
+
 -- ---------------------------------------------------------------------
 -- 8. PERMISOS DE EJECUCIÓN
 -- ---------------------------------------------------------------------
@@ -2943,6 +3117,12 @@ grant execute on function public.admin_deactivate_business(uuid) to authenticate
 grant execute on function public.admin_delete_owner(uuid, boolean) to authenticated;
 grant execute on function public.admin_extend_trial(uuid, int) to authenticated;
 grant execute on function public.admin_set_timezone(uuid, text, boolean) to authenticated;
+grant execute on function public.get_my_survey() to authenticated;
+grant execute on function public.submit_survey_answer(uuid, jsonb) to authenticated;
+grant execute on function public.admin_create_survey(text, text, jsonb, boolean) to authenticated;
+grant execute on function public.admin_list_surveys() to authenticated;
+grant execute on function public.admin_set_survey_active(uuid, boolean) to authenticated;
+grant execute on function public.admin_delete_survey(uuid) to authenticated;
 grant execute on function public.admin_stats() to authenticated;
 grant execute on function public.admin_traffic(int) to authenticated;
 grant execute on function public.admin_business_activity() to authenticated;
@@ -2994,6 +3174,7 @@ revoke execute on function public._notify_moderation(uuid, text) from anon, auth
 revoke execute on function public._notify_admin_push(text, text) from anon, authenticated;
 revoke execute on function public._approve_unmoderated_photos() from anon, authenticated;
 revoke execute on function public._purge_analytics() from anon, authenticated;
+revoke execute on function public._clean_survey_questions(jsonb) from anon, authenticated;
 revoke execute on function public._appointments_notify() from anon;
 revoke execute on function public.staff_services_guard() from anon;
 revoke execute on function public.staff_schedule_days_normalize() from anon;

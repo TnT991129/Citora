@@ -797,6 +797,57 @@ update platform_settings set default_timezone = 'America/Havana';
 delete from auth.users where id in ('33333333-3333-3333-3333-333333333333', '44444444-4444-4444-4444-444444444444');
 set role authenticated;
 
+-- ===== Encuestas a los dueños =====
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select expect_error($$select admin_create_survey('Hola', null, '[{"type":"estrellas","text":"¿Te gusta?"}]')$$, 'NO_AUTORIZADO');
+select expect_error('select admin_list_surveys()', 'NO_AUTORIZADO');
+do $$ begin assert get_my_survey() is null, 'sin encuestas todavía'; end $$;
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+select expect_error($$select admin_create_survey('Hola', null, '[]')$$, 'ENCUESTA_INVALIDA');
+select expect_error($$select admin_create_survey('Hola', null, '[{"type":"color","text":"¿Te gusta?"}]')$$, 'ENCUESTA_INVALIDA');
+select expect_error($$select admin_create_survey('', null, '[{"type":"texto","text":"¿Algo más?"}]')$$, 'ENCUESTA_INVALIDA');
+insert into ctx values ('encuesta', admin_create_survey('¿Qué te parece Citora?', '  Tres preguntas  ',
+  '[{"type":"estrellas","text":" ¿Te está gustando Citora? "},{"type":"si_no","text":"¿Te resulta útil?"},{"type":"texto","text":"¿Qué cambiarías?"}]', true)::text);
+
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+do $$ declare s jsonb := get_my_survey(); begin
+  assert s->>'id' = (select v from ctx where k = 'encuesta'), 'el dueño ve la encuesta: ' || coalesce(s::text, 'null');
+  assert s->>'intro' = 'Tres preguntas';
+  assert s->'questions' = '[{"id":"p1","type":"estrellas","text":"¿Te está gustando Citora?"},{"id":"p2","type":"si_no","text":"¿Te resulta útil?"},{"id":"p3","type":"texto","text":"¿Qué cambiarías?"}]'::jsonb, s::text;
+end $$;
+select expect_error($$select submit_survey_answer('$$ || (select v from ctx where k = 'encuesta') || $$', '{"p1":7,"p2":true}')$$, 'RESPUESTA_INVALIDA');
+select expect_error($$select submit_survey_answer('$$ || (select v from ctx where k = 'encuesta') || $$', '{"p1":5}')$$, 'RESPUESTA_INVALIDA');
+select expect_error($$select submit_survey_answer('$$ || (select v from ctx where k = 'encuesta') || $$', '{"p1":5,"p2":"si"}')$$, 'RESPUESTA_INVALIDA');
+select submit_survey_answer((select v from ctx where k = 'encuesta')::uuid, '{"p1":4,"p2":true,"p3":"  Más colores  ","p9":"ignorada"}');
+do $$ begin assert get_my_survey() is null, 'ya respondió: no se le vuelve a pedir'; end $$;
+-- Puede cambiar su respuesta (texto vacío = sin respuesta)
+select submit_survey_answer((select v from ctx where k = 'encuesta')::uuid, '{"p1":5,"p2":true,"p3":"  "}');
+do $$ begin
+  assert (select count(*) from owner_surveys) = 0, 'el dueño no lee las encuestas directamente';
+  assert (select count(*) from owner_survey_answers) = 0, 'ni las respuestas de nadie';
+end $$;
+
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+do $$ declare s jsonb := (select x from jsonb_array_elements(admin_list_surveys()) x where x->>'id' = (select v from ctx where k = 'encuesta')); begin
+  assert jsonb_array_length(s->'answers') = 1, s::text;
+  assert s->'answers'->0->'answers' = '{"p1":5,"p2":true}'::jsonb, s::text;
+  assert s->'answers'->0->>'name' = 'Spa Mar';
+  assert not exists (select 1 from jsonb_array_elements(s->'pending') x where x->>'name' = 'Spa Mar'), 'quien respondió no está en pendientes';
+end $$;
+select admin_set_survey_active((select v from ctx where k = 'encuesta')::uuid, false);
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select expect_error($$select submit_survey_answer('$$ || (select v from ctx where k = 'encuesta') || $$', '{"p1":5,"p2":true}')$$, 'ENCUESTA_CERRADA');
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+select admin_delete_survey((select v from ctx where k = 'encuesta')::uuid);
+select expect_error($$select admin_delete_survey('$$ || (select v from ctx where k = 'encuesta') || $$')$$, 'NO_DISPONIBLE');
+reset role;
+do $$ begin
+  assert not exists (select 1 from owner_surveys), 'encuesta borrada';
+  assert not exists (select 1 from owner_survey_answers), 'con sus respuestas';
+end $$;
+set role authenticated;
+
 -- ===== Borrar dueños =====
 reset role;
 set role authenticated;

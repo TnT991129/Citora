@@ -34,6 +34,7 @@ import Schedule from './Schedule'
 import Services from './Services'
 import Settings from './Settings'
 import Stats from './Stats'
+import { SurveyBanner } from './Survey'
 import Team from './Team'
 import Waitlist from './Waitlist'
 import Today from './Today'
@@ -205,6 +206,7 @@ export default function Panel() {
         </header>
 
         <StatusBanner status={status} planLink={link('plan')} />
+        {!blocked && <SurveyBanner />}
 
         <main className="mx-auto max-w-4xl px-4 py-5 lg:px-8 lg:py-8">
           {/* key: cada pantalla entra con una transición suave */}

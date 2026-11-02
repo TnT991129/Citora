@@ -138,5 +138,5 @@ html.dark { color-scheme: dark; }
 
 .dark .bg-sky-50 { background-color: rgb(14 165 233 / 0.12); }
 .dark .bg-sky-100 { background-color: rgb(14 165 233 / 0.2); }
-.dark .text-sky-600, .dark .text-sky-800 { color: #7dd3fc; }
+.dark .text-sky-600, .dark .text-sky-800, .dark .text-sky-900 { color: #7dd3fc; }
 .dark .border-sky-200 { border-color: rgb(14 165 233 / 0.35); }

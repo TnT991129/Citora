@@ -374,6 +374,25 @@ export interface PublicBooking {
   }
 }
 
+export type SurveyQuestionType = 'estrellas' | 'si_no' | 'texto'
+
+export interface SurveyQuestion {
+  id: string
+  type: SurveyQuestionType
+  text: string
+}
+
+/** Respuestas de un dueño: { p1: 5, p2: true, p3: 'texto' } */
+export type SurveyAnswers = Record<string, number | boolean | string>
+
+/** Encuesta que el administrador manda a los dueños (ver owner_surveys en schema.sql) */
+export interface OwnerSurvey {
+  id: string
+  title: string
+  intro: string | null
+  questions: SurveyQuestion[]
+}
+
 export interface Prices {
   basico: number
   plus: number
