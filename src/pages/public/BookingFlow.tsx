@@ -353,7 +353,7 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
 function CouponBox({ slug, serviceIds, options, applied, onApplied }: {
   slug: string
   serviceIds: string[]
-  options: OptionChoice
+  options: OptionChoice | undefined
   applied: { code: string } | null
   onApplied: (c: Coupon | null) => void
 }) {

@@ -28,7 +28,7 @@ describe('opciones de precio', () => {
   })
 
   it('solo manda las opciones de lo elegido', () => {
-    expect(optionsFor(['b'], { c: 'o1' })).toEqual({})
+    expect(optionsFor(['b'], { c: 'o1' })).toBeUndefined()
     expect(optionsFor(['c'], { c: 'o1' })).toEqual({ c: 'o1' })
   })
 })

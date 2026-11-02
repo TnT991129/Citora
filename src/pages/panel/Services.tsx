@@ -45,7 +45,8 @@ export default function Services() {
       price: options.length ? Math.min(...options.map((o) => o.price)) : Math.max(0, Number(editing.price) || 0),
       duration_min: editing.duration_min,
       is_extra: editing.is_extra,
-      options,
+      // Solo si tiene o tenía opciones: así guardar un servicio normal vale también con un schema.sql anterior
+      ...(options.length || services.find((s) => s.id === editing.id)?.options?.length ? { options } : {}),
     }
     const { error } = editing.id
       ? await supabase.from('services').update(payload).eq('id', editing.id)

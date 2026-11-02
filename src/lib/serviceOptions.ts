@@ -24,7 +24,11 @@ export function missingOption<T extends WithOptions>(list: T[], selected: string
   return list.find((s) => selected.includes(s.id) && hasOptions(s) && !s.options!.some((o) => o.id === choice[s.id]))
 }
 
-/** Solo las opciones de los servicios elegidos, para mandarlas a la base de datos */
-export function optionsFor(selected: string[], choice: OptionChoice): OptionChoice {
-  return Object.fromEntries(Object.entries(choice).filter(([id]) => selected.includes(id)))
+/**
+ * Solo las opciones de los servicios elegidos, para mandarlas a la base de datos. Sin ninguna, no se
+ * manda nada (undefined): así las reservas sin opciones también valen con un schema.sql anterior.
+ */
+export function optionsFor(selected: string[], choice: OptionChoice): OptionChoice | undefined {
+  const picked = Object.entries(choice).filter(([id]) => selected.includes(id))
+  return picked.length ? Object.fromEntries(picked) : undefined
 }
