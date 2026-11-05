@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { HelpTip } from '../../components/HelpTip'
 import { Alert, Button, Field, LinkButton, Modal, PageLoader, StatusBadge, WhatsAppIcon, flash } from '../../components/ui'
 import { servicesText } from '../../lib/appointments'
+import { serverNow } from '../../lib/clockSkew'
 import { dateKey, fullDateFromIso, money, shortDate, timeOf } from '../../lib/format'
 import { errorMessage } from '../../lib/errors'
 import { supabase } from '../../lib/supabase'
@@ -88,7 +89,7 @@ export default function Customers() {
 
       <ul className="space-y-2">
         {filtered.map((c) => {
-          const daysSince = c.last_visit ? Math.floor((Date.now() - new Date(c.last_visit).getTime()) / 86400000) : null
+          const daysSince = c.last_visit ? Math.floor((serverNow() - new Date(c.last_visit).getTime()) / 86400000) : null
           const inactive = !c.next_at && daysSince !== null && daysSince >= INACTIVE_DAYS
           return (
           <li key={c.phone}>
