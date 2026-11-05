@@ -1,4 +1,4 @@
-# Próxima actualización: Citora para salones grandes y dos planes
+# Próxima actualización: salones grandes, dos planes y mejoras del panel
 
 Ideas acordadas el 5 de noviembre de 2026. Aún no hay nada construido.
 
@@ -58,10 +58,37 @@ Nombre preferido: **Solo / Equipo** (falta que el dueño de Citora lo confirme).
 - Asistente de crear negocio y aviso de fin de prueba: elegir plan.
 - Paso de los negocios actuales a su plan, respetando el precio antiguo.
 
+## 3. Mejoras de las funciones que ya existen
+
+Revisión del panel hecha el 5 de noviembre de 2026. Ordenadas de más a menos útil.
+
+1. **Recordatorios en cadena.** Ahora se pulsa "Enviar" cliente por cliente. Botón **"Avisar a
+   todos"**: al volver de WhatsApp se abre el siguiente. Y que el dueño pueda cambiar el texto
+   del mensaje.
+2. **Recuperar clientes que dejaron de venir.** La ficha ya dice "⏰ 45 días sin venir". Añadir un
+   botón **"Escribirle"** con un mensaje tipo "Te echamos de menos" y, si quiere, un cupón.
+3. **Lista de espera más rápida.** El aviso "Se liberó un hueco" ya llega al dueño. Que abra la
+   lista de espera con un WhatsApp ya escrito: "Se liberó un hueco hoy a las 4:00, ¿lo quieres?".
+4. **Pedir opiniones.** Poner el enlace para opinar en el mensaje de "gracias" después de la cita
+   (ahora el cliente solo lo ve si entra en "Mis citas").
+5. **Control del depósito.** Marcar "depósito recibido" y, si se quiere, cancelar sola la cita si
+   no se paga en X horas.
+6. **Citas fijas.** Cliente que viene todos los martes o cada 15 días: crear la cita una vez y que
+   se repita sola.
+7. **Tiempo de limpieza entre citas.** Ej.: 10 minutos tras cada tinte o pedicura, sin poder
+   reservar en ese hueco.
+8. **Gastos fijos.** Alquiler, luz o internet se apuntan solos cada mes.
+9. **Estadísticas comparadas.** "Este mes ganaste un 12 % más que el anterior", servicios que más
+   dejan y mejores clientes.
+10. **Cumpleaños de clientes.** Guardar la fecha y avisar al dueño ese día para felicitar con descuento.
+
+Las más rápidas y que más se notan: **1, 2 y 4** (no tocan la base de datos o casi nada).
+
 ## Orden propuesto
 
-1. Agenda en columnas por profesional.
-2. Ausencias por profesional.
-3. Dividir en Solo / Equipo y lanzar.
-4. Después, por este orden: comisiones, precio por profesional, cuentas de trabajadores,
-   productos y sucursales.
+1. Mejoras rápidas de la sección 3: recordatorios en cadena, recuperar clientes y pedir opiniones.
+2. Agenda en columnas por profesional.
+3. Ausencias por profesional.
+4. Dividir en Solo / Equipo y lanzar.
+5. Después, por este orden: resto de la sección 3, comisiones, precio por profesional, cuentas de
+   trabajadores, productos y sucursales.
