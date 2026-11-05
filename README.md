@@ -103,7 +103,7 @@ Vuelve a ejecutar **todo** `supabase/schema.sql` en **SQL Editor** (es seguro: n
 
 ## Pendiente para las siguientes fases
 
-- **Próxima actualización:** mejoras para salones grandes, dos planes (Solo / Equipo) y mejoras del panel. Ver [PROXIMA-ACTUALIZACION.md](PROXIMA-ACTUALIZACION.md).
+- **Próxima actualización:** mejoras para salones grandes, dos planes (Solo / Equipo), mejoras del panel y portada nueva con animaciones 3D. Ver [PROXIMA-ACTUALIZACION.md](PROXIMA-ACTUALIZACION.md).
 
 - **Siguiente:** complementos o extras de cada servicio, sucursales, recordatorios automáticos por email.
 - **Más adelante:** modo oscuro.

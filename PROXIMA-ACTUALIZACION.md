@@ -1,4 +1,4 @@
-# Próxima actualización: salones grandes, dos planes y mejoras del panel
+# Próxima actualización: salones grandes, dos planes, mejoras del panel y portada nueva
 
 Ideas acordadas el 5 de noviembre de 2026. Aún no hay nada construido.
 
@@ -83,6 +83,25 @@ Revisión del panel hecha el 5 de noviembre de 2026. Ordenadas de más a menos �
 10. **Cumpleaños de clientes.** Guardar la fecha y avisar al dueño ese día para felicitar con descuento.
 
 Las más rápidas y que más se notan: **1, 2 y 4** (no tocan la base de datos o casi nada).
+
+## 4. Portada nueva con animaciones 3D y modernas
+
+Ya tiene animaciones al aparecer, texto que entra palabra a palabra, elementos flotantes y una
+cinta de logos (`landing.css` y `motion.ts`), pero nada en 3D.
+
+- **3D con CSS, sin librerías pesadas.** Three.js o similares pesan cientos de KB y van lentos en
+  los Android baratos y con datos móviles de Cuba. Con CSS (`perspective`, `rotate3d`) se consigue
+  lo mismo casi sin peso.
+- Ideas:
+  - **Móvil en 3D** con la app de un negocio dentro, que gira al hacer scroll o al mover el dedo.
+  - **Tarjetas que se inclinan** siguiendo el dedo o el ratón (servicios, precios, opiniones).
+  - **Capas con profundidad** (parallax) en la portada: fondo, móvil y avisos flotando a
+    distintas velocidades.
+  - **Pasos de "cómo funciona"** que se dan la vuelta como cartas al llegar a ellos.
+  - **Contadores animados** (negocios, citas reservadas) y botones con brillo al pasar.
+- **Que no se rompa nada:** respetar "reducir movimiento" del móvil, sin 3D en móviles muy lentos,
+  y comprobar que la portada sigue cargando rápido (medirlo antes y después).
+- No toca la base de datos ni el panel de los negocios: se puede lanzar sola, cuando se quiera.
 
 ## Orden propuesto
 
