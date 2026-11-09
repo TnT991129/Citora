@@ -9,14 +9,14 @@ import { applyOptions, missingOption, optionsFor, type OptionChoice } from '../.
 import { usePanel } from './context'
 
 /** Cita añadida por el dueño (por ejemplo, alguien que llamó). Puede ser a cualquier hora. */
-export function NewAppointment({ defaultDate, onClose, onCreated }: { defaultDate: string; onClose: () => void; onCreated: () => void }) {
+export function NewAppointment({ defaultDate, defaultTime = '', onClose, onCreated }: { defaultDate: string; defaultTime?: string; onClose: () => void; onCreated: () => void }) {
   const { business, services, staff } = usePanel()
   const team = staff.filter((s) => s.active)
   const active = useMemo(() => services.filter((s) => s.active), [services])
   const [selected, setSelected] = useState<string[]>([])
   const [choice, setChoice] = useState<OptionChoice>({})
   const [date, setDate] = useState(defaultDate)
-  const [time, setTime] = useState('')
+  const [time, setTime] = useState(defaultTime)
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [note, setNote] = useState('')
@@ -85,7 +85,7 @@ export function NewAppointment({ defaultDate, onClose, onCreated }: { defaultDat
           <Section n={++n} title="Con quién">
             <div className="flex flex-wrap gap-2">
               {team.map((s) => (
-                <Chip key={s.id} on={staffId === s.id} onClick={() => { setStaffId(s.id); setTime('') }}>
+                <Chip key={s.id} on={staffId === s.id} onClick={() => { setStaffId(s.id); if (time !== defaultTime) setTime('') }}>
                   {s.photo_url && <img src={s.photo_url} alt="" className="-ml-1.5 h-6 w-6 rounded-full object-cover" />}
                   {s.name}
                 </Chip>
