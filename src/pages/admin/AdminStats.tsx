@@ -1,14 +1,15 @@
+// Pestaña "Números": cobros, conversión, tipos de negocio, los que más reservan y las visitas a la
+// portada (Traffic). Junta lo que antes eran "Estadísticas" y la actividad de los negocios.
 import { useEffect, useState } from 'react'
 import { BarChart, RankBars } from '../../components/BarChart'
-import { Alert, LinkButton, PageLoader, WhatsAppIcon } from '../../components/ui'
+import { Alert, PageLoader } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
-import { daysLeft, fullDateFromIso, MONTHS, money } from '../../lib/format'
+import { MONTHS, money } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import { businessType } from '../../lib/templates'
 import type { PlanKey } from '../../lib/types'
-import { waLink } from '../../lib/whatsapp'
+import { Kpi, PageTitle } from './adminUi'
 import { Traffic } from './Traffic'
-import { BusinessActivity } from './BusinessActivity'
 
 export interface AdminStatsData {
   months: { month: string; signups: number; revenue: number; payments: number; appointments: number }[]
@@ -28,22 +29,13 @@ export interface AdminStatsData {
   recent_payments: { name: string; code: string; plan: PlanKey; months: number; amount: number | null; note: string | null; created_at: string }[]
 }
 
-const TZ = 'Etc/GMT+4'
-
-/** Mensaje de WhatsApp para un dueño cuyo plan vence o cuya prueba termina pronto */
-/** Mensaje para avisar a un dueño de que se le vence el plan, con la fecha en la hora de su negocio */
-export function expiringMessage(b: { name: string; kind: 'activo' | 'prueba'; ends_at: string; timezone?: string }): string {
-  const day = fullDateFromIso(b.ends_at, b.timezone || TZ)
-  return b.kind === 'activo'
-    ? `Hola, te escribo de Citora. El plan de ${b.name} vence el ${day}. Para renovarlo entra en tu panel > Mensualidad. ¡Gracias!`
-    : `Hola, te escribo de Citora. Tu prueba gratis de ${b.name} termina el ${day}. Para seguir recibiendo reservas entra en tu panel > Mensualidad. ¿Te ayudo con algo?`
-}
-
 function monthLabel(m: string, long = false): string {
   const [y, mm] = m.split('-').map(Number)
   const name = MONTHS[mm - 1]
   return long ? `${name.charAt(0).toUpperCase() + name.slice(1)} ${y}` : name.slice(0, 3)
 }
+
+const cup = (n: number) => money(n, 'CUP')
 
 export default function AdminStats() {
   const [s, setS] = useState<AdminStatsData | null>(null)
@@ -60,122 +52,55 @@ export default function AdminStats() {
   const conversion = t.ended_trials ? Math.round((t.converted / t.ended_trials) * 100) : null
   const thisMonth = s.months[s.months.length - 1]
   const paying = s.by_plan.basico + s.by_plan.plus + s.by_plan.ultra
-  const cup = (n: number) => money(n, 'CUP')
 
   return (
-    <div className="space-y-4">
-      <Traffic />
-      <BusinessActivity />
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Cobrado este mes" value={cup(thisMonth?.revenue || 0)} />
-        <Stat label="Cobrado en total" value={cup(t.revenue)} />
-        <Stat label="Conversión prueba → pago" value={conversion === null ? '—' : `${conversion}%`} hint={`${t.converted} de ${t.ended_trials} pruebas terminadas`} />
-        <Stat label="Dueños con negocio" value={String(t.businesses)} hint={`${paying} pagando ahora`} />
+    <div className="space-y-7">
+      <PageTitle title="Números" />
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Kpi label="Cobrado en total" value={cup(t.revenue)} hint={`${cup(Number(thisMonth?.revenue || 0))} este mes`} />
+        <Kpi label="Prueba → pago" value={conversion === null ? '—' : `${conversion} %`} hint={`${t.converted} de ${t.ended_trials} pruebas terminadas`} />
+        <Kpi label="Reservas este mes" value={String(thisMonth?.appointments || 0)} hint="en todos los negocios" />
+        <Kpi label="Negocios" value={String(t.businesses)} hint={`${paying} pagando · ${s.by_plan.prueba} en prueba`} />
       </div>
 
-      {s.expiring.length > 0 && (
-        <section className="card">
-          <h2 className="font-bold">Para escribir hoy</h2>
-          <p className="text-sm text-slate-500">Planes que vencen en 7 días y pruebas que terminan en 3.</p>
-          <ul className="mt-2 divide-y divide-slate-100">
-            {s.expiring.map((b) => (
-              <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                <div className="min-w-0">
-                  <p className="font-semibold">{b.name} <span className="font-mono text-sm text-slate-500">{b.code}</span></p>
-                  <p className="text-sm text-slate-500">
-                    {b.kind === 'activo' ? 'Plan vence' : 'Prueba termina'} {daysLeft(b.ends_at) <= 0 ? 'hoy' : `en ${daysLeft(b.ends_at)} ${daysLeft(b.ends_at) === 1 ? 'día' : 'días'}`}
-                  </p>
-                </div>
-                {b.whatsapp && (
-                  <LinkButton
-                    href={waLink(b.whatsapp, expiringMessage(b))}
-                    variant="whatsapp"
-                    size="sm"
-                    newTab
-                  >
-                    <WhatsAppIcon className="h-4 w-4" /> Escribir
-                  </LinkButton>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <section className="card">
-          <h2 className="font-bold">Cobros por mes</h2>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <section className="card h-full">
+          <h2 className="font-bold">Cobrado por mes</h2>
           <BarChart
+            height={210}
             barClass="bg-citora-500"
             format={cup}
             bars={s.months.map((m) => ({ label: monthLabel(m.month), value: Number(m.revenue), tip: `${monthLabel(m.month, true)} · ${cup(Number(m.revenue))} (${m.payments} ${m.payments === 1 ? 'pago' : 'pagos'})` }))}
           />
         </section>
-        <section className="card">
-          <h2 className="font-bold">Dueños nuevos por mes</h2>
-          <BarChart
-            barClass="bg-citora-500"
-            bars={s.months.map((m) => ({ label: monthLabel(m.month), value: m.signups, tip: `${monthLabel(m.month, true)} · ${m.signups} ${m.signups === 1 ? 'dueño nuevo' : 'dueños nuevos'}` }))}
-          />
-        </section>
-        <section className="card">
-          <h2 className="font-bold">Negocios por estado</h2>
-          <p className="text-sm text-slate-500">{paying} pagando ahora</p>
-          <div className="mt-3">
-            <RankBars
-              barClass="bg-citora-500"
-              items={[
-                { label: 'Pagando', value: paying },
-                { label: 'En prueba', value: s.by_plan.prueba },
-                { label: 'Vencidos', value: s.by_plan.vencido },
-                { label: 'Cortesía', value: s.by_plan.cortesia },
-              ]}
-            />
-          </div>
-        </section>
-        <section className="card">
-          <h2 className="font-bold">Tipos de negocio</h2>
-          <div className="mt-3">
-            {s.by_type.length === 0 ? <p className="text-slate-500">Aún no hay negocios.</p> : (
-              <RankBars barClass="bg-citora-500" items={s.by_type.map((x) => ({ label: `${businessType(x.type).emoji} ${businessType(x.type).name}`, value: x.count }))} />
-            )}
-          </div>
+        <section className="card h-full">
+          <h2 className="mb-3 font-bold">Tipos de negocio</h2>
+          {s.by_type.length === 0 ? <p className="text-slate-500">Aún no hay negocios.</p> : (
+            <RankBars barClass="bg-slate-800" items={s.by_type.map((x) => ({ label: `${businessType(x.type).emoji} ${businessType(x.type).name}`, value: x.count }))} />
+          )}
         </section>
       </div>
 
-      <section className="card">
-        <h2 className="font-bold">Últimos pagos</h2>
-        {s.recent_payments.length === 0 ? <p className="mt-2 text-slate-500">Todavía no hay pagos.</p> : (
-          <div className="mt-2 overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-xs text-slate-500">
-                <tr><th className="py-1.5 pr-3 font-medium">Fecha</th><th className="pr-3 font-medium">Negocio</th><th className="pr-3 font-medium">Meses</th><th className="pr-3 text-right font-medium">Importe</th></tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {s.recent_payments.map((p, i) => (
-                  <tr key={i}>
-                    <td className="whitespace-nowrap py-2 pr-3 text-slate-500">{fullDateFromIso(p.created_at, TZ)}</td>
-                    <td className="pr-3"><span className="font-medium">{p.name}</span> <span className="font-mono text-xs text-slate-400">{p.code}</span>{p.note && <span className="block text-xs text-slate-400">{p.note}</span>}</td>
-                    <td className="whitespace-nowrap pr-3">{p.months} {p.months === 1 ? 'mes' : 'meses'}</td>
-                    <td className="whitespace-nowrap pr-3 text-right font-semibold">{p.amount === null ? '—' : cup(Number(p.amount))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-    </div>
-  )
-}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <section className="card h-full">
+          <h2 className="font-bold">Negocios nuevos por mes</h2>
+          <BarChart
+            height={210}
+            barClass="bg-citora-500"
+            bars={s.months.map((m) => ({ label: monthLabel(m.month), value: m.signups, tip: `${monthLabel(m.month, true)} · ${m.signups} ${m.signups === 1 ? 'negocio nuevo' : 'negocios nuevos'}` }))}
+          />
+        </section>
+        <section className="card h-full">
+          <h2 className="font-bold">Los que más reservan</h2>
+          <p className="mb-3 text-sm text-slate-500">Últimos 30 días. Candidatos a un premio o un descuento.</p>
+          {s.top_businesses.length === 0 ? <p className="text-slate-500">Aún no hay reservas este mes.</p> : (
+            <RankBars barClass="bg-citora-500" items={s.top_businesses.slice(0, 6).map((b) => ({ label: b.name, value: b.count }))} />
+          )}
+        </section>
+      </div>
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="card relative overflow-hidden p-3.5 sm:p-4">
-      <span aria-hidden className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-rose-400 to-orange-400" />
-      <p className="text-xs font-semibold text-slate-500">{label}</p>
-      <p className="mt-1.5 truncate text-2xl font-extrabold tracking-tight">{value}</p>
-      {hint && <p className="mt-0.5 truncate text-xs text-slate-400">{hint}</p>}
+      <Traffic />
     </div>
   )
 }

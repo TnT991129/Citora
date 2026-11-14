@@ -1,164 +1,27 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+// Panel de administrador de Citora. Cinco pestañas: Inicio (lo de hoy), Negocios, Cobros, Números y
+// Ajustes. En el ordenador, menú lateral oscuro; en el móvil, barra abajo.
+import { useCallback, useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { RefreshButton } from '../../components/RefreshButton'
 import { ThemeToggle } from '../../components/ThemeToggle'
-import { Alert, Button, CitoraLogo, Field, LinkButton, Modal, PageLoader, StatusBadge, Toggle, WhatsAppIcon, flash } from '../../components/ui'
+import { Button, CitoraLogo, PageLoader } from '../../components/ui'
+import { stopTracking } from '../../lib/analytics'
 import { useSession } from '../../lib/auth'
 import { CITORA_COLOR, setBrandColor } from '../../lib/brand'
 import { setAppManifest } from '../../lib/pwa'
-import { stopTracking } from '../../lib/analytics'
-import { errorMessage } from '../../lib/errors'
-import { daysLeft, fullDateFromIso, money } from '../../lib/format'
-import { isPushSubscribed, pushSupported, subscribeAdminPush, unsubscribePush } from '../../lib/push'
-import { PLAN_LABEL, SINGLE_PLAN } from '../../lib/plans'
 import { supabase } from '../../lib/supabase'
-import type { BusinessStatus, PaymentClaimStatus, PlanKey } from '../../lib/types'
-import { TIMEZONES, tzLabel, tzNow } from '../../lib/timezones'
-import { publicUrl } from '../../lib/url'
-import { waLink } from '../../lib/whatsapp'
-import { ago, AdminHome, OwnerAvatar } from './AdminHome'
-import AdminStats from './AdminStats'
-import Surveys from './Surveys'
 import { Icon } from '../panel/Panel'
-
-// Una cuenta de dueño. Los campos del negocio son null si se registró pero no terminó de crearlo.
-export interface AdminOwner {
-  user_id: string
-  email: string | null
-  signed_up_at: string
-  last_sign_in_at: string | null
-  id: string | null
-  name: string | null
-  slug: string | null
-  code: string | null
-  business_type: string | null
-  whatsapp: string | null
-  plan: PlanKey | null
-  trial_ends_at: string | null
-  paid_until: string | null
-  created_at: string | null
-  comped: boolean
-  timezone: string | null
-  status: BusinessStatus | 'sin_negocio'
-}
-
-type OwnerWithBusiness = AdminOwner & { id: string; name: string; code: string }
-
-interface Settings {
-  card_number: string
-  card_holder: string
-  card_phone: string
-  admin_whatsapp: string
-  price_basico: number
-  price_plus: number
-  price_ultra: number
-  trial_days: number
-  push_function_url: string | null
-  push_shared_secret: string | null
-  moderate_function_url: string | null
-  default_timezone: string
-}
-
-export default function Admin() {
-  const session = useSession()
-  const [isAdmin, setIsAdmin] = useState<boolean | undefined>(undefined)
-  const [tab, setTabState] = useState<AdminTab>(savedTab)
-  const setTab = useCallback((t: AdminTab) => {
-    setTabState(t)
-    // Al pulsar "Actualizar" se vuelve a la misma pestaña
-    try {
-      sessionStorage.setItem(TAB_KEY, t)
-    } catch {
-      /* sin almacenamiento se vuelve a Inicio */
-    }
-  }, [])
-
-  useEffect(() => {
-    setBrandColor(null)
-    document.title = 'Administración · Citora'
-    setAppManifest({ name: 'Citora Admin', path: 'admin', color: CITORA_COLOR })
-  }, [])
-
-  useEffect(() => {
-    if (!session) return
-    supabase.rpc('is_platform_admin').then(({ data }) => {
-      setIsAdmin(Boolean(data))
-      // Tus visitas a la portada no cuentan en las estadísticas
-      if (data) stopTracking()
-    })
-  }, [session])
-
-  if (session === null) return <Navigate to="/entrar?next=%2Fadmin" replace />
-  if (session === undefined || isAdmin === undefined) return <PageLoader />
-  if (!isAdmin) {
-    return (
-      <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 p-6 text-center">
-        <CitoraLogo className="text-xl" />
-        <h1 className="text-xl font-bold">Esta cuenta no es de administrador</h1>
-        <p className="text-slate-600">
-          Estás conectado como <b>{session.user.email}</b>, que es la cuenta de un negocio. Para ver tu panel de administrador entra con tu correo de administrador.
-        </p>
-        <Button block onClick={() => supabase.auth.signOut()}>Entrar con otra cuenta</Button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="min-h-dvh pb-24 md:pb-0">
-      {/* Cabecera oscura: así se distingue de un vistazo del panel de un negocio */}
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-[#0b0b14]/95 text-white backdrop-blur-lg">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
-          <div className="flex items-center gap-2.5">
-            <CitoraLogo className="text-lg" />
-            <span className="rounded-full bg-gradient-to-r from-rose-400 to-orange-400 px-2.5 py-0.5 text-xs font-bold text-white">Admin</span>
-          </div>
-          <nav className="hidden items-center gap-1 rounded-full bg-white/5 p-1 ring-1 ring-white/10 md:flex">
-            {TABS.map((t) => (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                aria-current={tab === t.key ? 'page' : undefined}
-                className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${tab === t.key ? 'bg-white text-[#0b0b14] shadow' : 'text-white/70 hover:text-white'}`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </nav>
-          <div className="flex items-center gap-1">
-            <RefreshButton onImage />
-            <ThemeToggle onImage />
-            <button onClick={() => supabase.auth.signOut()} className="ml-1 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-white/70 transition hover:bg-white/10 hover:text-white">Salir</button>
-          </div>
-        </div>
-      </header>
-      <main key={tab} className="ui-page mx-auto max-w-5xl px-4 py-6">
-        {tab === 'inicio' ? <AdminHome go={setTab} /> : tab === 'duenos' ? <Owners /> : tab === 'pagos' ? <PaymentClaims /> : tab === 'estadisticas' ? <AdminStats /> : tab === 'encuestas' ? <Surveys /> : <SettingsForm />}
-      </main>
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-slate-200 bg-white/90 backdrop-blur-lg safe-bottom md:hidden">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            aria-current={tab === t.key ? 'page' : undefined}
-            className={`flex flex-col items-center gap-0.5 pb-1.5 pt-2 text-[11px] font-semibold ${tab === t.key ? 'text-brand' : 'text-slate-500'}`}
-          >
-            <span className={`flex h-8 w-14 items-center justify-center rounded-full transition duration-300 ${tab === t.key ? 'bg-brand/10' : ''}`}>
-              <Icon name={t.icon} className="h-[22px] w-[22px]" />
-            </span>
-            {t.label}
-          </button>
-        ))}
-      </nav>
-    </div>
-  )
-}
+import { AdminHome } from './AdminHome'
+import AdminSettings from './AdminSettings'
+import AdminStats from './AdminStats'
+import { Businesses, type BizFilter } from './Businesses'
+import { Payments } from './Payments'
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', icon: 'home' },
-  { key: 'duenos', label: 'Dueños', icon: 'users' },
-  { key: 'pagos', label: 'Pagos', icon: 'card' },
-  { key: 'estadisticas', label: 'Estadísticas', icon: 'chart' },
-  { key: 'encuestas', label: 'Encuestas', icon: 'star' },
+  { key: 'negocios', label: 'Negocios', icon: 'store' },
+  { key: 'cobros', label: 'Cobros', icon: 'card' },
+  { key: 'numeros', label: 'Números', icon: 'chart' },
   { key: 'ajustes', label: 'Ajustes', icon: 'gear' },
 ] as const
 
@@ -176,734 +39,137 @@ function savedTab(): AdminTab {
   return 'inicio'
 }
 
-type Filter = 'todos' | BusinessStatus | 'sin_negocio'
-type Sort = 'recientes' | 'pago'
+export default function Admin() {
+  const session = useSession()
+  const [isAdmin, setIsAdmin] = useState<boolean | undefined>(undefined)
+  const [tab, setTabState] = useState<AdminTab>(savedTab)
+  const [bizFilter, setBizFilter] = useState<BizFilter>('todos')
+  const [pending, setPending] = useState(0)
 
-const FILTER_LABEL: Record<Filter, string> = {
-  todos: 'Todos', activo: 'Pagando', prueba: 'En prueba', vencido: 'Vencidos', sin_negocio: 'Sin negocio',
-}
+  const go = useCallback((t: AdminTab, filter: BizFilter = 'todos') => {
+    setTabState(t)
+    setBizFilter(filter)
+    window.scrollTo(0, 0)
+    // Al pulsar "Actualizar" se vuelve a la misma pestaña
+    try {
+      sessionStorage.setItem(TAB_KEY, t)
+    } catch {
+      /* sin almacenamiento se vuelve a Inicio */
+    }
+  }, [])
 
-function Owners() {
-  const [list, setList] = useState<AdminOwner[] | null>(null)
-  const [prices, setPrices] = useState({ basico: 1500, plus: 2000, ultra: 2500 })
-  const [error, setError] = useState<string | null>(null)
-  const [filter, setFilter] = useState<Filter>('todos')
-  const [sort, setSort] = useState<Sort>('recientes')
-  const [q, setQ] = useState('')
-  const [activating, setActivating] = useState<OwnerWithBusiness | null>(null)
-  const [deleting, setDeleting] = useState<AdminOwner | null>(null)
-  const [zoning, setZoning] = useState<OwnerWithBusiness | null>(null)
-  // Acciones que piden confirmación antes de hacerse (por si se pulsan por error)
-  const [confirming, setConfirming] = useState<{ kind: 'grant' | 'revoke' | 'deactivate'; owner: AdminOwner } | null>(null)
-  const [menu, setMenu] = useState<string | null>(null)
-  const [acting, setActing] = useState(false)
-
-  const load = useCallback(async () => {
-    const { data, error } = await supabase.rpc('admin_list_owners')
-    if (error) setError(errorMessage(error))
-    else setList(data as AdminOwner[])
-    const { data: p } = await supabase.rpc('get_public_prices')
-    if (p) setPrices(p as typeof prices)
+  // Comprobantes por revisar: el número junto a "Cobros"
+  const countPending = useCallback(() => {
+    supabase.from('payment_claims').select('id', { count: 'exact', head: true }).eq('status', 'pendiente')
+      .then(({ count }) => setPending(count || 0))
   }, [])
 
   useEffect(() => {
-    load()
-  }, [load])
+    setBrandColor(null)
+    document.title = 'Administración · Citora'
+    setAppManifest({ name: 'Citora Admin', path: 'admin', color: CITORA_COLOR })
+  }, [])
 
-  // Fecha en la que le toca pagar: fin del plan pagado o fin de la prueba
-  const dueDate = (o: AdminOwner) => (o.status === 'activo' ? o.paid_until : o.status === 'prueba' ? o.trial_ends_at : null)
-
-  const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase()
-    const out = (list || []).filter((o) =>
-      (filter === 'todos' || o.status === filter) &&
-      (!term || [o.email, o.name, o.code, o.slug, o.whatsapp].some((x) => (x || '').toLowerCase().includes(term))),
-    )
-    if (sort === 'pago') {
-      // Primero los que pagan antes; los que no tienen fecha, al final
-      out.sort((a, b) => (dueDate(a) || '9999').localeCompare(dueDate(b) || '9999'))
-    }
-    return out
-  }, [list, filter, q, sort])
-
-  if (error) return <Alert>{error}</Alert>
-  if (!list) return <PageLoader />
-
-  const count = (f: Filter) => (f === 'todos' ? list.length : list.filter((o) => o.status === f).length)
-  const paying = list.filter((o) => o.status === 'activo' && !o.comped).length
-  const monthly = list
-    .filter((o) => o.status === 'activo' && o.plan && !o.comped)
-    .reduce((s) => s + prices.basico, 0)
-  // Los negocios de cortesía no son clientes reales: no cuentan como "dueños registrados"
-  const realOwners = list.filter((o) => !o.comped)
-  const thisMonth = new Date().toISOString().slice(0, 7)
-  const newThisMonth = realOwners.filter((o) => o.signed_up_at.slice(0, 7) === thisMonth).length
-
-  const act = async (fn: 'admin_extend_trial' | 'admin_deactivate_business' | 'admin_grant_free' | 'admin_revoke_free', o: AdminOwner, msg: string) => {
-    setActing(true)
-    const { error } = await supabase.rpc(fn, fn === 'admin_extend_trial' ? { p_business: o.id, p_days: 3 } : { p_business: o.id })
-    setActing(false)
-    setConfirming(null)
-    if (error) setError(errorMessage(error))
-    else {
-      flash(msg)
-      load()
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Dueños registrados" value={String(realOwners.length)} hint={`${newThisMonth} nuevos este mes`} />
-        <Stat label="Pagando" value={String(paying)} />
-        <Stat label="En prueba gratis" value={String(count('prueba'))} />
-        <Stat label="Ingreso mensual" value={money(monthly, 'CUP')} />
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <input className="input sm:max-w-xs" placeholder="Buscar por correo, negocio o código…" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select className="input w-auto" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Ordenar">
-          <option value="recientes">Más recientes primero</option>
-          <option value="pago">Próximo pago primero</option>
-        </select>
-      </div>
-      <div className="flex flex-wrap gap-1">
-        {(['todos', 'activo', 'prueba', 'vencido', 'sin_negocio'] as const).map((f) => (
-          <button key={f} onClick={() => setFilter(f)} className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${filter === f ? 'bg-brand text-white shadow-md shadow-brand/25' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-slate-300'}`}>
-            {FILTER_LABEL[f]} ({count(f)})
-          </button>
-        ))}
-      </div>
-
-      <div className="space-y-2">
-        {filtered.length === 0 && <p className="py-6 text-center text-slate-500">No hay dueños con ese filtro.</p>}
-        {filtered.map((o) => (
-          <div key={o.user_id} className="card transition hover:border-slate-300">
-            <div className="flex items-start gap-3">
-              <OwnerAvatar owner={o} size="h-11 w-11" />
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <p className="truncate font-extrabold tracking-tight">{o.name || 'Sin negocio todavía'}</p>
-                  {o.code && <span className="font-mono text-xs text-slate-400">{o.code}</span>}
-                </div>
-                <p className="truncate text-sm text-slate-500">{o.email}</p>
-                <p className="text-xs text-slate-400">
-                  {ago(o.signed_up_at)}
-                  {o.last_sign_in_at && <> · último acceso {fullDateFromIso(o.last_sign_in_at, TZ)}</>}
-                  {o.timezone && o.timezone !== TZ && <> · hora de {tzLabel(o.timezone)}</>}
-                </p>
-              </div>
-              {o.comped ? <span className="chip bg-violet-100 text-violet-700">🎁 Cortesía</span> :
-                o.status === 'sin_negocio' ? <span className="chip bg-slate-100 text-slate-600">Sin negocio</span> : <StatusBadge status={o.status} />}
-            </div>
-
-            {o.id ? (
-              <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                {o.comped && <>Cortesía para siempre: tiene todo incluido y no paga.</>}
-                {!o.comped && o.status === 'activo' && <>Pagando · próximo pago el <b>{fullDateFromIso(o.paid_until!, TZ)}</b> ({daysLeft(o.paid_until!)} días) · {money(prices.basico, 'CUP')}/mes</>}
-                {!o.comped && o.status === 'prueba' && <>Prueba gratis · termina el <b>{fullDateFromIso(o.trial_ends_at!, TZ)}</b> ({daysLeft(o.trial_ends_at!)} días)</>}
-                {!o.comped && o.status === 'vencido' && <>Sin pagar{o.paid_until ? <> desde el {fullDateFromIso(o.paid_until, TZ)}</> : <> desde que terminó la prueba</>}: sus clientes no pueden reservar.</>}
-              </p>
-            ) : (
-              <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">Se registró pero no terminó de crear su negocio.</p>
-            )}
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              {o.id && !o.comped && <Button size="sm" onClick={() => setActivating(o as OwnerWithBusiness)}>Registrar pago</Button>}
-              {o.whatsapp && (
-                <LinkButton href={waLink(o.whatsapp, `Hola, te escribo de Citora sobre ${o.name}.`)} variant="whatsapp" size="sm" newTab>
-                  <WhatsAppIcon className="h-4 w-4" /> WhatsApp
-                </LinkButton>
-              )}
-              {o.slug && <LinkButton href={publicUrl(o.slug)} variant="secondary" size="sm" newTab>Ver su web</LinkButton>}
-              {/* El resto de acciones, en un menú para no pulsarlas por error */}
-              <div className="relative ml-auto">
-                <button
-                  onClick={() => setMenu(menu === o.user_id ? null : o.user_id)}
-                  aria-expanded={menu === o.user_id}
-                  aria-label="Más acciones"
-                  className="flex h-9 items-center gap-1 rounded-btn px-3 text-sm font-semibold text-slate-600 ring-1 ring-slate-200 transition hover:bg-slate-50"
-                >
-                  Más
-                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M6 9l6 6 6-6" /></svg>
-                </button>
-                {menu === o.user_id && (
-                  <>
-                    <button aria-hidden tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={() => setMenu(null)} />
-                    <div className="ui-sheet absolute right-0 z-20 mt-1.5 w-60 overflow-hidden rounded-2xl border border-slate-200 bg-white py-1.5 shadow-xl shadow-slate-900/10">
-                      {o.id && !o.comped && o.status !== 'activo' && (
-                        <MenuItem icon="clock" onClick={() => { setMenu(null); act('admin_extend_trial', o, '3 días más de prueba') }}>Dar 3 días más de prueba</MenuItem>
-                      )}
-                      {o.id && !o.comped && <MenuItem icon="gift" onClick={() => { setMenu(null); setConfirming({ kind: 'grant', owner: o }) }}>Regalar para siempre</MenuItem>}
-                      {o.id && o.comped && <MenuItem icon="gift" onClick={() => { setMenu(null); setConfirming({ kind: 'revoke', owner: o }) }}>Quitar la cortesía</MenuItem>}
-                      {o.id && <MenuItem icon="globe" onClick={() => { setMenu(null); setZoning(o as OwnerWithBusiness) }}>Cambiar zona horaria</MenuItem>}
-                      {o.id && o.status !== 'vencido' && (
-                        <MenuItem icon="lock" danger onClick={() => { setMenu(null); setConfirming({ kind: 'deactivate', owner: o }) }}>Inhabilitar</MenuItem>
-                      )}
-                      {(o.status === 'vencido' || o.status === 'sin_negocio') && (
-                        <MenuItem icon="x" danger onClick={() => { setMenu(null); setDeleting(o) }}>Eliminar para siempre</MenuItem>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {confirming && (
-        <ConfirmModal
-          {...CONFIRM[confirming.kind](confirming.owner.name || confirming.owner.email || '')}
-          busy={acting}
-          onClose={() => setConfirming(null)}
-          onConfirm={() => {
-            const o = confirming.owner
-            if (confirming.kind === 'grant') act('admin_grant_free', o, `${o.name} tiene Citora gratis para siempre`)
-            else if (confirming.kind === 'revoke') act('admin_revoke_free', o, `Cortesía quitada: ${o.name} vuelve a como estaba`)
-            else act('admin_deactivate_business', o, `${o.name} inhabilitado`)
-          }}
-        />
-      )}
-
-      {deleting && (
-        <DeleteModal
-          owner={deleting}
-          onClose={() => setDeleting(null)}
-          onDone={() => {
-            setDeleting(null)
-            load()
-          }}
-        />
-      )}
-
-      {zoning && (
-        <TimezoneModal
-          business={zoning}
-          onClose={() => setZoning(null)}
-          onDone={() => {
-            setZoning(null)
-            load()
-          }}
-        />
-      )}
-
-      {activating && (
-        <ActivateModal
-          business={activating}
-          prices={prices}
-          onClose={() => setActivating(null)}
-          onDone={() => {
-            setActivating(null)
-            load()
-          }}
-        />
-      )}
-    </div>
-  )
-}
-
-const TZ = 'Etc/GMT+4'
-
-// Lo que dice cada confirmación (ver Owners)
-const CONFIRM: Record<'grant' | 'revoke' | 'deactivate', (name: string) => { title: string; text: string; confirmLabel: string; danger?: boolean }> = {
-  grant: (name) => ({
-    title: '¿Regalar Citora para siempre?',
-    text: `${name} tendrá todo incluido sin pagar nunca, y no contará en tus ingresos ni en tus estadísticas de pago. Si te equivocas, puedes deshacerlo desde "Más → Quitar la cortesía": volverá exactamente a como está ahora.`,
-    confirmLabel: 'Sí, regalar para siempre',
-  }),
-  revoke: (name) => ({
-    title: '¿Quitar la cortesía?',
-    text: `${name} vuelve exactamente a como estaba antes de regalársela: su plan y la fecha hasta la que había pagado. Si ya no tenía nada pagado ni prueba vigente, su web dejará de recibir reservas hasta que pague.`,
-    confirmLabel: 'Sí, quitar la cortesía',
-    danger: true,
-  }),
-  deactivate: (name) => ({
-    title: '¿Inhabilitar este negocio?',
-    text: `Los clientes de ${name} no podrán reservar desde ahora y el dueño solo verá la pantalla de pago. No se borra nada: vuelve a funcionar en cuanto registres un pago.`,
-    confirmLabel: 'Sí, inhabilitar',
-    danger: true,
-  }),
-}
-
-function ConfirmModal({ title, text, confirmLabel, danger, busy, onClose, onConfirm }: {
-  title: string; text: string; confirmLabel: string; danger?: boolean; busy: boolean; onClose: () => void; onConfirm: () => void
-}) {
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      title={title}
-      footer={
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={onClose} disabled={busy}>Cancelar</Button>
-          <Button block onClick={onConfirm} loading={busy} className={danger ? '!bg-red-600 !bg-none !shadow-red-600/25' : ''}>{confirmLabel}</Button>
-        </div>
-      }
-    >
-      <p className="text-slate-600">{text}</p>
-    </Modal>
-  )
-}
-
-function MenuItem({ icon, danger, onClick, children }: { icon: string; danger?: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button onClick={onClick} className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold transition hover:bg-slate-50 ${danger ? 'text-red-600' : 'text-slate-700'}`}>
-      <Icon name={icon} className="h-[18px] w-[18px] shrink-0" />
-      {children}
-    </button>
-  )
-}
-
-/** Confirmación para borrar para siempre a un dueño inhabilitado: hay que escribir su código (o su correo) */
-function DeleteModal({ owner, onClose, onDone }: { owner: AdminOwner; onClose: () => void; onDone: () => void }) {
-  const [typed, setTyped] = useState('')
-  const [account, setAccount] = useState(true)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const word = owner.code || owner.email || ''
-  const ok = typed.trim().toUpperCase() === word.toUpperCase()
-
-  const remove = async () => {
-    setBusy(true)
-    setError(null)
-    const { error } = await supabase.rpc('admin_delete_owner', { p_user: owner.user_id, p_delete_account: account })
-    setBusy(false)
-    if (error) return setError(errorMessage(error))
-    flash('Eliminado')
-    onDone()
-  }
-
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      title={owner.name ? `Eliminar · ${owner.name}` : 'Eliminar cuenta'}
-      footer={<Button block variant="danger" onClick={remove} loading={busy} disabled={!ok}>Eliminar para siempre</Button>}
-    >
-      <div className="space-y-4">
-        <Alert kind="warning">
-          {owner.id
-            ? <>Se borrarán <b>para siempre</b> su web, sus servicios, su horario, sus citas, sus clientes, sus opiniones y su galería. No se puede deshacer.</>
-            : <>Esta cuenta se registró pero no creó ningún negocio.</>}
-        </Alert>
-        <p className="text-sm text-slate-600">Cuenta: <b>{owner.email}</b></p>
-        {owner.id && (
-          <label className="flex items-start gap-3 rounded-xl bg-white p-3 ring-1 ring-slate-200">
-            <input type="checkbox" className="mt-1 h-5 w-5" checked={account} onChange={(e) => setAccount(e.target.checked)} />
-            <span className="text-sm text-slate-700">
-              Borrar también su cuenta. Si la dejas, podrá entrar con su correo y crear un negocio nuevo.
-            </span>
-          </label>
-        )}
-        <p className="text-sm text-slate-500">Los pagos que te hizo se conservan en tus estadísticas.</p>
-        <Field label={`Para confirmar, escribe ${owner.code ? 'su código' : 'su correo'}: ${word}`}>
-          <input className="input" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
-        </Field>
-        {error && <Alert>{error}</Alert>}
-      </div>
-    </Modal>
-  )
-}
-
-function ActivateModal({ business, prices, onClose, onDone }: {
-  business: { id: string; name: string; code: string; plan: PlanKey | null }
-  prices: Record<PlanKey, number>
-  onClose: () => void
-  onDone: () => void
-}) {
-  const [months, setMonths] = useState(1)
-  const [amount, setAmount] = useState<number>(prices.basico)
-  const [note, setNote] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => setAmount(prices.basico * months), [months, prices])
-
-  const activate = async () => {
-    setBusy(true)
-    setError(null)
-    const { data, error } = await supabase.rpc('admin_activate_plan', {
-      p_business: business.id,
-      p_plan: SINGLE_PLAN,
-      p_months: months,
-      p_amount: amount,
-      p_note: note,
+  useEffect(() => {
+    if (!session) return
+    supabase.rpc('is_platform_admin').then(({ data }) => {
+      setIsAdmin(Boolean(data))
+      // Tus visitas a la portada no cuentan en las estadísticas
+      if (data) stopTracking()
     })
-    setBusy(false)
-    if (error) return setError(errorMessage(error))
-    flash(`Activo hasta el ${fullDateFromIso(data as string, 'Etc/GMT+4')}`)
-    onDone()
-  }
-
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      title={`Activar · ${business.name}`}
-      footer={<Button block onClick={activate} loading={busy}>Confirmar pago y activar</Button>}
-    >
-      <div className="space-y-4">
-        <p className="text-sm text-slate-600">Código <b className="font-mono">{business.code}</b>. Comprueba que el pago llegó a tu tarjeta antes de activar.</p>
-        <Field label="Meses">
-          <select className="input" value={months} onChange={(e) => setMonths(Number(e.target.value))}>
-            {[1, 2, 3, 4, 5, 6, 12].map((m) => <option key={m} value={m}>{m}</option>)}
-          </select>
-        </Field>
-        <Field label="Importe recibido (CUP)">
-          <input className="input" type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} />
-        </Field>
-        <Field label="Nota (opcional)">
-          <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. Transfermóvil 14:32" />
-        </Field>
-        <p className="text-xs text-slate-500">Si todavía tiene meses pagados, los nuevos se suman al final.</p>
-        {error && <Alert>{error}</Alert>}
-      </div>
-    </Modal>
-  )
-}
-
-/** Lista de zonas con la hora que es ahora en cada una. Si la actual no está en la lista, se añade. */
-function TimezoneSelect({ value, onChange }: { value: string; onChange: (tz: string) => void }) {
-  const options = TIMEZONES.some((z) => z.tz === value) ? TIMEZONES : [{ tz: value, label: tzLabel(value) }, ...TIMEZONES]
-  return (
-    <select className="input" value={value} onChange={(e) => onChange(e.target.value)}>
-      {options.map((z) => {
-        const now = tzNow(z.tz)
-        return <option key={z.tz} value={z.tz}>{z.label} · {now.time} ({now.offset})</option>
-      })}
-    </select>
-  )
-}
-
-function TimezoneModal({ business, onClose, onDone }: { business: OwnerWithBusiness; onClose: () => void; onDone: () => void }) {
-  const current = business.timezone || TZ
-  const [tz, setTz] = useState(current)
-  const [keep, setKeep] = useState(true)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const change = async () => {
-    setBusy(true)
-    setError(null)
-    const { data, error } = await supabase.rpc('admin_set_timezone', { p_business: business.id, p_timezone: tz, p_keep_times: keep })
-    setBusy(false)
-    if (error) return setError(errorMessage(error))
-    const moved = Number(data) || 0
-    flash(`${business.name}: hora de ${tzLabel(tz)}${moved ? ` · ${moved} ${moved === 1 ? 'cita ajustada' : 'citas ajustadas'}` : ''}`)
-    onDone()
-  }
-
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      title={`Zona horaria · ${business.name}`}
-      footer={<Button block onClick={change} loading={busy} disabled={tz === current}>Cambiar zona horaria</Button>}
-    >
-      <div className="space-y-4">
-        <p className="text-sm text-slate-600">
-          Ahora usa la hora de <b>{tzLabel(current)}</b> (allí son las {tzNow(current).time}). Su horario, su agenda, sus recordatorios y sus estadísticas van con esta hora.
-        </p>
-        <Field label="Nueva zona horaria">
-          <TimezoneSelect value={tz} onChange={setTz} />
-        </Field>
-        <p className="text-sm text-slate-500">
-          Su horario no cambia de números: si abre a las 9:00, abrirá a las 9:00 de {tzLabel(tz)}.
-        </p>
-        <label className="flex items-start gap-3 rounded-xl bg-white p-3 ring-1 ring-slate-200">
-          <input type="checkbox" className="mt-1 h-5 w-5" checked={keep} onChange={(e) => setKeep(e.target.checked)} />
-          <span className="text-sm text-slate-700">
-            <b>Mantener la hora de las citas ya reservadas.</b> Una cita de las 10:00 sigue siendo a las 10:00, ahora de la nueva zona (lo normal si la zona estaba mal puesta). Al cliente no le llega ningún aviso.
-            Si lo desmarcas, las citas se quedan en el mismo momento real y se verán a otra hora.
-          </span>
-        </label>
-        {error && <Alert>{error}</Alert>}
-      </div>
-    </Modal>
-  )
-}
-
-interface AdminClaim {
-  id: string
-  business_id: string
-  months: number
-  amount: number | null
-  note: string | null
-  proof_path: string | null
-  status: PaymentClaimStatus
-  admin_note: string | null
-  created_at: string
-  businesses: { name: string; code: string; whatsapp: string } | null
-}
-
-function PaymentClaims() {
-  const [list, setList] = useState<AdminClaim[] | null>(null)
-  const [proofUrls, setProofUrls] = useState<Record<string, string>>({})
-  const [error, setError] = useState<string | null>(null)
-  const [filter, setFilter] = useState<PaymentClaimStatus | 'todos'>('pendiente')
-  const [busy, setBusy] = useState<string | null>(null)
-  const [rejecting, setRejecting] = useState<AdminClaim | null>(null)
-
-  const load = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('payment_claims')
-      .select('*, businesses(name, code, whatsapp)')
-      .order('created_at', { ascending: false })
-      .limit(200)
-    if (error) return setError(errorMessage(error))
-    const claims = data as unknown as AdminClaim[]
-    setList(claims)
-    const paths = claims.map((c) => c.proof_path).filter((p): p is string => !!p && !p.startsWith('sin-comprobante'))
-    if (paths.length) {
-      const { data: signed } = await supabase.storage.from('payment-proofs').createSignedUrls(paths, 3600)
-      const urls: Record<string, string> = {}
-      signed?.forEach((s) => { if (s.signedUrl && s.path) urls[s.path] = s.signedUrl })
-      setProofUrls(urls)
-    }
-  }, [])
+  }, [session])
 
   useEffect(() => {
-    load()
-  }, [load])
+    if (isAdmin) countPending()
+  }, [isAdmin, tab, countPending])
 
-  if (error) return <Alert>{error}</Alert>
-  if (!list) return <PageLoader />
-
-  const count = (f: PaymentClaimStatus) => list.filter((c) => c.status === f).length
-  const filtered = filter === 'todos' ? list : list.filter((c) => c.status === filter)
-
-  const approve = async (c: AdminClaim) => {
-    setBusy(c.id)
-    const { data, error } = await supabase.rpc('admin_approve_payment_claim', { p_claim_id: c.id })
-    setBusy(null)
-    if (error) return setError(errorMessage(error))
-    flash(`Activo hasta el ${fullDateFromIso(data as string, TZ)}`)
-    load()
+  if (session === null) return <Navigate to="/entrar?next=%2Fadmin" replace />
+  if (session === undefined || isAdmin === undefined) return <PageLoader />
+  if (!isAdmin) {
+    return (
+      <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 p-6 text-center">
+        <CitoraLogo className="text-xl" />
+        <h1 className="text-xl font-bold">Esta cuenta no es de administrador</h1>
+        <p className="text-slate-600">
+          Estás conectado como <b>{session.user.email}</b>, que es la cuenta de un negocio. Para ver tu panel de administrador entra con tu correo de administrador.
+        </p>
+        <Button block onClick={() => supabase.auth.signOut()}>Entrar con otra cuenta</Button>
+      </div>
+    )
   }
 
-  const reject = async (c: AdminClaim, note: string) => {
-    setBusy(c.id)
-    const { error } = await supabase.rpc('admin_reject_payment_claim', { p_claim_id: c.id, p_note: note || null })
-    setBusy(null)
-    if (error) return setError(errorMessage(error))
-    flash('Declaración rechazada')
-    setRejecting(null)
-    load()
-  }
+  const badge = (key: AdminTab) => (key === 'cobros' && pending > 0 ? pending : 0)
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-1">
-        {(['pendiente', 'aprobado', 'rechazado', 'todos'] as const).map((f) => (
-          <button key={f} onClick={() => setFilter(f)} className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${filter === f ? 'bg-brand text-white shadow-md shadow-brand/25' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-slate-300'}`}>
-            {f === 'pendiente' ? 'Pendientes' : f === 'aprobado' ? 'Aprobados' : f === 'rechazado' ? 'Rechazados' : 'Todos'}
-            {f !== 'todos' && ` (${count(f)})`}
+    <div className="min-h-dvh pb-24 lg:pb-0 lg:pl-60">
+      {/* Ordenador: menú lateral oscuro (así se distingue de un vistazo del panel de un negocio) */}
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col bg-[#0b0b14] p-4 text-white lg:flex">
+        <div className="flex items-center gap-2 px-2 pb-6 pt-1">
+          <CitoraLogo className="text-lg" />
+          <span className="ml-auto rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/60">Admin</span>
+        </div>
+        <nav className="space-y-0.5">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => go(t.key)}
+              aria-current={tab === t.key ? 'page' : undefined}
+              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-semibold transition ${tab === t.key ? 'bg-white/10 text-white' : 'text-white/55 hover:bg-white/5 hover:text-white'}`}
+            >
+              <Icon name={t.icon} className="h-5 w-5 shrink-0" />
+              <span className="flex-1">{t.label}</span>
+              {badge(t.key) > 0 && <span className="rounded-full bg-citora-600 px-2 py-0.5 text-xs font-bold text-white">{badge(t.key)}</span>}
+            </button>
+          ))}
+        </nav>
+        <div className="mt-auto flex items-center gap-1 border-t border-white/10 pt-3">
+          <RefreshButton onImage />
+          <ThemeToggle onImage />
+          <button onClick={() => supabase.auth.signOut()} className="ml-auto flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-white/60 transition hover:bg-white/10 hover:text-white">
+            <Icon name="logout" className="h-4 w-4" /> Salir
+          </button>
+        </div>
+      </aside>
+
+      {/* Móvil y tableta: cabecera oscura */}
+      <header className="sticky top-0 z-30 border-b border-white/10 bg-[#0b0b14]/95 text-white backdrop-blur-lg lg:hidden">
+        <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
+          <CitoraLogo className="text-lg" />
+          <span className="rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/60">Admin</span>
+          <div className="ml-auto flex items-center gap-1">
+            <RefreshButton onImage />
+            <ThemeToggle onImage />
+            <button onClick={() => supabase.auth.signOut()} className="ml-1 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-white/70 transition hover:bg-white/10 hover:text-white">Salir</button>
+          </div>
+        </div>
+      </header>
+
+      <main key={tab} className="ui-page mx-auto max-w-5xl px-4 py-6 lg:px-8 lg:py-8">
+        {tab === 'inicio' && <AdminHome go={go} />}
+        {tab === 'negocios' && <Businesses initialFilter={bizFilter} />}
+        {tab === 'cobros' && <Payments onChanged={countPending} />}
+        {tab === 'numeros' && <AdminStats />}
+        {tab === 'ajustes' && <AdminSettings />}
+      </main>
+
+      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white/90 backdrop-blur-lg lg:hidden">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => go(t.key)}
+            aria-current={tab === t.key ? 'page' : undefined}
+            className={`flex flex-col items-center gap-0.5 pb-1.5 pt-2 text-[11px] font-semibold ${tab === t.key ? 'text-brand' : 'text-slate-500'}`}
+          >
+            <span className={`relative flex h-8 w-14 items-center justify-center rounded-full transition duration-300 ${tab === t.key ? 'bg-brand/10' : ''}`}>
+              <Icon name={t.icon} className="h-[22px] w-[22px]" />
+              {badge(t.key) > 0 && (
+                <span className="absolute right-2 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-citora-600 px-1 text-[10px] font-bold text-white">{badge(t.key)}</span>
+              )}
+            </span>
+            {t.label}
           </button>
         ))}
-      </div>
-
-      <div className="space-y-2">
-        {filtered.length === 0 && <p className="py-6 text-center text-slate-500">No hay declaraciones con ese filtro.</p>}
-        {filtered.map((c) => (
-          <div key={c.id} className="card flex flex-wrap gap-3">
-            {c.proof_path && proofUrls[c.proof_path] && (
-              <a href={proofUrls[c.proof_path]} target="_blank" rel="noreferrer" className="shrink-0">
-                <img src={proofUrls[c.proof_path]} alt="Comprobante" className="h-24 w-24 rounded-xl object-cover ring-1 ring-slate-200" />
-              </a>
-            )}
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate font-bold">
-                    {c.businesses?.name || 'Negocio eliminado'} {c.businesses?.code && <span className="font-mono text-sm text-slate-500">{c.businesses.code}</span>}
-                  </p>
-                  <p className="text-sm text-slate-500">
-                    {fullDateFromIso(c.created_at, TZ)} · {c.months} {c.months === 1 ? 'mes' : 'meses'}
-                    {c.amount != null && <> · {money(c.amount, 'CUP')}</>}
-                  </p>
-                  {c.note && <p className="mt-1 text-sm text-slate-600">"{c.note}"</p>}
-                  {c.status === 'rechazado' && c.admin_note && <p className="mt-1 text-sm text-red-600">Motivo: {c.admin_note}</p>}
-                </div>
-                <span className={`chip text-xs ${
-                  c.status === 'aprobado' ? 'bg-emerald-100 text-emerald-700' : c.status === 'rechazado' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
-                }`}>
-                  {c.status === 'aprobado' ? 'Aprobado' : c.status === 'rechazado' ? 'Rechazado' : 'Pendiente'}
-                </span>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {c.status === 'pendiente' && (
-                  <>
-                    <Button size="sm" onClick={() => approve(c)} loading={busy === c.id}>Aprobar y activar</Button>
-                    <Button size="sm" variant="ghost" className="text-red-600" onClick={() => setRejecting(c)}>Rechazar</Button>
-                  </>
-                )}
-                {c.businesses?.whatsapp && (
-                  <LinkButton href={waLink(c.businesses.whatsapp, 'Hola, te escribo de Citora sobre tu pago declarado.')} variant="whatsapp" size="sm" newTab>
-                    <WhatsAppIcon className="h-4 w-4" /> WhatsApp
-                  </LinkButton>
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {rejecting && (
-        <RejectModal
-          claim={rejecting}
-          busy={busy === rejecting.id}
-          onClose={() => setRejecting(null)}
-          onConfirm={(note) => reject(rejecting, note)}
-        />
-      )}
-    </div>
-  )
-}
-
-function RejectModal({ claim, busy, onClose, onConfirm }: { claim: AdminClaim; busy: boolean; onClose: () => void; onConfirm: (note: string) => void }) {
-  const [note, setNote] = useState('')
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      title={`Rechazar · ${claim.businesses?.name || 'declaración'}`}
-      footer={<Button block variant="danger" onClick={() => onConfirm(note)} loading={busy}>Rechazar declaración</Button>}
-    >
-      <Field label="Motivo (se lo muestra al dueño)">
-        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. No coincide el comprobante" />
-      </Field>
-    </Modal>
-  )
-}
-
-function SettingsForm() {
-  const [s, setS] = useState<Settings | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    supabase.from('platform_settings').select('*').eq('id', 1).single().then(({ data, error }) => (error ? setError(errorMessage(error)) : setS(data as Settings)))
-  }, [])
-
-  if (error && !s) return <Alert>{error}</Alert>
-  if (!s) return <PageLoader />
-
-  const save = async () => {
-    setBusy(true)
-    setError(null)
-    const { error } = await supabase.from('platform_settings').update({ ...s, updated_at: new Date().toISOString() }).eq('id', 1)
-    setBusy(false)
-    if (error) setError(errorMessage(error))
-    else flash('Ajustes guardados')
-  }
-
-  return (
-    <div className="max-w-lg space-y-5">
-      <section className="card space-y-4">
-        <h2 className="font-bold">Cobro</h2>
-        <Field label="Número de tarjeta" hint="Se muestra a los dueños al pagar.">
-          <input className="input font-mono" value={s.card_number} onChange={(e) => setS({ ...s, card_number: e.target.value })} placeholder="9200 0000 0000 0000" />
-        </Field>
-        <Field label="Titular (opcional)">
-          <input className="input" value={s.card_holder} onChange={(e) => setS({ ...s, card_holder: e.target.value })} />
-        </Field>
-        <Field label="Teléfono para confirmar (opcional)" hint="Algunas apps (ej. Transfermóvil en Android) piden un teléfono además de la tarjeta, para confirmar que el destino es correcto.">
-          <input className="input" value={s.card_phone} onChange={(e) => setS({ ...s, card_phone: e.target.value })} placeholder="+53 5xxxxxxx" />
-        </Field>
-        <Field label="Tu WhatsApp" hint="Aquí te mandan las capturas. Con código de país.">
-          <input className="input" value={s.admin_whatsapp} onChange={(e) => setS({ ...s, admin_whatsapp: e.target.value.replace(/[^\d]/g, '') })} placeholder="5355555555" />
-        </Field>
-      </section>
-      <section className="card space-y-4">
-        <h2 className="font-bold">Precio</h2>
-        <Field label={`${PLAN_LABEL}: precio mensual (CUP)`} hint="Un solo plan con todo incluido. Lo ven los dueños al pagar y en la página principal.">
-          <input
-            className="input"
-            type="number"
-            min={0}
-            value={s.price_basico}
-            onChange={(e) => {
-              const v = Number(e.target.value)
-              setS({ ...s, price_basico: v, price_plus: v, price_ultra: v })
-            }}
-          />
-        </Field>
-        <Field label="Días de prueba gratis" hint="Para los negocios nuevos.">
-          <input className="input" type="number" min={0} max={60} value={s.trial_days} onChange={(e) => setS({ ...s, trial_days: Number(e.target.value) })} />
-        </Field>
-      </section>
-      <section className="card space-y-4">
-        <h2 className="font-bold">Zona horaria</h2>
-        <Field label="Zona de los negocios nuevos" hint="Con la que empiezan al crear su app. La de cada negocio se cambia en Dueños → Más → Cambiar zona horaria.">
-          <TimezoneSelect value={s.default_timezone || TZ} onChange={(tz) => setS({ ...s, default_timezone: tz })} />
-        </Field>
-      </section>
-      <section className="card space-y-4">
-        <h2 className="font-bold">Notificaciones push</h2>
-        <p className="text-sm text-slate-500">
-          Se rellenan después de desplegar <code className="rounded bg-slate-100 px-1">supabase/functions/notify-push</code>. Mientras estén vacías, la app funciona igual pero sin avisos.
-        </p>
-        <Field label="Dirección de la función" hint="La URL que te da 'supabase functions deploy notify-push'.">
-          <input className="input" value={s.push_function_url || ''} onChange={(e) => setS({ ...s, push_function_url: e.target.value.trim() || null })} placeholder="https://xxxx.supabase.co/functions/v1/notify-push" />
-        </Field>
-        <Field label="Clave secreta" hint="La misma frase que pusiste en PUSH_SHARED_SECRET al desplegar la función.">
-          <input className="input font-mono" value={s.push_shared_secret || ''} onChange={(e) => setS({ ...s, push_shared_secret: e.target.value.trim() || null })} />
-        </Field>
-      </section>
-      <AdminPushSection />
-      <section className="card space-y-4">
-        <h2 className="font-bold">Moderación de fotos</h2>
-        <p className="text-sm text-slate-500">
-          Revisa con IA (Sightengine) cada foto nueva de galería antes de publicarla. Se rellena después de desplegar <code className="rounded bg-slate-100 px-1">supabase/functions/moderate-photo</code> y configurar sus claves. Mientras esté vacía, las fotos se aprueban solas, sin revisión.
-        </p>
-        <Field label="Dirección de la función" hint="La URL que te da 'supabase functions deploy moderate-photo'.">
-          <input className="input" value={s.moderate_function_url || ''} onChange={(e) => setS({ ...s, moderate_function_url: e.target.value.trim() || null })} placeholder="https://xxxx.supabase.co/functions/v1/moderate-photo" />
-        </Field>
-        <p className="text-xs text-slate-500">Usa la misma clave secreta de arriba (PUSH_SHARED_SECRET).</p>
-      </section>
-      {error && <Alert>{error}</Alert>}
-      <Button block size="lg" onClick={save} loading={busy}>Guardar</Button>
-    </div>
-  )
-}
-
-function AdminPushSection() {
-  const [on, setOn] = useState<boolean | null>(null)
-  const [busy, setBusy] = useState(false)
-
-  useEffect(() => {
-    if (pushSupported()) isPushSubscribed().then(setOn)
-  }, [])
-
-  if (!pushSupported()) return null
-
-  const toggle = async (v: boolean) => {
-    setBusy(true)
-    const ok = v ? await subscribeAdminPush() : await unsubscribePush().then(() => true)
-    setBusy(false)
-    if (!ok) return flash('No se pudo activar. Revisa los permisos de notificaciones del navegador.')
-    setOn(v)
-    flash(v ? 'Avisos activados en este dispositivo' : 'Avisos desactivados en este dispositivo')
-  }
-
-  return (
-    <section className="card space-y-2">
-      <h2 className="font-bold">Avisos en este dispositivo</h2>
-      <p className="text-sm text-slate-500">Recibe una notificación cuando un negocio nuevo se registre y empiece su prueba gratis.</p>
-      {on !== null && <Toggle checked={on} onChange={toggle} label="Avisos de negocios nuevos" />}
-      {busy && <p className="text-xs text-slate-400">Guardando…</p>}
-    </section>
-  )
-}
-
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="card relative overflow-hidden p-3.5 sm:p-4">
-      <span aria-hidden className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-rose-400 to-orange-400" />
-      <p className="text-xs font-semibold text-slate-500">{label}</p>
-      <p className="mt-1.5 truncate text-2xl font-extrabold tracking-tight">{value}</p>
-      {hint && <p className="mt-0.5 truncate text-xs text-slate-400">{hint}</p>}
+      </nav>
     </div>
   )
 }

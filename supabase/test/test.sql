@@ -701,6 +701,11 @@ do $$ declare a jsonb := admin_business_activity(); leo jsonb; begin
   assert (leo->>'bookings_total')::int >= 1, 'tiene reservas: ' || leo::text;
   assert (leo->>'bookings_7d')::int <= (leo->>'bookings_30d')::int and (leo->>'bookings_30d')::int <= (leo->>'bookings_total')::int, 'cifras coherentes: ' || leo::text;
   assert (leo->>'customers')::int >= 1 and leo ? 'last_booking_at' and leo ? 'bookings_7d' and leo ? 'web_30d';
+  -- Primeros pasos del dueño (panel de administrador)
+  assert leo ? 'customized' and leo ? 'push_on' and leo ? 'link_visits' and leo ? 'paid' and leo ? 'web_7d', 'primeros pasos: ' || leo::text;
+  assert (leo->>'web_total')::int + (leo->>'manual_total')::int = (leo->>'bookings_total')::int, 'web + a mano = todas: ' || leo::text;
+  assert (leo->>'web_7d')::int <= (leo->>'web_30d')::int and (leo->>'web_30d')::int <= (leo->>'web_total')::int, 'reservas web coherentes: ' || leo::text;
+  assert (leo->>'link_visits')::int >= 0 and jsonb_typeof(leo->'customized') = 'boolean' and jsonb_typeof(leo->'paid') = 'boolean';
   assert (a->0->>'bookings_30d')::int >= (a->-1->>'bookings_30d')::int, 'de más a menos reservas';
 end $$;
 -- Sin restricciones (como la base misma), las reservas coinciden exactamente con las citas reales

@@ -1,203 +1,232 @@
-import { useEffect, useState } from 'react'
-import { Alert, LinkButton, PageLoader, StatusBadge, WhatsAppIcon } from '../../components/ui'
+// Inicio del administrador: lo que hay que hacer hoy (cada cosa con su botón), cómo va Citora en
+// 4 cifras y el embudo del último mes (visitas → apps creadas → primera reserva → pagan).
+import { useEffect, useState, type ReactNode } from 'react'
+import { Alert, Button, LinkButton, PageLoader, WhatsAppIcon } from '../../components/ui'
+import { serverNow } from '../../lib/clockSkew'
 import { errorMessage } from '../../lib/errors'
 import { daysLeft, money } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
-import { businessType } from '../../lib/templates'
 import { waLink } from '../../lib/whatsapp'
 import { Icon } from '../panel/Panel'
-import type { AdminOwner, AdminTab } from './Admin'
-import { expiringMessage, type AdminStatsData } from './AdminStats'
-import { serverNow } from '../../lib/clockSkew'
+import {
+  ADMIN_TZ, daysSince, expiredAt, expiredMessage, expiringMessage, helpMessage, int, mergeRows, pct, rowState, stepsCount, stuckReason,
+  type Activity, type AdminOwner, type AdminRow,
+} from './adminData'
+import { Kpi, SectionTitle } from './adminUi'
+import type { AdminTab } from './Admin'
+import type { BizFilter } from './Businesses'
+import type { AdminStatsData } from './AdminStats'
 
-interface Week { visitors: number; signups: number }
+interface Todo {
+  key: string
+  icon: string
+  tone: string
+  title: string
+  sub: string
+  action: ReactNode
+}
 
-/** Inicio del administrador: cómo va Citora y lo que necesita tu atención hoy */
-export function AdminHome({ go }: { go: (t: AdminTab) => void }) {
-  const [owners, setOwners] = useState<AdminOwner[] | null>(null)
+const STUCK_SHOWN = 4
+
+export function AdminHome({ go }: { go: (t: AdminTab, filter?: BizFilter) => void }) {
+  const [rows, setRows] = useState<AdminRow[] | null>(null)
   const [stats, setStats] = useState<AdminStatsData | null>(null)
-  const [week, setWeek] = useState<Week | null>(null)
-  const [pendingClaims, setPendingClaims] = useState(0)
+  const [claims, setClaims] = useState<{ months: number; businesses: { name: string } | null }[]>([])
+  const [visitors, setVisitors] = useState<number | null>(null)
   const [price, setPrice] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     Promise.all([
       supabase.rpc('admin_list_owners'),
+      supabase.rpc('admin_business_activity'),
       supabase.rpc('admin_stats'),
-      supabase.from('payment_claims').select('id', { count: 'exact', head: true }).eq('status', 'pendiente'),
-      supabase.rpc('admin_traffic', { p_days: 7 }),
+      supabase.from('payment_claims').select('months, businesses(name)').eq('status', 'pendiente').order('created_at'),
+      supabase.rpc('admin_traffic', { p_days: 30 }),
       supabase.rpc('get_public_prices'),
-    ]).then(([o, s, c, t, p]) => {
-      if (o.error || s.error) return setError(errorMessage(o.error || s.error))
-      setOwners(o.data as AdminOwner[])
+    ]).then(([o, a, s, c, t, p]) => {
+      if (o.error || a.error || s.error) return setError(errorMessage(o.error || a.error || s.error))
+      setRows(mergeRows(o.data as AdminOwner[], a.data as Activity[]))
       setStats(s.data as AdminStatsData)
-      setPendingClaims(c.count || 0)
+      setClaims((c.data as unknown as typeof claims) || [])
       setPrice(Number((p.data as { basico?: number } | null)?.basico) || 0)
       // Las visitas pueden no estar aún (si falta aplicar el schema): el resto del inicio se ve igual
-      if (!t.error) setWeek(t.data as Week)
+      if (!t.error) setVisitors((t.data as { visitors: number }).visitors)
     })
   }, [])
 
   if (error) return <Alert>{error}</Alert>
-  if (!owners || !stats) return <PageLoader />
+  if (!rows || !stats) return <PageLoader />
 
-  const real = owners.filter((o) => !o.comped)
-  const paying = real.filter((o) => o.status === 'activo').length
-  const trial = real.filter((o) => o.status === 'prueba').length
-  const monthly = paying * price
-  const thisMonth = new Date().toISOString().slice(0, 7)
-  const newThisMonth = real.filter((o) => o.signed_up_at.slice(0, 7) === thisMonth).length
-  const latest = owners.slice(0, 5)
-  const todo = pendingClaims + stats.expiring.length
-  const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Etc/GMT+4', hour: '2-digit', hour12: false }).format(new Date(serverNow())))
+  // ----- Para hoy -----
+  const todo: Todo[] = []
+  if (claims.length > 0) {
+    todo.push({
+      key: 'claims', icon: 'card', tone: 'bg-citora-50 text-citora-600',
+      title: `${claims.length} ${claims.length === 1 ? 'comprobante por revisar' : 'comprobantes por revisar'}`,
+      sub: claims.slice(0, 3).map((c) => `${c.businesses?.name || 'Negocio'} (${c.months} ${c.months === 1 ? 'mes' : 'meses'})`).join(' · '),
+      action: <Button size="sm" block onClick={() => go('cobros')} className="!bg-slate-900 !bg-none !shadow-none">Revisar</Button>,
+    })
+  }
+  const byId = new Map(rows.filter((r) => r.id).map((r) => [r.id as string, r]))
+  for (const b of stats.expiring) {
+    const d = daysLeft(b.ends_at)
+    const when = d <= 0 ? 'hoy' : d === 1 ? 'mañana' : `en ${d} días`
+    const row = byId.get(b.id)
+    const web = row?.act?.web_total || 0
+    const stuckToo = row ? stuckReason(row) : null
+    todo.push({
+      key: `exp-${b.id}`, icon: stuckToo ? 'alert' : 'clock', tone: stuckToo ? 'bg-amber-50 text-amber-600' : 'bg-sky-50 text-sky-600',
+      title: b.kind === 'activo' ? `${b.name}: su plan vence ${when}` : `${b.name}: la prueba acaba ${when}`,
+      sub: b.kind === 'activo' ? 'Recuérdale que renueve'
+        : stuckToo ? `${stuckToo} · ${stepsCount(row!.act)} de 6 primeros pasos`
+        : web > 0 ? `${web} ${web === 1 ? 'reserva' : 'reservas'} por la web en la prueba: buena señal para que pague` : 'Todavía sin reservas por la web',
+      // Si además está atascado, mejor ofrecerle ayuda que recordarle que pague
+      action: b.whatsapp ? <WaButton href={waLink(b.whatsapp, stuckToo ? helpMessage(b.name) : expiringMessage(b))} /> : null,
+    })
+  }
+  // Un negocio sale una sola vez: si su prueba ya está en la lista de arriba, no se repite como atascado
+  const listed = new Set(stats.expiring.map((b) => b.id))
+  const stuck = rows
+    .filter((r) => stuckReason(r) !== null && !listed.has(r.id || ''))
+    .sort((a, b) => stepsCount(a.act) - stepsCount(b.act))
+  for (const r of stuck.slice(0, STUCK_SHOWN)) {
+    todo.push({
+      key: `stuck-${r.user_id}`, icon: 'alert', tone: 'bg-amber-50 text-amber-600',
+      title: `${r.name} está atascado`,
+      sub: `${stuckReason(r)} · ${stepsCount(r.act)} de 6 primeros pasos`,
+      action: r.whatsapp ? <WaButton href={waLink(r.whatsapp, helpMessage(r.name || ''))} /> : null,
+    })
+  }
+  if (stuck.length > STUCK_SHOWN) {
+    todo.push({
+      key: 'stuck-more', icon: 'alert', tone: 'bg-amber-50 text-amber-600',
+      title: `Y ${stuck.length - STUCK_SHOWN} negocios atascados más`, sub: 'Míralos todos en Negocios',
+      action: <Button size="sm" variant="secondary" block onClick={() => go('negocios', 'atascados')}>Ver</Button>,
+    })
+  }
+  // Los que dejaron de funcionar en la última semana: aún se les puede recuperar
+  const expired = rows.filter((r) => rowState(r) === 'vencido' && r.id && expiredAt(r) && daysSince(expiredAt(r)!) <= 7)
+  for (const r of expired) {
+    const d = daysSince(expiredAt(r)!)
+    const wasTrial = !r.paid_until
+    todo.push({
+      key: `exp-done-${r.user_id}`, icon: 'ban', tone: 'bg-red-50 text-red-600',
+      title: `${r.name} ${d === 0 ? 'venció hoy' : `venció hace ${d} ${d === 1 ? 'día' : 'días'}`}`,
+      sub: `${wasTrial ? 'Terminó la prueba sin pagar' : 'No renovó la mensualidad'} · ${r.act?.bookings_30d || 0} reservas este mes`,
+      action: r.whatsapp ? <WaButton href={waLink(r.whatsapp, expiredMessage(r.name || '', wasTrial))} /> : null,
+    })
+  }
+
+  // ----- Cifras -----
+  const real = rows.filter((r) => r.id && !r.comped)
+  const paying = real.filter((r) => r.status === 'activo').length
+  const trial = real.filter((r) => r.status === 'prueba')
+  const endingSoon = trial.filter((r) => r.trial_ends_at && daysLeft(r.trial_ends_at) <= 7).length
+  const activated = real.filter((r) => (r.act?.web_total || 0) > 0).length
+  const activation = real.length ? Math.round((activated / real.length) * 100) : 0
+  const thisMonth = stats.months[stats.months.length - 1]
+  const lastMonth = stats.months[stats.months.length - 2]
+  const revenue = Number(thisMonth?.revenue || 0)
+  const prevRevenue = Number(lastMonth?.revenue || 0)
+  const revenueHint = prevRevenue > 0
+    ? `${revenue >= prevRevenue ? '+' : '−'}${Math.abs(Math.round(((revenue - prevRevenue) / prevRevenue) * 100))} % que el mes pasado`
+    : `${paying} × ${money(price, 'CUP')} al mes`
+
+  // ----- Embudo de 30 días -----
+  const recent = real.filter((r) => daysSince(r.created_at || r.signed_up_at) <= 30)
+  const recentFirst = recent.filter((r) => (r.act?.web_total || 0) > 0)
+  const recentPaid = recent.filter((r) => r.act?.paid)
+  const funnel: [string, number | null][] = [
+    ['Visitas a la portada', visitors],
+    ['Crearon su app', recent.length],
+    ['Recibieron su 1.ª reserva', recentFirst.length],
+    ['Pagaron', recentPaid.length],
+  ]
+  const lostAtFirst = recent.length > 0 ? Math.round(((recent.length - recentFirst.length) / recent.length) * 100) : 0
+
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: ADMIN_TZ, hour: '2-digit', hour12: false }).format(new Date(serverNow())))
   const hello = hour < 12 ? 'Buenos días' : hour < 19 ? 'Buenas tardes' : 'Buenas noches'
+  const day = new Intl.DateTimeFormat('es-ES', { timeZone: ADMIN_TZ, weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(serverNow()))
+  const today = day.charAt(0).toUpperCase() + day.slice(1)
 
   return (
-    <div className="space-y-5">
-      {/* Resumen principal */}
-      <section className="relative overflow-hidden rounded-3xl bg-[#0b0b14] p-6 text-white shadow-xl shadow-slate-900/10 sm:p-8">
-        <div aria-hidden className="pointer-events-none absolute -right-16 -top-20 h-72 w-72 rounded-full bg-rose-500/30 blur-3xl" />
-        <div aria-hidden className="pointer-events-none absolute -bottom-24 left-10 h-64 w-64 rounded-full bg-orange-500/20 blur-3xl" />
-        <p className="relative text-sm font-medium text-white/60">{hello} 👋</p>
-        <h1 className="relative mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">Así va Citora</h1>
-        {/* En el móvil, el ingreso ocupa toda la fila (es la cifra más larga) */}
-        <div className="relative mt-6 grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 sm:gap-6">
-          <div className="col-span-2 sm:col-span-1"><Big label="Ingreso mensual" value={money(monthly, 'CUP')} /></div>
-          <Big label="Pagando" value={String(paying)} hint={`de ${real.length} dueños`} />
-          <Big label="Nuevos este mes" value={String(newThisMonth)} hint={`${trial} en prueba`} />
-        </div>
-      </section>
+    <div className="space-y-7">
+      <div>
+        <p className="text-sm font-medium text-slate-500">{today}</p>
+        <h1 className="text-[28px] font-extrabold leading-tight tracking-tight">{hello}</h1>
+        <p className="text-slate-500">
+          {todo.length === 0 ? 'Todo al día: no hay nada pendiente.' : <>Tienes <b className="text-slate-900">{todo.length} {todo.length === 1 ? 'cosa' : 'cosas'}</b> para hoy.</>}
+        </p>
+      </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1.3fr_1fr]">
-        {/* Lo que necesita tu atención */}
-        <section className="card">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="flex items-center gap-2 font-extrabold tracking-tight">
-              <Icon name="bell" className="h-5 w-5 text-brand" /> Para hoy
-            </h2>
-            {todo > 0 && <span className="rounded-full bg-brand px-2.5 py-0.5 text-xs font-bold text-white">{todo}</span>}
+      <section>
+        <SectionTitle title="Para hoy" />
+        {todo.length === 0 ? (
+          <div className="card flex items-center gap-3 text-emerald-800">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600"><Icon name="check" className="h-5 w-5" /></span>
+            <p className="font-semibold">No hay pagos por revisar, planes por vencer ni negocios atascados.</p>
           </div>
-          {todo === 0 ? (
-            <p className="mt-4 flex items-center gap-2 rounded-xl bg-emerald-50 px-3.5 py-3 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">
-              ✓ Todo al día: no hay pagos por revisar ni planes por vencer.
-            </p>
-          ) : (
-            <ul className="mt-3 divide-y divide-slate-100">
-              {pendingClaims > 0 && (
-                <li className="flex items-center justify-between gap-3 py-3">
-                  <span className="flex min-w-0 items-center gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700"><Icon name="card" className="h-5 w-5" /></span>
-                    <span className="min-w-0">
-                      <b className="block">{pendingClaims} {pendingClaims === 1 ? 'pago por revisar' : 'pagos por revisar'}</b>
-                      <span className="text-sm text-slate-500">Dueños que declararon que ya pagaron</span>
-                    </span>
-                  </span>
-                  <button onClick={() => go('pagos')} className="shrink-0 rounded-full bg-brand px-3.5 py-1.5 text-sm font-bold text-white shadow-sm">Revisar</button>
-                </li>
-              )}
-              {stats.expiring.map((b) => {
-                const d = daysLeft(b.ends_at)
-                return (
-                  <li key={b.id} className="flex items-center justify-between gap-3 py-3">
-                    <span className="flex min-w-0 items-center gap-3">
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand"><Icon name="clock" className="h-5 w-5" /></span>
-                      <span className="min-w-0">
-                        <b className="block truncate">{b.name}</b>
-                        <span className="text-sm text-slate-500">
-                          {b.kind === 'activo' ? 'Su plan vence' : 'Su prueba termina'} {d <= 0 ? 'hoy' : `en ${d} ${d === 1 ? 'día' : 'días'}`}
-                        </span>
-                      </span>
-                    </span>
-                    {b.whatsapp && (
-                      <LinkButton href={waLink(b.whatsapp, expiringMessage(b))} variant="whatsapp" size="sm" newTab>
-                        <WhatsAppIcon className="h-4 w-4" /> Escribir
-                      </LinkButton>
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </section>
-
-        {/* Últimos registros */}
-        <section className="card">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="flex items-center gap-2 font-extrabold tracking-tight"><Icon name="users" className="h-5 w-5 text-brand" /> Últimos registros</h2>
-            <button onClick={() => go('duenos')} className="text-sm font-semibold text-brand">Ver todos</button>
-          </div>
-          <ul className="mt-3 space-y-2.5">
-            {latest.map((o) => (
-              <li key={o.user_id} className="flex items-center gap-3">
-                <OwnerAvatar owner={o} />
-                <span className="min-w-0 flex-1">
-                  <b className="block truncate text-sm">{o.name || o.email}</b>
-                  <span className="block truncate text-xs text-slate-500">{ago(o.signed_up_at)}</span>
+        ) : (
+          <ul className="card divide-y divide-slate-100 overflow-hidden p-0 sm:p-0">
+            {todo.map((t) => (
+              <li key={t.key} className="grid grid-cols-[40px_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5 px-4 py-3.5 sm:grid-cols-[40px_minmax(0,1fr)_120px]">
+                <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${t.tone}`}><Icon name={t.icon} className="h-5 w-5" /></span>
+                <span className="min-w-0">
+                  <span className="block font-semibold leading-snug sm:truncate">{t.title}</span>
+                  <span className="block text-sm text-slate-500 sm:truncate" title={t.sub}>{t.sub}</span>
                 </span>
-                {o.comped ? <span className="chip bg-violet-100 text-violet-700">Cortesía</span> : o.status === 'sin_negocio' ? <span className="chip bg-slate-100 text-slate-600">Sin negocio</span> : <StatusBadge status={o.status} />}
+                <span className="col-start-2 sm:col-start-auto">{t.action}</span>
               </li>
             ))}
           </ul>
-        </section>
+        )}
+      </section>
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Kpi label="Cobrado este mes" value={money(revenue, 'CUP')} hint={revenueHint} />
+        <Kpi label="Pagando" value={String(paying)} hint={`de ${real.length} negocios`} />
+        <Kpi label="En prueba" value={String(trial.length)} hint={endingSoon ? `${endingSoon} acaban esta semana` : 'ninguna acaba esta semana'} />
+        <Kpi label="Activación" value={`${activation} %`} hint="recibieron su 1.ª reserva por la web" />
       </div>
 
-      {/* La semana en números */}
       <section>
-        <div className="mb-2.5 flex items-center justify-between px-1">
-          <h2 className="font-extrabold tracking-tight">Últimos 7 días</h2>
-          <button onClick={() => go('estadisticas')} className="text-sm font-semibold text-brand">Ver estadísticas</button>
-        </div>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Tile icon="globe" label="Visitantes de la portada" value={week ? String(week.visitors) : '—'} />
-          <Tile icon="sparkles" label="Apps creadas" value={week ? String(week.signups) : '—'} hint={week && week.visitors > 0 ? `${Math.round((week.signups / week.visitors) * 100)}% de los visitantes` : undefined} />
-          <Tile icon="calendar" label="Citas reservadas" value={String(stats.totals.appointments_30d)} hint="últimos 30 días" />
-          <Tile icon="chart" label="Negocios con citas" value={String(stats.totals.active_30d)} hint="últimos 30 días" />
+        <SectionTitle title="Embudo de los últimos 30 días" />
+        <div className="card space-y-3.5">
+          {funnel.map(([label, value], i) => {
+            const prev = i > 0 ? funnel[i - 1][1] : null
+            const base = funnel[1][1] || 1
+            const width = value === null ? 0 : i === 0 ? 100 : Math.max(value > 0 ? 4 : 0, (value / Math.max(base, 1)) * 70)
+            return (
+              <div key={label}>
+                <div className="mb-1 flex items-baseline justify-between gap-3 text-sm">
+                  <span className="truncate font-semibold">{label}</span>
+                  <span className="shrink-0 tabular-nums text-slate-500">
+                    <b className="text-slate-900">{value === null ? '—' : int(value)}</b>
+                    {i > 0 && prev !== null && prev > 0 && value !== null && <> · {pct(value, prev)}</>}
+                  </span>
+                </div>
+                <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full rounded-full bg-gradient-to-r from-rose-400 to-orange-400 transition-all duration-700" style={{ width: `${width}%` }} />
+                </div>
+              </div>
+            )
+          })}
+          {recent.length >= 3 && (
+            <p className="pt-1 text-sm text-slate-500">
+              De crear la app a la primera reserva se queda el <b className="text-slate-700">{lostAtFirst} %</b>: es el paso que más hay que cuidar.
+            </p>
+          )}
         </div>
       </section>
     </div>
   )
 }
 
-function Big({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function WaButton({ href }: { href: string }) {
   return (
-    <div className="min-w-0">
-      <p className="truncate text-2xl font-extrabold tracking-tight sm:text-3xl">{value}</p>
-      <p className="truncate text-xs font-semibold text-white/60 sm:text-sm">{label}</p>
-      {hint && <p className="truncate text-[11px] text-white/40 sm:text-xs">{hint}</p>}
-    </div>
+    <LinkButton href={href} variant="whatsapp" size="sm" block newTab>
+      <WhatsAppIcon className="h-4 w-4" /> Escribir
+    </LinkButton>
   )
-}
-
-function Tile({ icon, label, value, hint }: { icon: string; label: string; value: string; hint?: string }) {
-  return (
-    <div className="card p-4">
-      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand/10 text-brand"><Icon name={icon} className="h-5 w-5" /></span>
-      <p className="mt-3 text-2xl font-extrabold tracking-tight">{value}</p>
-      <p className="truncate text-xs font-semibold text-slate-500">{label}</p>
-      {hint && <p className="truncate text-[11px] text-slate-400">{hint}</p>}
-    </div>
-  )
-}
-
-/** Inicial del negocio (o del correo) en un círculo de color según el tipo de negocio */
-export function OwnerAvatar({ owner, size = 'h-10 w-10' }: { owner: AdminOwner; size?: string }) {
-  const name = owner.name || owner.email || '?'
-  const emoji = owner.business_type ? businessType(owner.business_type).emoji : null
-  return (
-    <span className={`relative flex ${size} shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-rose-400 to-orange-400 text-sm font-extrabold text-white shadow-sm`}>
-      {name.trim().charAt(0).toUpperCase()}
-      {emoji && <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[11px] shadow ring-1 ring-slate-200">{emoji}</span>}
-    </span>
-  )
-}
-
-/** "hoy", "ayer", "hace 5 días", "hace 2 meses" */
-export function ago(iso: string): string {
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
-  if (days <= 0) return 'Se registró hoy'
-  if (days === 1) return 'Se registró ayer'
-  if (days < 30) return `Se registró hace ${days} días`
-  const months = Math.floor(days / 30)
-  return `Se registró hace ${months} ${months === 1 ? 'mes' : 'meses'}`
 }

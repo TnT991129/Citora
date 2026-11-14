@@ -3116,6 +3116,10 @@ $$;
 -- Actividad de cada negocio para el administrador: cuántas reservas recibe (por fecha en que se
 -- hicieron, sin contar las canceladas), cuántos clientes distintos y cuándo fue la última. Sirve para
 -- ver cuáles están funcionando y cuáles no, y a cuáles premiar (ej. un descuento en la mensualidad).
+-- También dice qué ha hecho el dueño desde que creó su app (los "primeros pasos" del panel de
+-- administrador, ver src/pages/admin/adminData.ts) para saber quién está atascado y ayudarle:
+-- si personalizó su app, si activó los avisos, si apunta citas, si alguien abrió su enlace, si ya le
+-- reservan por la web y si ha pagado alguna vez.
 create or replace function public.admin_business_activity()
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 begin
@@ -3131,10 +3135,19 @@ begin
         'bookings_30d', count(a.id) filter (where a.status <> 'cancelada' and a.created_at > now() - interval '30 days'),
         'bookings_7d', count(a.id) filter (where a.status <> 'cancelada' and a.created_at > now() - interval '7 days'),
         'web_30d', count(a.id) filter (where a.status <> 'cancelada' and a.source = 'web' and a.created_at > now() - interval '30 days'),
+        'web_7d', count(a.id) filter (where a.status <> 'cancelada' and a.source = 'web' and a.created_at > now() - interval '7 days'),
+        'web_total', count(a.id) filter (where a.status <> 'cancelada' and a.source = 'web'),
+        'manual_total', count(a.id) filter (where a.status <> 'cancelada' and a.source = 'manual'),
         'customers', count(distinct a.customer_phone) filter (where a.status <> 'cancelada'),
         'revenue_30d', coalesce(sum(a.total) filter (where _appt_done(a.status, a.ends_at) and a.starts_at > now() - interval '30 days'), 0),
         'last_booking_at', max(a.created_at) filter (where a.status <> 'cancelada'),
-        'services', (select count(*) from services s where s.business_id = b.id and s.active)
+        'services', (select count(*) from services s where s.business_id = b.id and s.active),
+        'customized', (b.logo_url is not null or b.cover_url is not null or b.appearance <> '{}'::jsonb),
+        'push_on', exists (select 1 from push_subscriptions ps where ps.business_id = b.id and ps.kind = 'owner'),
+        -- Personas distintas que abrieron su página (las visitas del propio dueño no se miden)
+        'link_visits', (select count(distinct e.visitor_id) from analytics_events e
+                        where e.name = 'visita' and e.page = 'negocio' and e.slug = b.slug),
+        'paid', exists (select 1 from payments p where p.business_id = b.id)
       ) as j
       from businesses b
       left join appointments a on a.business_id = b.id

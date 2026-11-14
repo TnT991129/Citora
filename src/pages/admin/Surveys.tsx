@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, Button, Field, LinkButton, Modal, PageLoader, Spinner, Toggle, WhatsAppIcon, flash } from '../../components/ui'
+import { Alert, Button, Field, LinkButton, Modal, Spinner, Toggle, WhatsAppIcon, flash } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { fullDateFromIso } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
@@ -46,17 +46,12 @@ export default function Surveys() {
   }, [load])
 
   if (error && !list) return <Alert>{error}</Alert>
-  if (!list) return <PageLoader />
+  if (!list) return <div className="card py-6 text-center text-sm text-slate-500">Cargando encuestas…</div>
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-extrabold tracking-tight">Encuestas a los dueños</h1>
-          <p className="text-sm text-slate-500">Pregúntales qué les parece Citora. Les sale un aviso en su panel y responden en un minuto.</p>
-        </div>
-        <Button onClick={() => setCreating(true)}>Nueva encuesta</Button>
-      </div>
+      {/* Va dentro de Ajustes, que ya explica qué son las encuestas: aquí solo el botón */}
+      <Button variant="secondary" block onClick={() => setCreating(true)}>+ Nueva encuesta</Button>
       {error && <Alert>{error}</Alert>}
       {list.length === 0 && (
         <div className="card py-10 text-center">

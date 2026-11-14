@@ -93,7 +93,14 @@ Durante el tutorial, la pantalla no se anima (si no, el resaltado no coincide co
 - **Ajustes:** "Avisos en este móvil" arriba y grande; instalar el panel; datos del negocio;
   cuenta (modo oscuro y salir).
 
-### 0.5 Panel de administrador
+### 0.5 Panel de administrador — ✅ hecho el 14 de noviembre de 2026
+
+Construido en `src/pages/admin/` (falta aplicar `schema.sql` y publicar). Diferencia con el
+prototipo: los "primeros pasos x/6" del administrador salen de datos que ya existen (ver
+`STEPS` en `adminData.ts`): personalizó su app, activó los avisos, apuntó una cita, alguien abrió su
+enlace, primera reserva por la web y reservas esta semana. Cuando el panel del dueño tenga su lista
+de Primeros pasos (0.4), se pueden unificar. "Atascado" = en prueba, creado hace 3 días o más y sin
+ninguna reserva por la web.
 
 Pestañas: Inicio · Negocios · Cobros (con número de pendientes) · Números · Ajustes. En ordenador,
 menú lateral oscuro.
