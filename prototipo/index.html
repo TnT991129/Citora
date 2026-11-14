@@ -1,0 +1,1510 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Citora · Prototipo de rediseño</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com/3.4.16"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          brand: 'rgb(var(--brand-rgb) / <alpha-value>)',
+          citora: { 50: '#fff5f2', 100: '#ffe8e1', 500: '#fb6b47', 600: '#f0532e', 700: '#cc3e1f' },
+        },
+        fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+      },
+    },
+  }
+</script>
+<style>
+  :root { --brand-rgb: 124 58 237; }
+  body { font-family: Inter, system-ui, sans-serif; }
+  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .thin-scroll { scrollbar-width: thin; }
+  @keyframes up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes pop { from { opacity: 0; transform: translate(-50%, -8px) scale(.97); } to { opacity: 1; transform: translate(-50%, 0); } }
+  .anim-up { animation: up .35s cubic-bezier(.16,1,.3,1) both; }
+  .anim-fade { animation: fade .2s ease-out both; }
+  .anim-pop { animation: pop .25s cubic-bezier(.16,1,.3,1) both; }
+  .page { animation: up .35s cubic-bezier(.16,1,.3,1) backwards; }
+  /* Durante el tutorial la pantalla no se anima: así lo resaltado coincide justo con lo que hay debajo */
+  #screen.touring .page, #screen.touring .anim-up, #screen.touring .anim-fade { animation: none !important; }
+  .tour-in { animation: up .35s cubic-bezier(.16,1,.3,1) both; }
+  details > summary { list-style: none; cursor: pointer; }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] .chev-rot { transform: rotate(90deg); }
+  .switch { width: 44px; height: 26px; border-radius: 999px; background: #cbd5e1; position: relative; transition: .2s; flex-shrink: 0; }
+  .switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 999px; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / .2); transition: .2s; }
+  .switch.on { background: rgb(var(--brand-rgb)); }
+  .switch.on::after { left: 21px; }
+  input, select, textarea { font-size: 16px; }
+</style>
+</head>
+<body class="min-h-dvh bg-slate-100 text-slate-900 antialiased">
+
+<!-- Cabecera del prototipo (no es parte del diseño) -->
+<div class="sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur">
+  <div class="mx-auto flex max-w-[1600px] flex-wrap items-center gap-3 px-4 py-2.5">
+    <div class="flex items-center gap-2">
+      <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-rose-400 to-orange-400 text-xs font-black text-white">C</span>
+      <b class="tracking-tight">Prototipo de rediseño</b>
+      <span class="hidden rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800 sm:inline">Solo en tu ordenador · no publicado · datos de ejemplo</span>
+    </div>
+    <div class="ml-auto flex items-center gap-2">
+      <select id="pick" class="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm font-medium lg:hidden"></select>
+      <div class="inline-flex rounded-lg bg-slate-100 p-0.5 text-sm font-semibold" id="devices"></div>
+    </div>
+  </div>
+</div>
+
+<div class="mx-auto flex max-w-[1600px] gap-6 px-4 py-5">
+  <!-- Índice de pantallas -->
+  <aside id="index" class="hidden w-56 shrink-0 lg:block"></aside>
+
+  <!-- Pantalla -->
+  <main class="flex min-w-0 flex-1 flex-col items-center">
+    <div id="frame"></div>
+  </main>
+
+  <!-- Qué cambia -->
+  <aside id="notes" class="hidden w-80 shrink-0 2xl:block"></aside>
+</div>
+<div id="notes-mobile" class="px-4 pb-10 2xl:hidden"></div>
+
+<script>
+// =====================================================================
+// Datos de ejemplo
+// =====================================================================
+const BIZ = { name: 'Salón Yaneisy', owner: 'Yaneisy', slug: 'salon-yaneisy', city: 'La Habana' }
+
+const TYPES = [
+  ['💅', 'Uñas'], ['💈', 'Barbería'], ['💇‍♀️', 'Peluquería'], ['👁️', 'Cejas y pestañas'], ['💆', 'Spa y masajes'],
+  ['💄', 'Maquillaje'], ['🖋️', 'Tatuajes'], ['🩺', 'Consulta'], ['✨', 'Otro'],
+]
+
+const SERVICES = [
+  { n: 'Manicura', p: 1500, d: 60 },
+  { n: 'Pedicura', p: 1800, d: 60 },
+  { n: 'Uñas acrílicas', p: 3500, d: 120 },
+  { n: 'Retoque', p: 1200, d: 60 },
+]
+const EXTRAS = [{ n: 'Diseño de uñas', p: 300, d: 15 }]
+
+const TOMORROW = [
+  { t: '9:00', n: 'Rosa Martínez', s: 'Pedicura' },
+  { t: '11:00', n: 'Claudia Díaz', s: 'Manicura' },
+  { t: '14:00', n: 'Ana Ruiz', s: 'Uñas acrílicas' },
+  { t: '16:30', n: 'Beatriz León', s: 'Retoque' },
+]
+
+const CUSTOMERS = [
+  { n: 'Daniela Pérez', v: 8, last: 'Vino hoy', g: 12000, ph: '53 5212 3344' },
+  { n: 'Lisandra Gómez', v: 5, last: 'Viene hoy', g: 15500, ph: '53 5398 1122' },
+  { n: 'Rosa Martínez', v: 6, last: 'Hace 15 días', g: 9800, ph: '53 5544 7788' },
+  { n: 'Beatriz León', v: 4, last: 'Hace 9 días', g: 5200, ph: '53 5677 0099' },
+  { n: 'Mailén Rodríguez', v: 3, last: 'Hace 21 días', g: 5400, ph: '53 5233 4455' },
+  { n: 'Claudia Díaz', v: 2, last: 'Hace 48 días', g: 3000, lapsed: 48, ph: '53 5811 2233' },
+  { n: 'Yudith Castro', v: 1, last: 'Hace 2 meses', g: 1200, lapsed: 63, ph: '53 5900 6677' },
+  { n: 'Ana Ruiz', v: 0, last: 'Primera cita mañana', g: 0, isNew: true, ph: '53 5122 8899' },
+]
+
+const BUSINESSES = [
+  { id: 1, e: '💅', n: 'Salón Yaneisy', st: 'prueba', left: '11 días', steps: 3, r30: 14, last: 'hace 1 h', wa: true },
+  { id: 2, e: '💈', n: 'Barbería Leo', st: 'activo', left: 'hasta 12 dic', steps: 5, r30: 86, last: 'hace 20 min' },
+  { id: 3, e: '💅', n: 'Nails Studio Vedado', st: 'prueba', left: '3 días', steps: 1, r30: 0, last: 'hace 3 días', risk: 'Lleva 12 días y no tiene ninguna reserva' },
+  { id: 4, e: '💆', n: 'Spa Habana', st: 'prueba', left: '11 días', steps: 0, r30: 0, last: 'hace 4 días', risk: 'Creó su app y no ha vuelto a entrar' },
+  { id: 5, e: '💇‍♀️', n: 'Peluquería Ana', st: 'vencido', left: 'hace 2 días', steps: 4, r30: 2, last: 'hace 6 días' },
+  { id: 6, e: '👁️', n: 'Cejas by Mary', st: 'activo', left: 'hasta 3 dic', steps: 5, r30: 41, last: 'hoy' },
+  { id: 7, e: '🩺', n: 'Dr. Ramos · Consulta', st: 'activo', left: 'hasta 28 nov', steps: 4, r30: 23, last: 'ayer' },
+  { id: 8, e: '🖋️', n: 'Tattoo Malecón', st: 'prueba', left: '1 día', steps: 4, r30: 6, last: 'ayer' },
+  { id: 9, e: '💈', n: 'Barbería El Clásico', st: 'activo', left: 'hasta 20 dic', steps: 5, r30: 64, last: 'hoy' },
+  { id: 10, e: '💄', n: 'Makeup Lis', st: 'cortesia', left: 'sin fin', steps: 3, r30: 9, last: 'hace 2 días' },
+]
+
+const STEPS = [
+  { id: 'precios', t: 'Revisa tus servicios y precios', d: 'Son lo primero que ven tus clientes.', go: 'p-servicios' },
+  { id: 'ver', t: 'Mira tu página como un cliente', d: 'Así sabes qué verán al abrir tu enlace.' },
+  { id: 'prueba', t: 'Haz una reserva de prueba', d: 'Resérvate una cita tú mismo y mira cómo te llega.' },
+  { id: 'avisos', t: 'Activa los avisos en este móvil', d: 'Sin esto no te enteras cuando alguien reserva.', go: 'p-ajustes' },
+  { id: 'compartir', t: 'Comparte tu enlace en WhatsApp', d: 'Ponlo en tu estado: el texto y la imagen ya están listos.' },
+  { id: 'primera', t: 'Recibe tu primera reserva', d: 'Se marca sola cuando un cliente reserve.', auto: true },
+]
+
+const TOOLS = [
+  { id: 'recordatorios', n: 'Recordatorios', d: 'Avisa por WhatsApp a los clientes de mañana', i: 'bell' },
+  { id: 'opiniones', n: 'Opiniones', d: 'Lo que dicen tus clientes', i: 'star' },
+  { id: 'estadisticas', n: 'Estadísticas', d: 'Ingresos, asistencia y lo más pedido', i: 'chart' },
+  { id: 'espera', n: 'Lista de espera', d: 'Clientes que quieren un hueco si se libera', i: 'hourglass' },
+  { id: 'cupones', n: 'Cupones', d: 'Códigos de descuento para tus clientes', i: 'gift' },
+  { id: 'bonos', n: 'Bonos', d: 'Paquetes de sesiones pagadas por adelantado', i: 'ticket' },
+  { id: 'galeria', n: 'Galería', d: 'Fotos de tus trabajos en tu página', i: 'image' },
+  { id: 'gastos', n: 'Gastos', d: 'Apunta tus gastos y mira lo que ganas de verdad', i: 'receipt' },
+  { id: 'respaldo', n: 'Respaldo', d: 'Descarga tus citas y clientes en Excel', i: 'download' },
+]
+
+const COLORS = ['#7c3aed', '#db2777', '#e11d48', '#f0532e', '#d97706', '#059669', '#0d9488', '#0284c7', '#4f46e5', '#0f172a']
+
+// =====================================================================
+// Estado del prototipo
+// =====================================================================
+const freshAppts = () => [
+  { id: 1, t: '9:00', e: '10:00', n: 'Daniela Pérez', s: 'Manicura', p: 1500, st: 'hecha' },
+  { id: 2, t: '10:30', e: '12:30', n: 'Lisandra Gómez', s: 'Uñas acrílicas', p: 3500, st: 'confirmada' },
+  { free: true, t: '12:30', e: '14:00' },
+  { id: 3, t: '14:00', e: '15:00', n: 'Mailén Rodríguez', s: 'Pedicura', p: 1800, st: 'pendiente' },
+  { free: true, t: '15:00', e: '16:00' },
+  { id: 4, t: '16:00', e: '17:00', n: 'Yudith Castro', s: 'Retoque + Diseño de uñas', p: 1500, st: 'pendiente' },
+  { free: true, t: '17:00', e: '18:00' },
+]
+
+const state = {
+  screen: 'alta-tipo',
+  device: 'movil',
+  type: 0,
+  currency: 'CUP',
+  days: [1, 2, 3, 4, 5, 6],
+  skipped: {},
+  done: { precios: true },
+  stepsOpen: true,
+  tools: ['recordatorios', 'opiniones', 'estadisticas'],
+  appts: freshAppts(),
+  dayTab: 'hoy',
+  agendaDay: 13,
+  custFilter: 'todos',
+  bizFilter: 'todos',
+  months: 1,
+  sheet: null,
+  toast: null,
+  tutorial: null,
+  pushOn: false,
+}
+
+// =====================================================================
+// Índice de pantallas y notas de "qué cambia"
+// =====================================================================
+const GROUPS = [
+  { key: 'alta', title: 'Crear la app', device: 'movil', items: [
+    ['alta-tipo', '1 · Tipo de negocio'], ['alta-negocio', '2 · Tu negocio'], ['alta-moneda', '3 · Moneda'],
+    ['alta-servicios', '4 · Servicios'], ['alta-horario', '5 · Horario'], ['alta-cuenta', '6 · Tu cuenta'], ['alta-bienvenida', 'Bienvenida'],
+  ] },
+  { key: 'panel', title: 'Panel del dueño', device: 'movil', items: [
+    ['p-hoy', 'Hoy'], ['p-agenda', 'Agenda'], ['p-clientes', 'Clientes'], ['p-negocio', 'Mi negocio'],
+    ['p-servicios', '· Servicios'], ['p-horario', '· Horario'], ['p-apariencia', '· Apariencia'],
+    ['p-mas', 'Más'], ['p-plan', '· Mensualidad'], ['p-ajustes', '· Ajustes y avisos'],
+  ] },
+  { key: 'admin', title: 'Tu panel (administrador)', device: 'ordenador', items: [
+    ['a-inicio', 'Inicio'], ['a-negocios', 'Negocios'], ['a-cobros', 'Cobros'], ['a-numeros', 'Números'], ['a-ajustes', 'Ajustes'],
+  ] },
+]
+const groupOf = (s) => GROUPS.find((g) => g.items.some((i) => i[0] === s))
+
+const NOTES = {
+  'alta-tipo': ['Tipo de negocio', [
+    'Igual que ahora: un toque y pasa solo al siguiente paso.',
+    'Se dice para qué sirve: "Te prepararemos servicios y precios típicos".',
+    'Debajo de la barra de progreso se ve cuánto falta ("Unos 3 minutos").',
+  ]],
+  'alta-negocio': ['Tu negocio', [
+    'No se puede saltar: sin nombre, enlace y WhatsApp no hay app.',
+    'El enlace se crea solo con el nombre y se ve cómo quedará.',
+    'Cada campo lleva una frase corta de para qué sirve, no párrafos.',
+  ]],
+  'alta-moneda': ['Moneda', [
+    'Botón nuevo "Saltar, uso CUP" debajo de "Siguiente".',
+    'Tres opciones grandes con un ejemplo de precio, en vez de un desplegable.',
+  ]],
+  'alta-servicios': ['Servicios', [
+    'Botón "Saltar, los reviso después": se guardan los de ejemplo.',
+    'Si lo salta, en "Hoy" aparece un aviso de revisar precios antes de compartir.',
+    'Filas más compactas: nombre, precio y duración en una sola tarjeta.',
+  ]],
+  'alta-horario': ['Horario', [
+    'Botón "Saltar": queda de lunes a sábado, de 9:00 a 18:00.',
+    'Días como botones grandes y un solo rango de horas. Los turnos partidos se ponen luego en el panel.',
+  ]],
+  'alta-cuenta': ['Tu cuenta', [
+    'No se puede saltar. Último paso y lo dice: "Último paso".',
+    'Resumen de lo que dejó para después, para que no se sorprenda.',
+  ]],
+  'alta-bienvenida': ['Bienvenida', [
+    'Antes: "¡Tu app está lista!" con el enlace. Ahora le da la bienvenida a su negocio y le enseña su página.',
+    'Tres caminos claros: ver su página, hacer el tutorial o ir al panel.',
+    'El tutorial es opcional, ya no se abre solo.',
+    'Tutorial nuevo: primero dice qué vas a aprender. Después resalta en la pantalla lo que explica y oscurece el resto.',
+    'En los pasos prácticos hay que tocar el botón de verdad (Confirmar, +, Compartir). Si alguien no se atreve, tiene "Hazlo por mí".',
+    'Frases cortas, sin palabras técnicas, con "Paso 3 de 9" y una barra de progreso. Al final, un resumen de lo aprendido.',
+    'Prueba: toca "Hacer el tutorial".',
+    'Si saltó pasos, se lo recuerda aquí con calma.',
+  ]],
+  'p-hoy': ['Hoy', [
+    'Una sola pregunta: "¿qué tengo hoy?". Arriba un resumen en una línea en vez de 3 tarjetas.',
+    'Tarjeta "Primeros pasos" hasta la primera reserva real. Desaparece al completarla.',
+    'Las citas por confirmar llevan el botón "Confirmar" en la misma fila: un toque.',
+    'Fuera de "Hoy": la tarjeta del enlace (va a "Mi negocio") y la lista larga de recordatorios (queda en una fila "Avisar a todos").',
+    'Botón + flotante para nueva cita, siempre en el mismo sitio.',
+    'Prueba: toca "Confirmar", una cita o un hueco libre.',
+  ]],
+  'p-agenda': ['Agenda', [
+    'Tira de la semana con puntos según las citas de cada día.',
+    'Misma lista que "Hoy", para no aprender dos formas de ver citas.',
+  ]],
+  'p-clientes': ['Clientes', [
+    'Filtros que responden a preguntas: "Fieles", "Hace tiempo que no vienen", "Nuevos".',
+    'En "Hace tiempo que no vienen" hay un botón "Escribirle" con un mensaje "Te echamos de menos" ya escrito.',
+    'La ficha se abre como hoja desde abajo, con 3 números y 2 botones.',
+  ]],
+  'p-negocio': ['Mi negocio (nueva pestaña)', [
+    'Reúne lo que configura su negocio: página y enlace, servicios, horario, apariencia, equipo y políticas.',
+    'Servicios sale de la barra de abajo: se usa al principio, no a diario.',
+    'La tarjeta del enlace vive aquí, con "Compartir en WhatsApp" como botón principal.',
+  ]],
+  'p-servicios': ['Servicios', [
+    'Lista limpia: nombre, duración y precio. Toca uno para editarlo en una hoja.',
+    'Extras en su propia sección, con una frase de qué son.',
+  ]],
+  'p-horario': ['Horario', [
+    'Cada día en una fila con su interruptor y sus horas.',
+    'Lo avanzado (clientes a la misma hora, reglas de antelación) queda plegado en "Opciones avanzadas".',
+  ]],
+  'p-apariencia': ['Apariencia', [
+    'Dos niveles. Arriba lo esencial: color, logo y foto de portada, con vista previa en vivo.',
+    'Debajo, plegado, "Personalizar más": letra, botones, degradados, textos, redes y qué mostrar.',
+    'Prueba: toca un color y mira cómo cambia todo el panel.',
+  ]],
+  'p-mas': ['Más (modo sencillo)', [
+    'Antes: 16 entradas a la vista. Ahora: ayuda, cuenta y solo las herramientas activas.',
+    'El resto está en "Más herramientas" y se activa con un botón cuando se necesite.',
+    'Todo sigue existiendo: nada se quita, solo se esconde hasta que se pide.',
+    'Prueba: activa "Cupones" y mira cómo pasa a tus herramientas.',
+  ]],
+  'p-plan': ['Mensualidad', [
+    'Arriba lo que Citora hizo por el negocio en la prueba (reservas y dinero). Ayuda a decidir pagar.',
+    'Pago en 3 pasos numerados, con los datos de la tarjeta para copiar.',
+  ]],
+  'p-ajustes': ['Ajustes y avisos', [
+    '"Avisos en este móvil" arriba del todo y bien grande: es lo más importante.',
+    'Datos del negocio, moneda y cuenta, agrupados y cortos.',
+  ]],
+  'a-inicio': ['Inicio del administrador', [
+    'Lo primero es "Para hoy": lo que tienes que hacer, cada cosa con su botón. Todos los botones tienen el mismo ancho y quedan en columna.',
+    'Avisos nuevos de negocios en riesgo: creados y sin reservas, o que no han vuelto a entrar.',
+    'Nuevo número: activación (cuántos recibieron su primera reserva real).',
+    'Embudo del mes: visitas → apps creadas → primera reserva → pagan.',
+  ]],
+  'a-negocios': ['Negocios', [
+    '"Dueños" pasa a "Negocios", con filtros por estado y por riesgo.',
+    'Columna nueva de "Primeros pasos" (x de 6) para ver quién está atascado.',
+    'Cada fila tiene la misma altura: estado en una etiqueta corta con el detalle debajo, nombres en una sola línea y columnas de ancho fijo.',
+    'Al tocar un negocio se abre su ficha al lado, con las acciones principales a la vista y las raras plegadas.',
+  ]],
+  'a-cobros': ['Cobros', [
+    'Comprobantes por revisar arriba, con la captura y dos botones: Aprobar o Rechazar.',
+    'El historial queda abajo, en una tabla con cabecera y columnas fijas: fecha, negocio, meses e importe.',
+  ]],
+  'a-numeros': ['Números', [
+    'Estadísticas y tráfico juntos en una pantalla, con pocos gráficos y sencillos.',
+    'Las visitas por origen se ven en una barra de colores con su leyenda, en vez de una frase.',
+    'Las encuestas pasan a Ajustes.',
+  ]],
+  'a-ajustes': ['Ajustes', [
+    'En ordenador, dos columnas fijas: a la izquierda qué es cada grupo y para qué sirve, a la derecha sus campos.',
+    'Grupos: dónde te pagan, precio y prueba, contacto, encuestas y técnico.',
+    '"Guardar cambios" arriba a la derecha, siempre a la vista.',
+  ]],
+}
+
+// =====================================================================
+// Utilidades
+// =====================================================================
+const cup = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' CUP'
+const initials = (n) => n.split(' ').map((w) => w[0]).slice(0, 2).join('')
+const dur = (m) => (m < 60 ? `${m} min` : m % 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m / 60} h`)
+const isMobile = () => state.device === 'movil'
+const hexToRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)).join(' ')
+
+const ICONS = {
+  home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+  users: '<circle cx="9" cy="8" r="4"/><path d="M2 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1M16 3.5a4 4 0 0 1 0 8M22 21v-1a6 6 0 0 0-4-5.6"/>',
+  store: '<path d="M4 4h16l1 5a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0zM5 12v9h14v-9M10 21v-5h4v5"/>',
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  chevron: '<path d="m9 6 6 6-6 6"/>',
+  back: '<path d="m15 6-6 6 6 6"/>',
+  check: '<path d="m5 12 5 5 9-10"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 0 0 4 0"/>',
+  star: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',
+  chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  hourglass: '<path d="M6 3h12M6 21h12M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9"/>',
+  gift: '<rect x="3" y="8" width="18" height="5" rx="1"/><path d="M5 13v8h14v-8M12 8v13M12 8S10 3 7.5 4.5 9 8 12 8zm0 0s2-5 4.5-3.5S15 8 12 8z"/>',
+  ticket: '<path d="M3 8a2 2 0 0 0 0 4v0a2 2 0 0 1 0 4v1a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-1a2 2 0 0 1 0-4 2 2 0 0 0 0-4V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1zM14 6v12"/>',
+  image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>',
+  receipt: '<path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2zM9 8h6M9 12h6"/>',
+  download: '<path d="M12 4v11M7 10l5 5 5-5M4 20h16"/>',
+  card: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4.9.8c0 1.7-2.4 2.2-2.4 3.7M12 17h.01"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  x: '<path d="M6 6l12 12M18 6 6 18"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  sparkles: '<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
+  alert: '<path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+  link: '<path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>',
+  copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/>',
+  palette: '<path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.5-.8 1.5-1.5 0-1.3-1-1.5-1-2.5S13.4 15 14.5 15H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/>',
+  scissors: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/>',
+  scroll: '<path d="M8 21h11a2 2 0 0 0 2-2v-1H10v1a2 2 0 0 1-4 0V5a2 2 0 0 0-2-2h12a2 2 0 0 1 2 2v13M8 7h6M8 11h6"/>',
+  phone: '<rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/>',
+  whatsapp: '<path d="M3 21l1.6-4.6A8.5 8.5 0 1 1 8 19.6z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 .8a4 4 0 0 1-1.8-1.8l.8-1-1-2z"/>',
+  move: '<path d="M12 3v18M3 12h18M8 7l4-4 4 4M8 17l4 4 4-4M7 8l-4 4 4 4M17 8l4 4-4 4"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  ban: '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
+  cash: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
+  flag: '<path d="M4 21V4h12l-2 4 2 4H4"/>',
+  trend: '<path d="m3 17 6-6 4 4 8-8M15 7h6v6"/>',
+  dots: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0 1 14 0v1"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+}
+const ic = (n, c = 'h-5 w-5') => `<svg viewBox="0 0 24 24" class="${c}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n] || ''}</svg>`
+
+// Piezas comunes
+const btn = (label, { act, go, arg, kind = 'primary', size = 'md', block, icon, cls = '', tour } = {}) => {
+  const k = {
+    primary: 'bg-brand text-white shadow-sm shadow-brand/30 hover:brightness-110',
+    secondary: 'bg-white text-slate-800 ring-1 ring-slate-200 hover:bg-slate-50',
+    soft: 'bg-brand/10 text-brand hover:bg-brand/15',
+    ghost: 'text-slate-600 hover:bg-slate-100',
+    wa: 'bg-[#25D366] text-white shadow-sm hover:brightness-105',
+    danger: 'bg-white text-red-600 ring-1 ring-red-200 hover:bg-red-50',
+    dark: 'bg-slate-900 text-white hover:bg-slate-800',
+  }[kind]
+  const s = { sm: 'px-3 py-1.5 text-sm rounded-lg', md: 'px-4 py-2.5 rounded-xl', lg: 'px-5 py-3.5 text-[17px] rounded-xl' }[size]
+  const data = `${act ? `data-act="${act}"` : ''} ${go ? `data-go="${go}"` : ''} ${arg !== undefined ? `data-arg="${arg}"` : ''} ${tour ? `data-tour="${tour}"` : ''}`
+  return `<button ${data} class="inline-flex items-center justify-center gap-2 font-semibold transition active:scale-[.98] ${k} ${s} ${block ? 'w-full' : ''} ${cls}">${icon ? ic(icon, size === 'sm' ? 'h-4 w-4' : 'h-[18px] w-[18px]') : ''}${label}</button>`
+}
+const card = (inner, cls = '') => `<div class="rounded-2xl border border-slate-200/80 bg-white ${cls}">${inner}</div>`
+const sectionTitle = (t, right = '') => `<div class="mb-2.5 flex min-h-[20px] items-center justify-between gap-3"><h2 class="text-[13px] font-bold uppercase leading-5 tracking-[0.12em] text-slate-500">${t}</h2>${right}</div>`
+const row = ({ icon, title, sub, right, go, act, arg, tint = 'brand', tour }) => `
+  <button ${go ? `data-go="${go}"` : ''} ${act ? `data-act="${act}"` : ''} ${arg !== undefined ? `data-arg="${arg}"` : ''} ${tour ? `data-tour="${tour}"` : ''} class="flex w-full items-center gap-3 px-4 py-3.5 text-left transition hover:bg-slate-50 active:bg-slate-100">
+    ${icon ? `<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tint === 'brand' ? 'bg-brand/10 text-brand' : tint}">${ic(icon)}</span>` : ''}
+    <span class="min-w-0 flex-1"><span class="block font-semibold">${title}</span>${sub ? `<span class="block truncate text-sm text-slate-500">${sub}</span>` : ''}</span>
+    ${right ?? ic('chevron', 'h-4 w-4 shrink-0 text-slate-400')}
+  </button>`
+const list = (rows) => card(`<div class="divide-y divide-slate-100 overflow-hidden rounded-2xl">${rows.join('')}</div>`)
+const field = (label, input, hint = '') => `<label class="block"><span class="mb-1.5 block text-sm font-semibold text-slate-700">${label}</span>${input}${hint ? `<span class="mt-1.5 block text-sm text-slate-500">${hint}</span>` : ''}</label>`
+const inputCls = 'w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand focus:ring-4 focus:ring-brand/15'
+const chip = (t, cls) => `<span class="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${cls}">${t}</span>`
+const avatar = (n, size = 'h-10 w-10 text-sm') => `<span class="flex ${size} shrink-0 items-center justify-center rounded-full bg-brand/10 font-bold text-brand">${initials(n)}</span>`
+const ST = {
+  pendiente: chip('Por confirmar', 'bg-amber-100 text-amber-800'),
+  confirmada: chip('Confirmada', 'bg-emerald-100 text-emerald-800'),
+  hecha: chip('Vino ✓', 'bg-slate-100 text-slate-600'),
+  cancelada: chip('Cancelada', 'bg-red-100 text-red-700'),
+}
+
+// =====================================================================
+// 1. ALTA
+// =====================================================================
+const ALTA_ORDER = ['alta-tipo', 'alta-negocio', 'alta-moneda', 'alta-servicios', 'alta-horario', 'alta-cuenta']
+
+function altaShell(i, { title, sub, body, next = 'Siguiente', skip, skipKey, noFooter }) {
+  const pct = ((i + 1) / ALTA_ORDER.length) * 100
+  const left = ['Unos 3 minutos', 'Unos 3 minutos', 'Unos 2 minutos', 'Menos de 2 minutos', 'Un minuto', 'Último paso'][i]
+  return `
+  <div class="flex h-full flex-col bg-white">
+    <div class="px-5 pt-4">
+      <div class="flex items-center gap-3">
+        ${i > 0 ? `<button data-go="${ALTA_ORDER[i - 1]}" class="-ml-2 rounded-full p-2 text-slate-500 hover:bg-slate-100" aria-label="Atrás">${ic('back')}</button>` : `<span class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-rose-400 to-orange-400 text-xs font-black text-white">C</span>`}
+        <div class="flex-1">
+          <div class="flex justify-between text-xs font-semibold"><span class="text-brand">Paso ${i + 1} de ${ALTA_ORDER.length}</span><span class="text-slate-400">${left}</span></div>
+          <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-brand transition-all duration-500" style="width:${pct}%"></div></div>
+        </div>
+      </div>
+    </div>
+    <div id="scroll" class="thin-scroll flex-1 overflow-y-auto px-5 pb-6 pt-6">
+      <div class="page">
+        <h1 class="text-[26px] font-extrabold leading-tight tracking-tight">${title}</h1>
+        ${sub ? `<p class="mt-2 text-[15px] leading-relaxed text-slate-500">${sub}</p>` : ''}
+        <div class="mt-6">${body}</div>
+      </div>
+    </div>
+    ${noFooter ? '' : `
+    <div class="border-t border-slate-100 bg-white px-5 pb-5 pt-3">
+      ${btn(next, { act: 'altaNext', arg: i, size: 'lg', block: true })}
+      ${skip ? `<button data-act="altaSkip" data-arg="${i}|${skipKey}" class="mt-2 w-full rounded-xl py-2.5 text-[15px] font-semibold text-slate-500 hover:bg-slate-50">${skip}</button>` : ''}
+    </div>`}
+  </div>`
+}
+
+const SCREENS = {}
+
+SCREENS['alta-tipo'] = () => altaShell(0, {
+  title: '¿Qué tipo de negocio tienes?',
+  sub: 'Te preparamos servicios, precios y horario típicos para empezar. Podrás cambiarlo todo.',
+  noFooter: true,
+  body: `<div class="grid grid-cols-3 gap-2.5">${TYPES.map(([e, n], k) => `
+    <button data-act="pickType" data-arg="${k}" class="flex flex-col items-center gap-1.5 rounded-2xl border px-2 py-4 text-center transition active:scale-[.97] ${state.type === k ? 'border-brand bg-brand/5 ring-2 ring-brand/30' : 'border-slate-200 hover:border-brand/40'}">
+      <span class="text-3xl">${e}</span><span class="text-sm font-semibold leading-tight">${n}</span>
+    </button>`).join('')}</div>`,
+})
+
+SCREENS['alta-negocio'] = () => altaShell(1, {
+  title: 'Tu negocio',
+  sub: 'Así te verán tus clientes cuando abran tu enlace.',
+  body: `<div class="space-y-5">
+    ${field('Nombre del negocio', `<input data-bind="name" class="${inputCls}" value="${BIZ.name}" placeholder="Ej. Salón Yaneisy" />`)}
+    ${field('Tu enlace', `<div class="flex items-center rounded-xl border border-slate-300 bg-slate-50 pl-3.5 focus-within:border-brand focus-within:ring-4 focus-within:ring-brand/15"><span class="shrink-0 text-slate-400">citora.app/</span><input id="slug" class="w-full rounded-r-xl bg-transparent py-3 pr-3 font-semibold outline-none" value="${BIZ.slug}" /></div>`,
+      `<span class="inline-flex items-center gap-1 font-semibold text-emerald-600">${ic('check', 'h-4 w-4')} Disponible</span> · Se crea solo con el nombre.`)}
+    ${field('Tu WhatsApp', `<input class="${inputCls}" value="53 5555 1234" inputmode="tel" />`, 'Aquí te escribirán tus clientes si tienen dudas.')}
+  </div>`,
+})
+
+SCREENS['alta-moneda'] = () => altaShell(2, {
+  title: '¿En qué moneda cobras?',
+  sub: 'Es la moneda en la que verán tus precios.',
+  skip: 'Saltar, uso CUP', skipKey: 'moneda',
+  body: `<div class="space-y-3">${[
+    ['CUP', 'Solo en CUP', 'Ej. Manicura · 1.500 CUP'],
+    ['USD', 'Solo en USD', 'Ej. Manicura · 5 USD'],
+    ['AMBAS', 'En USD y CUP', 'Ej. Manicura · 5 USD (≈ 1.750 CUP)'],
+  ].map(([k, t, e]) => `
+    <button data-act="currency" data-arg="${k}" class="flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition ${state.currency === k ? 'border-brand bg-brand/5 ring-2 ring-brand/30' : 'border-slate-200 hover:border-brand/40'}">
+      <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${state.currency === k ? 'border-brand bg-brand text-white' : 'border-slate-300'}">${state.currency === k ? ic('check', 'h-3.5 w-3.5') : ''}</span>
+      <span><span class="block font-bold">${t}</span><span class="block text-sm text-slate-500">${e}</span></span>
+    </button>`).join('')}
+    ${state.currency === 'AMBAS' ? field('¿Cuántos CUP vale 1 USD?', `<input class="${inputCls}" value="350" inputmode="decimal" />`, 'La puedes cambiar cada día desde tu panel.') : ''}
+  </div>`,
+})
+
+SCREENS['alta-servicios'] = () => altaShell(3, {
+  title: 'Tus servicios',
+  sub: 'Te dejamos estos de ejemplo. Cambia lo que no sea igual que en tu negocio.',
+  skip: 'Saltar, los reviso después', skipKey: 'servicios',
+  body: `<div class="space-y-2.5">
+    ${SERVICES.map((s) => `
+      <div class="rounded-2xl border border-slate-200 p-3">
+        <div class="flex items-center gap-2">
+          <input class="w-full rounded-lg px-2 py-1.5 font-semibold outline-none focus:bg-slate-50" value="${s.n}" />
+          <button class="rounded-lg p-2 text-slate-300 hover:bg-red-50 hover:text-red-500" aria-label="Quitar">${ic('trash', 'h-4 w-4')}</button>
+        </div>
+        <div class="mt-1 grid grid-cols-2 gap-2 px-2">
+          <label class="text-xs font-medium text-slate-500">Precio<div class="mt-1 flex items-center rounded-lg bg-slate-50 px-2.5"><input class="w-full bg-transparent py-2 font-semibold text-slate-900 outline-none" value="${s.p}" inputmode="decimal" /><span class="text-sm text-slate-400">CUP</span></div></label>
+          <label class="text-xs font-medium text-slate-500">Duración<select class="mt-1 w-full rounded-lg bg-slate-50 px-2.5 py-2 font-semibold text-slate-900 outline-none">${[30, 45, 60, 90, 120].map((m) => `<option ${m === s.d ? 'selected' : ''}>${dur(m)}</option>`).join('')}</select></label>
+        </div>
+      </div>`).join('')}
+    ${btn('Añadir otro servicio', { kind: 'secondary', block: true, icon: 'plus' })}
+    <p class="flex items-start gap-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-500">${ic('sparkles', 'mt-0.5 h-4 w-4 shrink-0 text-brand')} Los extras (como un diseño de uñas) se añaden después desde tu panel.</p>
+  </div>`,
+})
+
+SCREENS['alta-horario'] = () => altaShell(4, {
+  title: '¿Cuándo trabajas?',
+  sub: 'Tus clientes solo podrán reservar en estos días y horas.',
+  skip: 'Saltar, de lunes a sábado de 9:00 a 18:00', skipKey: 'horario',
+  body: `<div class="space-y-6">
+    <div><span class="mb-2 block text-sm font-semibold text-slate-700">Días</span>
+      <div class="grid grid-cols-7 gap-1.5">${[[1, 'L'], [2, 'M'], [3, 'X'], [4, 'J'], [5, 'V'], [6, 'S'], [0, 'D']].map(([d, l]) => `
+        <button data-act="toggleDay" data-arg="${d}" class="aspect-square rounded-xl text-[15px] font-bold transition ${state.days.includes(d) ? 'bg-brand text-white' : 'bg-slate-100 text-slate-400'}">${l}</button>`).join('')}</div>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      ${field('Abres a las', `<select class="${inputCls}">${['8:00', '9:00', '10:00'].map((t) => `<option ${t === '9:00' ? 'selected' : ''}>${t}</option>`).join('')}</select>`)}
+      ${field('Cierras a las', `<select class="${inputCls}">${['17:00', '18:00', '19:00', '20:00'].map((t) => `<option ${t === '18:00' ? 'selected' : ''}>${t}</option>`).join('')}</select>`)}
+    </div>
+    <p class="rounded-xl bg-slate-50 p-3 text-sm text-slate-500">¿Paras a almorzar o tienes horarios distintos cada día? Lo ajustas luego en <b>Mi negocio → Horario</b>.</p>
+  </div>`,
+})
+
+SCREENS['alta-cuenta'] = () => {
+  const sk = Object.keys(state.skipped).filter((k) => state.skipped[k])
+  const names = { moneda: 'Moneda (CUP)', servicios: 'Servicios (de ejemplo)', horario: 'Horario (L–S, 9:00–18:00)' }
+  return altaShell(5, {
+    title: 'Crea tu cuenta',
+    sub: 'Con este correo y contraseña entrarás a tu panel.',
+    next: 'Crear mi app',
+    body: `<div class="space-y-5">
+      ${field('Correo', `<input class="${inputCls}" value="yaneisy@gmail.com" inputmode="email" />`)}
+      ${field('Contraseña', `<input class="${inputCls}" type="password" value="12345678" />`, 'Mínimo 6 caracteres.')}
+      ${sk.length ? `<div class="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900 ring-1 ring-amber-200"><b>Dejaste para después:</b> ${sk.map((k) => names[k]).join(', ')}. Te lo recordaremos en tu panel.</div>` : ''}
+      <p class="text-center text-sm text-slate-500">Empiezas con <b>15 días gratis</b>, con todo incluido. Sin tarjeta.</p>
+    </div>`,
+  })
+}
+
+SCREENS['alta-bienvenida'] = () => {
+  const sk = ['servicios', 'horario'].filter((k) => state.skipped[k])
+  return `
+  <div id="scroll" class="thin-scroll h-full overflow-y-auto bg-white">
+    <div class="relative overflow-hidden bg-brand px-6 pb-24 pt-10 text-center text-white">
+      <div class="pointer-events-none absolute -left-10 -top-10 h-40 w-40 rounded-full bg-white/10"></div>
+      <div class="pointer-events-none absolute -right-12 top-16 h-32 w-32 rounded-full bg-white/10"></div>
+      <p class="anim-up text-5xl">🎉</p>
+      <p class="anim-up mt-4 text-sm font-semibold uppercase tracking-[0.16em] text-white/75">Tu app ya está lista</p>
+      <h1 class="anim-up mt-1 text-[28px] font-extrabold leading-tight tracking-tight">Te damos la bienvenida a ${BIZ.name}</h1>
+      <p class="anim-up mt-2 text-white/80">Tus 15 días gratis ya empezaron.</p>
+    </div>
+    <div class="anim-up -mt-16 px-5">${pagePreview()}</div>
+    <div class="space-y-2.5 px-5 pb-6 pt-6">
+      ${sk.length ? `<p class="mb-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">Dejaste <b>${sk.join(' y ')}</b> para después. Revísalo antes de compartir tu enlace: te lo recordamos en tu panel.</p>` : ''}
+      ${btn('Hacer el tutorial · 1 minuto', { act: 'startTutorial', size: 'lg', block: true, icon: 'sparkles' })}
+      ${btn('Ver mi página como un cliente', { act: 'toast', arg: 'Aquí se abriría tu página de reservas', kind: 'secondary', size: 'lg', block: true, icon: 'eye' })}
+      <button data-go="p-hoy" class="w-full rounded-xl py-3 text-[15px] font-semibold text-slate-500 hover:bg-slate-50">Ahora no, ir a mi panel</button>
+    </div>
+  </div>`
+}
+
+function pagePreview() {
+  return `<div class="overflow-hidden rounded-2xl bg-white shadow-xl shadow-slate-900/10 ring-1 ring-slate-200">
+    <div class="flex items-center gap-1.5 border-b border-slate-100 bg-slate-50 px-3 py-2 text-[11px] text-slate-400"><span class="h-2 w-2 rounded-full bg-slate-300"></span>citora.app/${BIZ.slug}</div>
+    <div class="bg-gradient-to-br from-brand to-brand/70 px-4 py-4 text-white">
+      <div class="flex items-center gap-3"><span class="flex h-11 w-11 items-center justify-center rounded-full bg-white/20 text-lg">💅</span>
+      <div><p class="font-extrabold leading-tight">${BIZ.name}</p><p class="text-xs text-white/80">Uñas · ${BIZ.city} · ★ 4,9</p></div></div>
+    </div>
+    <div class="divide-y divide-slate-100 px-4">${SERVICES.slice(0, 3).map((s) => `<div class="flex justify-between py-2.5 text-sm"><span class="font-semibold">${s.n}<span class="block text-xs font-normal text-slate-400">${dur(s.d)}</span></span><span class="font-bold">${cup(s.p)}</span></div>`).join('')}</div>
+    <div class="px-4 pb-4"><div class="rounded-xl bg-brand py-2.5 text-center text-sm font-bold text-white">Reservar cita</div></div>
+  </div>`
+}
+
+// =====================================================================
+// 2. PANEL DEL DUEÑO
+// =====================================================================
+const OWNER_NAV = [
+  ['p-hoy', 'Hoy', 'home'], ['p-agenda', 'Agenda', 'calendar'], ['p-clientes', 'Clientes', 'users'], ['p-negocio', 'Mi negocio', 'store'], ['p-mas', 'Más', 'grid'],
+]
+const OWNER_PARENT = { 'p-servicios': 'p-negocio', 'p-horario': 'p-negocio', 'p-apariencia': 'p-negocio', 'p-plan': 'p-mas', 'p-ajustes': 'p-mas' }
+
+function ownerShell(content, { fab, back } = {}) {
+  const active = OWNER_PARENT[state.screen] || state.screen
+  const trial = `<button data-go="p-plan" class="rounded-full bg-brand/10 px-2.5 py-1 text-xs font-bold text-brand">Prueba · 11 días</button>`
+  if (isMobile()) {
+    return `<div class="relative flex h-full flex-col bg-slate-50">
+      <header class="flex items-center gap-2.5 border-b border-slate-200/70 bg-white/95 px-4 py-2.5 backdrop-blur">
+        ${back ? `<button data-go="${back}" class="-ml-2 rounded-full p-2 text-slate-500 hover:bg-slate-100" aria-label="Atrás">${ic('back')}</button>` : `<span class="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-sm text-white">💅</span>`}
+        <p class="min-w-0 flex-1 truncate font-bold">${BIZ.name}</p>${trial}
+      </header>
+      <div id="scroll" class="thin-scroll flex-1 overflow-y-auto px-4 pb-24 pt-5"><div class="page">${content}</div></div>
+      ${fab ? `<button data-act="newAppt" data-tour="fab" class="absolute bottom-[84px] right-4 z-10 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand text-white shadow-lg shadow-brand/40 transition active:scale-95" aria-label="Nueva cita">${ic('plus', 'h-6 w-6')}</button>` : ''}
+      <nav class="absolute inset-x-0 bottom-0 grid grid-cols-5 border-t border-slate-200 bg-white/95 pb-2 pt-1.5 backdrop-blur">
+        ${OWNER_NAV.map(([s, l, i]) => `<button data-go="${s}" data-tour="nav-${s}" class="flex flex-col items-center gap-0.5 py-1 text-[11px] font-semibold ${active === s ? 'text-brand' : 'text-slate-400'}">
+          <span class="flex h-8 w-14 items-center justify-center rounded-full transition ${active === s ? 'bg-brand/10' : ''}">${ic(i, 'h-[22px] w-[22px]')}</span>${l}</button>`).join('')}
+      </nav>
+    </div>`
+  }
+  return `<div class="relative flex h-full bg-slate-50">
+    <aside class="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white p-4">
+      <div class="flex items-center gap-2.5 px-2 pb-5"><span class="flex h-9 w-9 items-center justify-center rounded-full bg-brand text-white">💅</span><div class="min-w-0"><p class="truncate font-bold leading-tight">${BIZ.name}</p><p class="text-xs text-slate-400">citora.app/${BIZ.slug}</p></div></div>
+      ${OWNER_NAV.map(([s, l, i]) => `<button data-go="${s}" data-tour="nav-${s}" class="mb-0.5 flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-semibold transition ${active === s ? 'bg-brand/10 text-brand' : 'text-slate-600 hover:bg-slate-50'}">${ic(i)}${l}</button>`).join('')}
+      <div class="mt-auto space-y-2">${btn('Nueva cita', { act: 'newAppt', icon: 'plus', block: true, tour: 'fab' })}<div class="text-center">${trial}</div></div>
+    </aside>
+    <div id="scroll" class="thin-scroll flex-1 overflow-y-auto"><div class="page mx-auto max-w-3xl px-8 py-8">${content}</div></div>
+  </div>`
+}
+
+function apptRow(a, { compact } = {}) {
+  if (a.free) {
+    return `<button data-act="newAppt" data-arg="${a.t}" class="flex w-full items-center gap-3 rounded-xl border-2 border-dashed border-emerald-200 bg-emerald-50/40 px-3.5 py-2.5 text-left text-sm transition hover:border-emerald-300 hover:bg-emerald-50">
+      <span class="font-semibold text-emerald-700">Libre · ${a.t} – ${a.e}</span><span class="ml-auto inline-flex items-center gap-1 font-semibold text-emerald-700">${ic('plus', 'h-4 w-4')} Añadir</span></button>`
+  }
+  const done = a.st === 'hecha'
+  return `<div class="flex items-center gap-3 rounded-xl border border-slate-200/80 bg-white px-3.5 py-3 ${done ? 'opacity-60' : ''}">
+    <button data-act="openAppt" data-arg="${a.id}" class="flex min-w-0 flex-1 items-center gap-3 text-left">
+      <span class="h-10 w-1 shrink-0 rounded-full ${a.st === 'pendiente' ? 'bg-amber-400' : a.st === 'confirmada' ? 'bg-brand' : 'bg-slate-300'}"></span>
+      <span class="min-w-0"><span class="block truncate font-semibold">${a.n}</span><span class="block truncate text-sm text-slate-500">${a.s} · ${cup(a.p)}</span></span>
+    </button>
+    ${a.st === 'pendiente' && !compact ? btn('Confirmar', { act: 'confirm', arg: a.id, size: 'sm', kind: 'soft', tour: a.id === 3 ? 'confirm' : undefined }) : ST[a.st]}
+  </div>`
+}
+
+function timeline(items) {
+  return `<div class="space-y-2">${items.map((a) => `<div class="flex gap-3"><span class="w-11 shrink-0 pt-3 text-right text-sm font-semibold tabular-nums text-slate-400">${a.t}</span><div class="min-w-0 flex-1">${apptRow(a)}</div></div>`).join('')}</div>`
+}
+
+function firstSteps() {
+  const done = STEPS.filter((s) => state.done[s.id]).length
+  if (done === STEPS.length) {
+    return card(`<div class="flex items-center gap-3 p-4"><span class="text-2xl">🏆</span><div><p class="font-bold">¡Todo listo!</p><p class="text-sm text-slate-500">Ya recibiste tu primera reserva. Esta tarjeta ya no saldrá más.</p></div></div>`)
+  }
+  const pricesWarn = state.skipped.servicios && !state.done.precios
+  return card(`
+    <button data-act="toggleSteps" class="flex w-full items-center gap-3 p-4 text-left">
+      <span class="relative flex h-11 w-11 shrink-0 items-center justify-center">
+        <svg viewBox="0 0 36 36" class="h-11 w-11 -rotate-90"><circle cx="18" cy="18" r="15" fill="none" stroke="#e2e8f0" stroke-width="4"/><circle cx="18" cy="18" r="15" fill="none" stroke="rgb(var(--brand-rgb))" stroke-width="4" stroke-linecap="round" stroke-dasharray="${(done / STEPS.length) * 94.2} 94.2"/></svg>
+        <span class="absolute text-xs font-bold">${done}/${STEPS.length}</span>
+      </span>
+      <span class="min-w-0 flex-1"><span class="block font-bold">Primeros pasos</span><span class="block text-sm text-slate-500">Hasta tu primera reserva de un cliente</span></span>
+      <span class="text-slate-400 transition ${state.stepsOpen ? 'rotate-90' : ''}">${ic('chevron', 'h-4 w-4')}</span>
+    </button>
+    ${state.stepsOpen ? `<div class="space-y-1 border-t border-slate-100 p-2">
+      ${STEPS.map((s) => {
+        const ok = state.done[s.id]
+        const warn = s.id === 'precios' && pricesWarn
+        return `<button data-act="step" data-arg="${s.id}" class="flex w-full items-start gap-3 rounded-xl p-2.5 text-left transition hover:bg-slate-50 ${warn ? 'bg-amber-50 ring-1 ring-amber-200' : ''}">
+          <span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${ok ? 'bg-emerald-500 text-white' : warn ? 'border-2 border-amber-400 text-amber-500' : 'border-2 border-slate-300'}">${ok ? ic('check', 'h-3.5 w-3.5') : warn ? '!' : ''}</span>
+          <span class="min-w-0 flex-1"><span class="block font-semibold ${ok ? 'text-slate-400 line-through' : ''}">${s.t}</span>${ok ? '' : `<span class="block text-sm ${warn ? 'text-amber-800' : 'text-slate-500'}">${warn ? 'Tus clientes verán los precios de ejemplo. Revísalos antes de compartir.' : s.d}</span>`}</span>
+          ${ok || s.auto ? '' : `<span class="mt-0.5 text-slate-300">${ic('chevron', 'h-4 w-4')}</span>`}
+        </button>`
+      }).join('')}
+    </div>` : ''}
+  `)
+}
+
+SCREENS['p-hoy'] = () => {
+  const real = state.appts.filter((a) => !a.free)
+  const pending = real.filter((a) => a.st === 'pendiente')
+  const total = real.reduce((s, a) => s + a.p, 0)
+  const next = state.appts.find((a) => a.id === 2)
+  const items = state.dayTab === 'hoy' ? state.appts : TOMORROW.map((a, k) => ({ id: 100 + k, t: a.t, e: '', n: a.n, s: a.s, p: 1500, st: k === 2 ? 'pendiente' : 'confirmada' }))
+  return ownerShell(`
+    <div class="space-y-6">
+      <div data-tour="resumen">
+        <p class="text-sm font-medium text-slate-500">Buenos días, ${BIZ.owner}</p>
+        <h1 class="text-[26px] font-extrabold leading-tight tracking-tight">Jueves, 13 de noviembre</h1>
+        <p class="mt-1 text-[15px] text-slate-500"><b class="text-slate-900">${real.length} citas</b>${pending.length ? ` · <b class="text-amber-700">${pending.length} por confirmar</b>` : ''} · ${cup(total)} previstos</p>
+      </div>
+
+      ${firstSteps()}
+
+      <button data-act="openAppt" data-arg="2" class="flex w-full items-center gap-4 rounded-2xl bg-brand p-4 text-left text-white shadow-lg shadow-brand/25 transition active:scale-[.99]">
+        <span class="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-white/20 leading-none"><span class="text-[17px] font-extrabold">10:30</span></span>
+        <span class="min-w-0 flex-1"><span class="block text-xs font-bold uppercase tracking-[0.14em] text-white/75">Próxima · en 20 min</span><span class="block truncate text-lg font-extrabold">${next.n}</span><span class="block truncate text-sm text-white/80">${next.s} · 2 h</span></span>
+        ${ic('chevron', 'h-5 w-5 text-white/70')}
+      </button>
+
+      <section>
+        <div class="mb-3 flex items-center justify-between">
+          <div class="inline-flex rounded-full bg-slate-200/60 p-1">${['hoy', 'mañana'].map((t) => `<button data-act="dayTab" data-arg="${t}" class="rounded-full px-4 py-1.5 text-sm font-bold capitalize transition ${state.dayTab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}">${t}</button>`).join('')}</div>
+          <button data-act="toast" data-arg="Aquí se prepararía tu estado de WhatsApp con tus huecos libres" class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-brand hover:bg-brand/10">${ic('sparkles', 'h-4 w-4')} Publicar huecos</button>
+        </div>
+        <div data-tour="dia">${timeline(items)}</div>
+      </section>
+
+      ${state.dayTab === 'hoy' ? `<button data-act="toast" data-arg="Se abriría WhatsApp con el primer cliente; al volver, el siguiente" class="flex w-full items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 text-left transition hover:bg-slate-50">
+        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#25D366]/15 text-[#128C7E]">${ic('whatsapp')}</span>
+        <span class="min-w-0 flex-1"><span class="block font-semibold">Mañana tienes ${TOMORROW.length} citas</span><span class="block text-sm text-slate-500">Recuérdaselas por WhatsApp, una detrás de otra</span></span>
+        <span class="shrink-0 rounded-lg bg-[#25D366] px-3 py-1.5 text-sm font-semibold text-white">Avisar</span>
+      </button>` : ''}
+    </div>`, { fab: true })
+}
+
+SCREENS['p-agenda'] = () => {
+  const days = [[10, 'L', 3], [11, 'M', 5], [12, 'X', 2], [13, 'J', 4], [14, 'V', 6], [15, 'S', 7], [16, 'D', 0]]
+  const sel = state.agendaDay
+  const items = sel === 13 ? state.appts : sel === 16 ? [] : [
+    { id: 201, t: '9:00', n: 'Rosa Martínez', s: 'Pedicura', p: 1800, st: 'confirmada' },
+    { free: true, t: '10:00', e: '11:00' },
+    { id: 202, t: '11:00', n: 'Claudia Díaz', s: 'Manicura', p: 1500, st: sel < 13 ? 'hecha' : 'pendiente' },
+    { id: 203, t: '15:30', n: 'Beatriz León', s: 'Retoque', p: 1200, st: sel < 13 ? 'hecha' : 'confirmada' },
+  ]
+  return ownerShell(`
+    <div class="space-y-5">
+      <div class="flex items-center justify-between"><h1 class="text-[26px] font-extrabold tracking-tight">Agenda</h1>
+        <div class="flex items-center gap-1 text-slate-500"><button class="rounded-full p-2 hover:bg-slate-200/60">${ic('back', 'h-4 w-4')}</button><span class="text-sm font-semibold text-slate-700">10 – 16 nov</span><button class="rounded-full p-2 hover:bg-slate-200/60">${ic('chevron', 'h-4 w-4')}</button></div></div>
+      <div class="grid grid-cols-7 gap-1.5">${days.map(([d, l, n]) => `
+        <button data-act="agendaDay" data-arg="${d}" class="flex flex-col items-center gap-1 rounded-2xl py-2.5 transition ${sel === d ? 'bg-brand text-white shadow-md shadow-brand/30' : d === 13 ? 'bg-white ring-1 ring-brand/40' : 'bg-white ring-1 ring-slate-200/80'}">
+          <span class="text-[11px] font-semibold ${sel === d ? 'text-white/80' : 'text-slate-400'}">${l}</span><span class="text-lg font-extrabold leading-none">${d}</span>
+          <span class="flex h-1.5 gap-0.5">${Array.from({ length: Math.min(n, 4) }).map(() => `<span class="h-1.5 w-1.5 rounded-full ${sel === d ? 'bg-white/80' : 'bg-brand/50'}"></span>`).join('')}</span>
+        </button>`).join('')}</div>
+      <div>
+        <p class="mb-3 text-sm font-semibold text-slate-500">${sel === 13 ? 'Hoy, jueves 13' : `${['', '', '', '', '', '', '', '', '', '', 'Lunes', 'Martes', 'Miércoles', '', 'Viernes', 'Sábado', 'Domingo'][sel]} ${sel}`}</p>
+        ${items.length ? timeline(items) : card(`<div class="p-8 text-center"><p class="text-3xl">😴</p><p class="mt-2 font-semibold">Cerrado</p><p class="text-sm text-slate-500">Los domingos no trabajas</p></div>`)}
+      </div>
+    </div>`, { fab: true })
+}
+
+SCREENS['p-clientes'] = () => {
+  const F = { todos: ['Todos', () => true], fieles: ['Fieles', (c) => c.v >= 5], lejos: ['Hace tiempo que no vienen', (c) => c.lapsed], nuevos: ['Nuevos', (c) => c.isNew] }
+  const shown = CUSTOMERS.filter(F[state.custFilter][1])
+  return ownerShell(`
+    <div class="space-y-4">
+      <div class="flex items-end justify-between"><h1 class="text-[26px] font-extrabold tracking-tight">Clientes</h1><span class="pb-1 text-sm text-slate-500">${CUSTOMERS.length} en total</span></div>
+      <div class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5">${ic('search', 'h-5 w-5 text-slate-400')}<input class="w-full bg-transparent py-3 outline-none" placeholder="Buscar por nombre o teléfono" /></div>
+      <div class="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">${Object.entries(F).map(([k, [l]]) => `<button data-act="custFilter" data-arg="${k}" class="shrink-0 rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${state.custFilter === k ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'}">${l}</button>`).join('')}</div>
+      ${state.custFilter === 'lejos' ? `<p class="rounded-xl bg-brand/5 p-3 text-sm text-slate-600 ring-1 ring-brand/15">Escríbeles para que vuelvan. El mensaje ya va escrito, puedes cambiarlo antes de enviar.</p>` : ''}
+      ${list(shown.map((c, k) => `
+        <div class="flex items-center gap-3 px-4 py-3">
+          <button data-act="openCust" data-arg="${CUSTOMERS.indexOf(c)}" class="flex min-w-0 flex-1 items-center gap-3 text-left">
+            ${avatar(c.n)}
+            <span class="min-w-0"><span class="block truncate font-semibold">${c.n}</span><span class="block truncate text-sm text-slate-500">${c.v ? `${c.v} ${c.v === 1 ? 'visita' : 'visitas'} · ` : ''}${c.last}</span></span>
+          </button>
+          ${c.lapsed ? `<button data-act="toast" data-arg="Se abriría WhatsApp: «¡Hola ${c.n.split(' ')[0]}! Hace tiempo que no te vemos…»" class="shrink-0 rounded-lg bg-[#25D366] px-3 py-1.5 text-sm font-semibold text-white">Escribirle</button>` : c.isNew ? chip('Nueva', 'bg-sky-100 text-sky-800') : c.v >= 5 ? chip('★ Fiel', 'bg-amber-100 text-amber-800') : ''}
+        </div>`))}
+    </div>`)
+}
+
+SCREENS['p-negocio'] = () => ownerShell(`
+  <div class="space-y-6">
+    <h1 class="text-[26px] font-extrabold tracking-tight">Mi negocio</h1>
+    ${card(`<div class="p-4">
+      <p class="text-sm font-semibold text-slate-500">Tu página de reservas</p>
+      <div class="mt-2 flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5">${ic('link', 'h-4 w-4 shrink-0 text-brand')}<span class="truncate font-mono text-[15px] font-semibold text-brand">citora.app/${BIZ.slug}</span></div>
+      <div class="mt-3 grid grid-cols-[1fr_auto_auto] gap-2">
+        ${btn('Compartir', { act: 'shareLink', kind: 'wa', icon: 'whatsapp', tour: 'compartir' })}
+        <button data-act="toast" data-arg="Enlace copiado" class="rounded-xl px-3 ring-1 ring-slate-200 hover:bg-slate-50" aria-label="Copiar">${ic('copy', 'h-[18px] w-[18px]')}</button>
+        <button data-act="toast" data-arg="Aquí se abriría tu página de reservas" class="rounded-xl px-3 ring-1 ring-slate-200 hover:bg-slate-50" aria-label="Ver">${ic('eye', 'h-[18px] w-[18px]')}</button>
+      </div>
+      <p class="mt-3 text-sm text-slate-500">Ponlo en tu estado de WhatsApp y en tu Instagram. Esta semana lo abrieron <b class="text-slate-700">38 personas</b>.</p>
+    </div>`)}
+    <div>${sectionTitle('Lo que ven tus clientes')}${list([
+      row({ icon: 'scissors', title: 'Servicios', sub: `${SERVICES.length} servicios · ${EXTRAS.length} extra`, go: 'p-servicios', right: state.skipped.servicios && !state.done.precios ? chip('Revisar', 'bg-amber-100 text-amber-800') : undefined }),
+      row({ icon: 'clock', title: 'Horario', sub: 'Lunes a sábado · 9:00 – 18:00', go: 'p-horario' }),
+      row({ icon: 'palette', title: 'Apariencia', sub: 'Color, logo y foto de portada', go: 'p-apariencia' }),
+    ])}</div>
+    <div>${sectionTitle('Cómo trabajas')}${list([
+      row({ icon: 'users', title: 'Equipo', sub: 'Solo tú · añade a quien trabaje contigo', act: 'toast', arg: 'Pantalla sin cambios en este prototipo' }),
+      row({ icon: 'scroll', title: 'Reglas de reserva', sub: 'Cancelar hasta 2 h antes · sin depósito', act: 'toast', arg: 'Pantalla sin cambios en este prototipo' }),
+    ])}</div>
+  </div>`)
+
+SCREENS['p-servicios'] = () => ownerShell(`
+  <div class="space-y-6">
+    <div class="flex items-center justify-between"><h1 class="text-[26px] font-extrabold tracking-tight">Servicios</h1>${btn('Añadir', { act: 'editService', arg: -1, size: 'sm', icon: 'plus' })}</div>
+    ${state.skipped.servicios && !state.done.precios ? `<div class="flex items-start gap-3 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900 ring-1 ring-amber-200">${ic('alert', 'mt-0.5 h-5 w-5 shrink-0 text-amber-500')}<div><b>Estos son de ejemplo.</b> Cambia los precios y duraciones por los tuyos.<button data-act="step" data-arg="precios" class="mt-2 block font-bold text-amber-900 underline">Ya los revisé</button></div></div>` : ''}
+    ${list(SERVICES.map((s, k) => row({ title: s.n, sub: dur(s.d), act: 'editService', arg: k, right: `<span class="font-bold">${cup(s.p)}</span>${ic('chevron', 'h-4 w-4 text-slate-300')}` })))}
+    <div>${sectionTitle('Extras')}
+      <p class="mb-2 text-sm text-slate-500">Se añaden a un servicio al reservar. No se reservan solos.</p>
+      ${list([...EXTRAS.map((s) => row({ title: '+ ' + s.n, sub: dur(s.d), act: 'editService', arg: 0, right: `<span class="font-bold">${cup(s.p)}</span>${ic('chevron', 'h-4 w-4 text-slate-300')}` })),
+        `<button data-act="editService" data-arg="-1" class="flex w-full items-center gap-2 px-4 py-3.5 font-semibold text-brand hover:bg-slate-50">${ic('plus', 'h-4 w-4')} Añadir extra</button>`])}
+    </div>
+  </div>`, { back: 'p-negocio' })
+
+SCREENS['p-horario'] = () => {
+  const D = [['Lunes', 1], ['Martes', 1], ['Miércoles', 1], ['Jueves', 1], ['Viernes', 1], ['Sábado', 1], ['Domingo', 0]]
+  return ownerShell(`
+  <div class="space-y-6">
+    <h1 class="text-[26px] font-extrabold tracking-tight">Horario</h1>
+    ${list(D.map(([d, on]) => `<div class="flex items-center gap-3 px-4 py-3">
+      <span class="switch ${on ? 'on' : ''}"></span>
+      <span class="w-24 font-semibold ${on ? '' : 'text-slate-400'}">${d}</span>
+      <span class="ml-auto text-sm ${on ? 'font-semibold text-slate-700' : 'text-slate-400'}">${on ? (d === 'Sábado' ? '9:00 – 14:00' : '9:00 – 13:00 · 14:00 – 18:00') : 'Cerrado'}</span>
+      ${ic('chevron', 'h-4 w-4 text-slate-300')}</div>`))}
+    ${list([row({ icon: 'ban', title: 'Días cerrados', sub: 'Vacaciones, feriados o un día libre', act: 'toast', arg: 'Pantalla sin cambios en este prototipo' })])}
+    <details class="group">
+      <summary class="flex items-center gap-2 text-sm font-bold text-slate-500"><span class="chev-rot transition">${ic('chevron', 'h-4 w-4')}</span> Opciones avanzadas</summary>
+      <div class="mt-3">${list([
+        row({ title: 'Clientes a la misma hora', sub: 'Ahora: 1 cliente por turno', right: `<span class="flex items-center gap-2"><button class="h-8 w-8 rounded-lg ring-1 ring-slate-200">−</button><b>1</b><button class="h-8 w-8 rounded-lg ring-1 ring-slate-200">+</button></span>` }),
+        row({ title: 'Reservar con antelación', sub: 'Desde 1 hora antes hasta 30 días' }),
+        row({ title: 'Tiempo entre citas', sub: 'Sin descanso entre una y otra' }),
+      ])}</div>
+    </details>
+  </div>`, { back: 'p-negocio' })
+}
+
+SCREENS['p-apariencia'] = () => ownerShell(`
+  <div class="space-y-6">
+    <h1 class="text-[26px] font-extrabold tracking-tight">Apariencia</h1>
+    <div class="mx-auto max-w-sm">${pagePreview()}</div>
+    <div>${sectionTitle('Lo esencial')}
+      ${card(`<div class="space-y-5 p-4">
+        <div><p class="mb-2.5 font-semibold">Color</p>
+          <div class="grid grid-cols-5 gap-2.5">${COLORS.map((c) => `<button data-act="color" data-arg="${c}" class="aspect-square rounded-full transition hover:scale-105 ${state.brand === c ? 'ring-4 ring-offset-2' : ''}" style="background:${c};--tw-ring-color:${c}55" aria-label="Color ${c}"></button>`).join('')}</div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <button data-act="toast" data-arg="Se abriría la galería del móvil" class="flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 p-4 text-sm font-semibold text-slate-500 hover:border-brand/40">${ic('image', 'h-6 w-6')}Subir logo</button>
+          <button data-act="toast" data-arg="Se abriría la galería del móvil" class="flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 p-4 text-sm font-semibold text-slate-500 hover:border-brand/40">${ic('image', 'h-6 w-6')}Foto de portada</button>
+        </div>
+      </div>`)}
+    </div>
+    <details>
+      <summary class="flex items-center gap-2 text-sm font-bold text-slate-500"><span class="chev-rot transition">${ic('chevron', 'h-4 w-4')}</span> Personalizar más</summary>
+      <div class="mt-3">${list([
+        row({ title: 'Tipo de letra', sub: 'Moderna' }), row({ title: 'Forma de los botones', sub: 'Redondeados' }),
+        row({ title: 'Degradado y fondo', sub: 'Sin degradado' }), row({ title: 'Frase de bienvenida', sub: '«Tus uñas, en buenas manos»' }),
+        row({ title: 'Aviso destacado', sub: 'Ninguno' }), row({ title: 'Texto del botón', sub: 'Reservar cita' }),
+        row({ title: 'Redes y mapa', sub: 'Instagram' }), row({ title: 'Qué mostrar', sub: 'Precios, duración, horario, opiniones' }),
+      ])}</div>
+    </details>
+  </div>`, { back: 'p-negocio' })
+
+SCREENS['p-mas'] = () => {
+  const on = TOOLS.filter((t) => state.tools.includes(t.id))
+  const off = TOOLS.filter((t) => !state.tools.includes(t.id))
+  return ownerShell(`
+  <div class="space-y-6">
+    <h1 class="text-[26px] font-extrabold tracking-tight">Más</h1>
+    <div>${sectionTitle('Tus herramientas')}${list(on.map((t) => row({ icon: t.i, title: t.n, sub: t.d, act: 'toast', arg: 'Pantalla sin cambios en este prototipo' })))}</div>
+    <div>${sectionTitle('Más herramientas', `<span class="text-xs text-slate-400">Actívalas cuando las necesites</span>`)}
+      ${list(off.map((t) => `<div class="flex items-center gap-3 px-4 py-3.5">
+        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">${ic(t.i)}</span>
+        <span class="min-w-0 flex-1"><span class="block font-semibold">${t.n}</span><span class="block text-sm text-slate-500">${t.d}</span></span>
+        ${btn('Activar', { act: 'tool', arg: t.id, size: 'sm', kind: 'soft' })}</div>`))}
+    </div>
+    <div>${sectionTitle('Tu cuenta')}${list([
+      row({ icon: 'card', title: 'Mensualidad', sub: 'Prueba gratis · quedan 11 días', go: 'p-plan' }),
+      row({ icon: 'gear', title: 'Ajustes y avisos', sub: state.pushOn ? 'Avisos activados en este móvil' : 'Avisos sin activar en este móvil', go: 'p-ajustes', tour: 'avisos', right: state.pushOn ? undefined : chip('Actívalos', 'bg-amber-100 text-amber-800') }),
+    ])}</div>
+    <div>${sectionTitle('Ayuda')}${list([
+      row({ icon: 'sparkles', title: 'Tutorial paso a paso', sub: 'Te enseñamos a usar tu panel en 2 minutos', act: 'startTutorial' }),
+      row({ icon: 'whatsapp', title: 'Hablar con una persona', sub: 'Te ayudamos por WhatsApp', tint: 'bg-[#25D366]/15 text-[#128C7E]', act: 'toast', arg: 'Se abriría WhatsApp con soporte de Citora' }),
+    ])}</div>
+    <p class="text-center text-xs text-slate-400">Citora v1.4.0</p>
+  </div>`)
+}
+
+SCREENS['p-plan'] = () => ownerShell(`
+  <div class="space-y-6">
+    <h1 class="text-[26px] font-extrabold tracking-tight">Mensualidad</h1>
+    ${card(`<div class="p-5">
+      <div class="flex items-center justify-between"><p class="font-bold">Prueba gratis</p>${chip('Quedan 11 días', 'bg-brand/10 text-brand')}</div>
+      <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div class="h-full w-[27%] rounded-full bg-brand"></div></div>
+      <p class="mt-2 text-sm text-slate-500">Termina el lunes 24 de noviembre. Si no pagas, tu página deja de aceptar reservas, pero no se borra nada.</p>
+    </div>`)}
+    <div>${sectionTitle('En estos 4 días, Citora te trajo')}
+      <div class="grid grid-cols-3 gap-2.5">${[['14', 'reservas'], ['9', 'por tu enlace'], ['21.000', 'CUP en citas']].map(([v, l]) => card(`<div class="p-3.5 text-center"><p class="text-2xl font-extrabold tracking-tight">${v}</p><p class="text-xs font-medium text-slate-500">${l}</p></div>`)).join('')}</div>
+    </div>
+    ${card(`<div class="space-y-5 p-5">
+      <div class="flex items-baseline justify-between"><p class="font-bold">Plan Citora</p><p><b class="text-2xl">1.500</b> <span class="text-slate-500">CUP/mes</span></p></div>
+      <div class="grid grid-cols-3 gap-2">${[1, 3, 6].map((m) => `<button data-act="months" data-arg="${m}" class="rounded-xl py-2.5 text-sm font-bold transition ${state.months === m ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600'}">${m} ${m === 1 ? 'mes' : 'meses'}</button>`).join('')}</div>
+      <ol class="space-y-3 text-sm">
+        <li class="flex gap-3"><span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">1</span><span class="flex-1">Transfiere <b>${cup(1500 * state.months)}</b> por Transfermóvil o EnZona a:<span class="mt-1.5 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 font-mono font-semibold">9224 1234 5678 9012<button data-act="toast" data-arg="Número de tarjeta copiado" class="text-brand">${ic('copy', 'h-4 w-4')}</button></span></span></li>
+        <li class="flex gap-3"><span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">2</span><span>Haz una captura del comprobante.</span></li>
+        <li class="flex gap-3"><span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">3</span><span>Súbela aquí. Se activa en cuanto la revisemos.</span></li>
+      </ol>
+      ${btn('Subir comprobante', { act: 'toast', arg: 'Se abriría la galería para elegir la captura', size: 'lg', block: true })}
+    </div>`)}
+  </div>`, { back: 'p-mas' })
+
+SCREENS['p-ajustes'] = () => ownerShell(`
+  <div class="space-y-6">
+    <h1 class="text-[26px] font-extrabold tracking-tight">Ajustes</h1>
+    ${card(`<div class="p-5 ${state.pushOn ? '' : 'bg-amber-50/60'} rounded-2xl">
+      <div class="flex items-start gap-3">
+        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${state.pushOn ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}">${ic('bell')}</span>
+        <div class="min-w-0 flex-1"><p class="font-bold">Avisos en este móvil</p><p class="text-sm text-slate-600">${state.pushOn ? 'Te avisaremos al momento cuando alguien reserve, cambie o cancele.' : 'Ahora mismo no te enteras cuando un cliente reserva. Actívalos en cada móvil que uses.'}</p></div>
+        <button data-act="push" class="switch mt-1 ${state.pushOn ? 'on' : ''}" aria-label="Avisos"></button>
+      </div>
+      ${state.pushOn ? '' : `<div class="mt-4">${btn('Activar avisos', { act: 'push', block: true, icon: 'bell' })}</div>`}
+    </div>`)}
+    ${list([row({ icon: 'phone', title: 'Instalar el panel en este móvil', sub: 'Ábrelo como una app, sin buscar el enlace', act: 'toast', arg: 'Se mostraría el aviso de instalar' })])}
+    <div>${sectionTitle('Tu negocio')}${list([
+      row({ title: 'Nombre', sub: BIZ.name }), row({ title: 'WhatsApp', sub: '53 5555 1234' }),
+      row({ title: 'Dirección', sub: 'Calle 23 #456, Vedado' }), row({ title: 'Enlace', sub: `citora.app/${BIZ.slug}` }),
+      row({ title: 'Moneda', sub: 'CUP' }),
+    ])}</div>
+    <div>${sectionTitle('Cuenta')}${list([
+      row({ title: 'Correo', sub: 'yaneisy@gmail.com' }), row({ title: 'Cambiar contraseña' }),
+      row({ title: 'Modo oscuro', right: '<span class="switch"></span>' }),
+      `<button data-act="toast" data-arg="Saldrías de tu cuenta" class="w-full px-4 py-3.5 text-left font-semibold text-red-600 hover:bg-red-50">Salir</button>`,
+    ])}</div>
+  </div>`, { back: 'p-mas' })
+
+// =====================================================================
+// 3. ADMINISTRADOR
+// =====================================================================
+const ADMIN_NAV = [['a-inicio', 'Inicio', 'home'], ['a-negocios', 'Negocios', 'store'], ['a-cobros', 'Cobros', 'card', 2], ['a-numeros', 'Números', 'chart'], ['a-ajustes', 'Ajustes', 'gear']]
+// Estado de un negocio: etiqueta corta (siempre en una línea) + detalle aparte
+const BSTATUS = {
+  prueba: (b) => ['Prueba', 'bg-sky-100 text-sky-800', `Quedan ${b.left}`],
+  activo: (b) => ['Pagando', 'bg-emerald-100 text-emerald-800', b.left[0].toUpperCase() + b.left.slice(1)],
+  vencido: (b) => ['Vencido', 'bg-red-100 text-red-700', b.left[0].toUpperCase() + b.left.slice(1)],
+  cortesia: () => ['Cortesía', 'bg-violet-100 text-violet-800', 'Gratis siempre'],
+}
+const bChip = (b) => { const [l, c] = BSTATUS[b.st](b); return chip(l, `${c} whitespace-nowrap`) }
+const bSub = (b) => BSTATUS[b.st](b)[2]
+const bEmoji = (b, size = 'h-9 w-9 text-lg') => `<span class="flex ${size} shrink-0 items-center justify-center rounded-xl bg-slate-100">${b.e}</span>`
+const stepsBar = (n) => `<span class="inline-flex items-center gap-2 whitespace-nowrap"><span class="flex gap-0.5">${Array.from({ length: 6 }).map((_, k) => `<span class="h-1.5 w-3 rounded-full ${k < n ? (n === 6 ? 'bg-emerald-500' : n <= 1 ? 'bg-amber-400' : 'bg-sky-500') : 'bg-slate-200'}"></span>`).join('')}</span><span class="w-7 text-xs tabular-nums text-slate-500">${n}/6</span></span>`
+
+function adminShell(content) {
+  const active = state.screen
+  if (isMobile()) {
+    return `<div class="relative flex h-full flex-col bg-slate-50">
+      <header class="flex items-center gap-2.5 border-b border-slate-200/70 bg-white px-4 py-3"><span class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-rose-400 to-orange-400 text-xs font-black text-white">C</span><b class="flex-1">Citora · Admin</b></header>
+      <div id="scroll" class="thin-scroll flex-1 overflow-y-auto px-4 pb-24 pt-5"><div class="page">${content}</div></div>
+      <nav class="absolute inset-x-0 bottom-0 grid grid-cols-5 border-t border-slate-200 bg-white pb-2 pt-1.5">${ADMIN_NAV.map(([s, l, i, badge]) => `<button data-go="${s}" class="relative flex flex-col items-center gap-0.5 py-1 text-[11px] font-semibold ${active === s ? 'text-citora-600' : 'text-slate-400'}"><span class="relative flex h-8 w-14 items-center justify-center rounded-full ${active === s ? 'bg-citora-50' : ''}">${ic(i, 'h-[22px] w-[22px]')}${badge ? `<span class="absolute right-2 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-citora-600 px-1 text-[10px] text-white">${badge}</span>` : ''}</span>${l}</button>`).join('')}</nav>
+    </div>`
+  }
+  return `<div class="relative flex h-full bg-slate-50">
+    <aside class="flex w-56 shrink-0 flex-col bg-[#0f0f1a] p-4 text-white">
+      <div class="flex items-center gap-2.5 px-2 pb-6"><span class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-rose-400 to-orange-400 text-xs font-black">C</span><b>Citora</b><span class="ml-auto rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/60">Admin</span></div>
+      ${ADMIN_NAV.map(([s, l, i, badge]) => `<button data-go="${s}" class="mb-0.5 flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-semibold transition ${active === s ? 'bg-white/10 text-white' : 'text-white/55 hover:bg-white/5 hover:text-white'}">${ic(i)}${l}${badge ? `<span class="ml-auto rounded-full bg-citora-600 px-2 py-0.5 text-xs">${badge}</span>` : ''}</button>`).join('')}
+      <p class="mt-auto px-3 text-xs text-white/40">Osmel · Salir</p>
+    </aside>
+    <div id="scroll" class="thin-scroll flex-1 overflow-y-auto"><div class="page mx-auto max-w-5xl px-8 py-8">${content}</div></div>
+  </div>`
+}
+
+SCREENS['a-inicio'] = () => {
+  const todo = [
+    { i: 'card', c: 'bg-citora-50 text-citora-600', t: '2 comprobantes por revisar', s: 'Barbería Leo (3 meses) · Cejas by Mary (1 mes)', b: btn('Revisar', { go: 'a-cobros', size: 'sm', kind: 'dark', block: true }) },
+    { i: 'clock', c: 'bg-sky-50 text-sky-600', t: 'Tattoo Malecón: la prueba acaba mañana', s: '6 reservas en la prueba · buena señal para que pague', b: btn('Escribir', { act: 'toast', arg: 'Se abriría WhatsApp con un mensaje ya escrito', size: 'sm', kind: 'wa', block: true, icon: 'whatsapp' }) },
+    { i: 'alert', c: 'bg-amber-50 text-amber-600', t: 'Nails Studio Vedado está atascado', s: 'Lleva 12 días sin ninguna reserva · 1 de 6 primeros pasos', b: btn('Escribir', { act: 'toast', arg: 'Se abriría WhatsApp: «¿Te ayudo a dejar tu app lista?»', size: 'sm', kind: 'wa', block: true, icon: 'whatsapp' }) },
+    { i: 'alert', c: 'bg-amber-50 text-amber-600', t: 'Spa Habana no ha vuelto a entrar', s: 'Creó su app hace 4 días · 0 de 6 primeros pasos', b: btn('Escribir', { act: 'toast', arg: 'Se abriría WhatsApp: «¿Te ayudo a dejar tu app lista?»', size: 'sm', kind: 'wa', block: true, icon: 'whatsapp' }) },
+    { i: 'ban', c: 'bg-red-50 text-red-600', t: 'Peluquería Ana venció hace 2 días', s: 'Pagó 2 meses antes · 2 reservas este mes', b: btn('Escribir', { act: 'toast', arg: 'Se abriría WhatsApp con un mensaje ya escrito', size: 'sm', kind: 'wa', block: true, icon: 'whatsapp' }) },
+  ]
+  const funnel = [['Visitas a la portada', 1240], ['Crearon su app', 31], ['Recibieron su 1.ª reserva', 13], ['Pagaron', 6]]
+  return adminShell(`
+    <div class="space-y-7">
+      <div><p class="text-sm font-medium text-slate-500">Jueves, 13 de noviembre</p><h1 class="text-[28px] font-extrabold tracking-tight">Buenos días, Osmel</h1><p class="text-slate-500">Tienes <b class="text-slate-900">${todo.length} cosas</b> para hoy.</p></div>
+      <div>${sectionTitle('Para hoy')}
+        ${card(`<div class="divide-y divide-slate-100">${todo.map((x) => `<div class="grid ${isMobile() ? 'grid-cols-[40px_1fr]' : 'grid-cols-[40px_1fr_112px]'} items-center gap-x-3 gap-y-2.5 px-4 py-3.5">
+          <span class="flex h-10 w-10 items-center justify-center rounded-xl ${x.c}">${ic(x.i)}</span>
+          <span class="min-w-0"><span class="block ${isMobile() ? '' : 'truncate'} font-semibold leading-snug">${x.t}</span><span class="block ${isMobile() ? '' : 'truncate'} text-sm text-slate-500">${x.s}</span></span>
+          <span class="${isMobile() ? 'col-start-2' : ''}">${x.b}</span></div>`).join('')}</div>`)}
+      </div>
+      <div class="grid ${isMobile() ? "grid-cols-2" : "grid-cols-4"} gap-3">${[
+        ['Ingreso este mes', '18.000 CUP', '+20 % que octubre'], ['Pagando', '12', 'de 23 negocios'], ['En prueba', '7', '3 acaban esta semana'], ['Activación', '42 %', 'recibieron su 1.ª reserva'],
+      ].map(([l, v, h]) => card(`<div class="flex h-full flex-col p-4"><p class="truncate text-sm font-medium text-slate-500">${l}</p><p class="mt-1 whitespace-nowrap text-2xl font-extrabold tracking-tight">${v}</p><p class="mt-auto truncate pt-0.5 text-xs text-slate-400">${h}</p></div>`, 'h-full')).join('')}</div>
+      <div>${sectionTitle('Embudo de los últimos 30 días')}
+        ${card(`<div class="space-y-3 p-5">${funnel.map(([l, v], k) => {
+          const w = k === 0 ? 100 : Math.max(8, (v / funnel[1][1]) * 70)
+          return `<div><div class="mb-1 flex justify-between text-sm"><span class="font-semibold">${l}</span><span class="tabular-nums text-slate-500"><b class="text-slate-900">${String(v).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}</b>${k > 0 ? ` · ${Math.round((v / funnel[k - 1][1]) * 100)} %` : ''}</span></div><div class="h-2.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-gradient-to-r from-rose-400 to-orange-400" style="width:${w}%"></div></div></div>`
+        }).join('')}
+        <p class="pt-1 text-sm text-slate-500">El paso que más se pierde: <b class="text-slate-700">de crear la app a la primera reserva</b> (58 % se quedan ahí).</p></div>`)}
+      </div>
+    </div>`)
+}
+
+SCREENS['a-negocios'] = () => {
+  const F = { todos: ['Todos', () => true], prueba: ['En prueba', (b) => b.st === 'prueba'], activo: ['Pagando', (b) => b.st === 'activo'], vencido: ['Vencidos', (b) => b.st === 'vencido'], riesgo: ['Atascados', (b) => b.risk] }
+  const shown = BUSINESSES.filter(F[state.bizFilter][1])
+  const th = 'whitespace-nowrap px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-400'
+  return adminShell(`
+    <div class="space-y-4">
+      <div class="flex items-end justify-between"><h1 class="text-[28px] font-extrabold tracking-tight">Negocios</h1><span class="pb-1 text-sm text-slate-500">${BUSINESSES.length} en total</span></div>
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="flex min-w-[220px] flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5">${ic('search', 'h-5 w-5 text-slate-400')}<input class="w-full bg-transparent py-2.5 outline-none" placeholder="Nombre, código o WhatsApp" /></div>
+      </div>
+      <div class="no-scrollbar flex gap-2 overflow-x-auto">${Object.entries(F).map(([k, [l, f]]) => `<button data-act="bizFilter" data-arg="${k}" class="shrink-0 rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${state.bizFilter === k ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'}">${l} <span class="opacity-60">${BUSINESSES.filter(f).length}</span></button>`).join('')}</div>
+      ${isMobile()
+        ? list(shown.map((b) => `<button data-act="openBiz" data-arg="${b.id}" class="grid w-full grid-cols-[36px_1fr_56px] items-center gap-3 px-4 py-3.5 text-left hover:bg-slate-50">
+            ${bEmoji(b)}
+            <span class="min-w-0"><span class="flex items-center gap-1.5"><span class="truncate font-semibold">${b.n}</span>${b.risk ? '<span class="shrink-0 text-amber-500">⚠</span>' : ''}</span>
+              <span class="mt-1 flex items-center gap-2">${bChip(b)}<span class="truncate text-xs text-slate-500">${bSub(b)}</span></span></span>
+            <span class="text-right"><b class="block tabular-nums">${b.r30}</b><span class="block text-[11px] leading-tight text-slate-400">reservas</span></span>
+          </button>`))
+        : card(`<table class="w-full table-fixed text-left text-sm">
+          <colgroup><col /><col class="w-[136px]" /><col class="w-[150px]" /><col class="w-[124px]" /></colgroup>
+          <thead class="border-b border-slate-100"><tr><th class="${th}">Negocio</th><th class="${th}">Estado</th><th class="${th}">Primeros pasos</th><th class="${th} text-right">Reservas 30 d</th></tr></thead>
+          <tbody class="divide-y divide-slate-100">${shown.map((b) => `<tr data-act="openBiz" data-arg="${b.id}" class="cursor-pointer align-middle transition hover:bg-slate-50">
+            <td class="px-4 py-3"><span class="flex items-center gap-3">${bEmoji(b)}<span class="min-w-0"><span class="block truncate font-semibold">${b.n}</span>${b.risk ? `<span class="mt-0.5 block truncate text-xs font-medium text-amber-700" title="${b.risk}">⚠ ${b.risk}</span>` : `<span class="mt-0.5 block truncate text-xs text-slate-400">Activo ${b.last}</span>`}</span></span></td>
+            <td class="px-4 py-3">${bChip(b)}<span class="mt-1 block truncate text-xs text-slate-500">${bSub(b)}</span></td>
+            <td class="px-4 py-3">${stepsBar(b.steps)}</td>
+            <td class="px-4 py-3 text-right text-[15px] font-bold tabular-nums">${b.r30}</td></tr>`).join('')}</tbody></table>`)}
+    </div>`)
+}
+
+SCREENS['a-cobros'] = () => adminShell(`
+  <div class="space-y-7">
+    <h1 class="text-[28px] font-extrabold tracking-tight">Cobros</h1>
+    <div>${sectionTitle('Por revisar · 2')}
+      <div class="grid gap-3 ${isMobile() ? '' : 'grid-cols-2'}">${[['💈', 'Barbería Leo', 3, 'hoy, 9:12'], ['👁️', 'Cejas by Mary', 1, 'ayer, 18:40']].map(([e, n, m, w]) => card(`<div class="grid h-full grid-cols-[80px_1fr] gap-4 p-4">
+        <button data-act="toast" data-arg="Se abriría la captura en grande" class="flex h-[120px] flex-col items-center justify-center gap-1 rounded-xl bg-slate-100 text-xs font-semibold text-slate-400 hover:bg-slate-200/70">${ic('image', 'h-6 w-6')}Ver captura</button>
+        <div class="flex min-w-0 flex-col">
+          <p class="flex items-center gap-2 font-bold"><span>${e}</span><span class="truncate">${n}</span></p>
+          <p class="truncate text-sm text-slate-500">${m} ${m === 1 ? 'mes' : 'meses'} · enviado ${w}</p>
+          <p class="mt-1 text-2xl font-extrabold tracking-tight">${cup(1500 * m)}</p>
+          <div class="mt-auto grid grid-cols-2 gap-2 pt-3">${btn('Aprobar', { act: 'toast', arg: `Plan activado ${m} ${m === 1 ? 'mes' : 'meses'} para ${n}`, size: 'sm', icon: 'check', block: true, cls: '!bg-emerald-600 !shadow-emerald-600/30' })}${btn('Rechazar', { act: 'toast', arg: 'Se pediría el motivo', size: 'sm', kind: 'secondary', block: true })}</div>
+        </div></div>`, 'h-full')).join('')}</div>
+    </div>
+    <div>${sectionTitle('Historial', `<button data-act="toast" data-arg="Se abriría el formulario de registrar pago a mano" class="text-sm font-semibold text-citora-600 hover:underline">+ Registrar pago a mano</button>`)}
+      ${card(`<div class="grid ${isMobile() ? 'grid-cols-[52px_1fr_auto]' : 'grid-cols-[72px_1fr_96px_120px]'} border-b border-slate-100 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-400"><span>Fecha</span><span>Negocio</span>${isMobile() ? '' : '<span class="text-right">Meses</span>'}<span class="text-right">Importe</span></div>
+        <div class="divide-y divide-slate-100 text-sm">${[['12 nov', 'Barbería El Clásico', 3, 4500], ['10 nov', 'Dr. Ramos · Consulta', 1, 1500], ['8 nov', 'Cejas by Mary', 1, 1500], ['3 nov', 'Barbería Leo', 1, 1500], ['1 nov', 'Peluquería Ana', 2, 3000]].map(([d, n, m, a]) => `<div class="grid ${isMobile() ? 'grid-cols-[52px_1fr_auto]' : 'grid-cols-[72px_1fr_96px_120px]'} items-center px-4 py-3">
+          <span class="text-slate-400">${d}</span><span class="truncate pr-3 font-semibold">${n}</span>${isMobile() ? '' : `<span class="text-right text-slate-500">${m} ${m === 1 ? 'mes' : 'meses'}</span>`}<b class="text-right tabular-nums">${cup(a)}</b></div>`).join('')}</div>`)}
+    </div>
+  </div>`)
+
+SCREENS['a-numeros'] = () => {
+  const months = [['Jun', 4500], ['Jul', 7500], ['Ago', 9000], ['Sep', 12000], ['Oct', 15000], ['Nov', 18000]]
+  const max = 18000
+  const types = [['💅', 'Uñas', 8], ['💈', 'Barbería', 6], ['💇‍♀️', 'Peluquería', 4], ['👁️', 'Cejas', 2], ['✨', 'Otros', 3]]
+  const sources = [['WhatsApp', 61], ['Facebook', 18], ['Instagram', 12], ['Directo', 9]]
+  const kpi = (l, v, h) => card(`<div class="flex h-full flex-col p-4"><p class="truncate text-sm font-medium text-slate-500">${l}</p><p class="mt-1 whitespace-nowrap text-2xl font-extrabold tracking-tight">${v}</p><p class="mt-auto truncate pt-0.5 text-xs text-slate-400">${h}</p></div>`, 'h-full')
+  return adminShell(`
+    <div class="space-y-7">
+      <h1 class="text-[28px] font-extrabold tracking-tight">Números</h1>
+      <div class="grid grid-cols-2 gap-3 ${isMobile() ? '' : 'grid-cols-4'}">${kpi('Cobrado en total', '66.000 CUP', 'desde junio')}${kpi('Prueba → pago', '38 %', '23 de 61 pruebas')}${kpi('Reservas este mes', '412', 'en todos los negocios')}${kpi('Visitas a la portada', '1.240', 'últimos 30 días')}</div>
+      <div class="grid gap-4 ${isMobile() ? '' : 'grid-cols-[1.4fr_1fr]'}">
+        ${card(`<div class="flex h-full flex-col p-5"><p class="font-bold">Cobrado por mes</p>
+          <div class="mt-4 flex flex-1 items-end gap-3">${months.map(([m, v]) => `<div class="flex flex-1 flex-col items-center justify-end gap-2"><span class="whitespace-nowrap text-xs font-semibold tabular-nums text-slate-500">${String(v / 1000).replace('.', ',')} mil</span><div class="w-full rounded-t-lg ${m === 'Nov' ? 'bg-gradient-to-t from-rose-400 to-orange-400' : 'bg-slate-200'}" style="height:${Math.round((v / max) * 200)}px"></div><span class="text-xs font-semibold text-slate-400">${m}</span></div>`).join('')}</div></div>`, 'h-full')}
+        ${card(`<div class="p-5"><p class="font-bold">Tipos de negocio</p><div class="mt-4 space-y-3.5">${types.map(([e, t, n]) => `<div class="grid grid-cols-[24px_1fr_auto] items-center gap-x-2 gap-y-1.5"><span class="text-center">${e}</span><span class="text-sm font-semibold">${t}</span><span class="text-right text-sm tabular-nums text-slate-500">${n}</span><span></span><div class="col-span-2 h-2 rounded-full bg-slate-100"><div class="h-full rounded-full bg-slate-800" style="width:${(n / 8) * 100}%"></div></div></div>`).join('')}</div></div>`, 'h-full')}
+      </div>
+      ${card(`<div class="p-5"><p class="font-bold">De dónde llegan las visitas</p>
+        <div class="mt-4 flex h-3 overflow-hidden rounded-full">${sources.map(([, p], k) => `<span style="width:${p}%" class="${['bg-[#25D366]', 'bg-[#1877F2]', 'bg-[#E4405F]', 'bg-slate-400'][k]}"></span>`).join('')}</div>
+        <div class="mt-3 grid grid-cols-2 gap-2 ${isMobile() ? '' : 'grid-cols-4'}">${sources.map(([s, p], k) => `<span class="flex items-center gap-2 text-sm"><span class="h-2.5 w-2.5 rounded-full ${['bg-[#25D366]', 'bg-[#1877F2]', 'bg-[#E4405F]', 'bg-slate-400'][k]}"></span><span class="text-slate-600">${s}</span><b class="tabular-nums">${p} %</b></span>`).join('')}</div></div>`)}
+    </div>`)
+}
+
+// Ajustes: en ordenador, el título y la explicación de cada grupo a la izquierda y los campos a la
+// derecha, siempre en las mismas dos columnas para que todo quede alineado.
+function settingsGroup(title, desc, body) {
+  return `<section class="grid gap-3 ${isMobile() ? '' : 'grid-cols-[220px_1fr] gap-8'} py-6 first:pt-0">
+    <div><h2 class="font-bold">${title}</h2><p class="mt-1 text-sm leading-relaxed text-slate-500">${desc}</p></div>
+    <div>${body}</div>
+  </section>`
+}
+const suffixInput = (v, suffix) => `<div class="flex items-center rounded-xl border border-slate-300 bg-white pr-3.5 transition focus-within:border-brand focus-within:ring-4 focus-within:ring-brand/15"><input class="w-full rounded-xl bg-transparent px-3.5 py-3 outline-none" value="${v}" inputmode="numeric" /><span class="shrink-0 text-slate-400">${suffix}</span></div>`
+
+SCREENS['a-ajustes'] = () => adminShell(`
+  <div>
+    <div class="mb-6 flex items-center justify-between gap-3"><h1 class="text-[28px] font-extrabold tracking-tight">Ajustes</h1>${isMobile() ? '' : btn('Guardar cambios', { act: 'toast', arg: 'Cambios guardados', kind: 'dark' })}</div>
+    <div class="divide-y divide-slate-200">
+      ${settingsGroup('Dónde te pagan', 'Lo ven los dueños al pagar su mensualidad.', card(`<div class="space-y-4 p-5">
+        ${field('Número de tarjeta', `<input class="${inputCls} font-mono tracking-wide" value="9224 1234 5678 9012" />`)}
+        <div class="grid gap-4 ${isMobile() ? '' : 'grid-cols-2'}">${field('Titular', `<input class="${inputCls}" value="Osmel" />`)}${field('Teléfono para confirmar', `<input class="${inputCls}" value="53 5555 0000" />`)}</div>
+      </div>`))}
+      ${settingsGroup('Precio y prueba', 'Para los negocios nuevos. A los que ya pagan no se les cambia.', card(`<div class="grid gap-4 p-5 ${isMobile() ? '' : 'grid-cols-2'}">
+        ${field('Precio al mes', suffixInput('1500', 'CUP'))}
+        ${field('Días de prueba gratis', suffixInput('15', 'días'))}
+      </div>`))}
+      ${settingsGroup('Contacto', 'Los dueños te escriben aquí desde "Hablar con una persona".', card(`<div class="p-5">${field('Tu WhatsApp', `<input class="${inputCls}" value="53 5555 0000" />`)}</div>`))}
+      ${settingsGroup('Encuestas', 'Preguntas cortas que ven los dueños en su panel.', `${list([
+        row({ title: '¿Qué te costó más al empezar?', sub: '9 respuestas', right: `<span class="flex items-center gap-2">${chip('Activa', 'bg-emerald-100 text-emerald-800')}${ic('chevron', 'h-4 w-4 text-slate-300')}</span>` }),
+        row({ title: '¿Recomendarías Citora?', sub: '21 respuestas', right: `<span class="flex items-center gap-2">${chip('Terminada', 'bg-slate-100 text-slate-600')}${ic('chevron', 'h-4 w-4 text-slate-300')}</span>` }),
+        `<button data-act="toast" data-arg="Se abriría el editor de encuestas" class="flex w-full items-center gap-2 px-4 py-3.5 font-semibold text-citora-600 hover:bg-slate-50">${ic('plus', 'h-4 w-4')} Nueva encuesta</button>`,
+      ])}`)}
+      ${settingsGroup('Técnico', 'Rara vez hace falta tocarlo.', list([
+        row({ title: 'Avisos push', sub: 'Configurados', right: `<span class="flex items-center gap-2">${chip('OK', 'bg-emerald-100 text-emerald-800')}${ic('chevron', 'h-4 w-4 text-slate-300')}</span>` }),
+        row({ title: 'Moderación de fotos', sub: 'Revisa las fotos que suben los negocios', right: `<span class="flex items-center gap-2">${chip('OK', 'bg-emerald-100 text-emerald-800')}${ic('chevron', 'h-4 w-4 text-slate-300')}</span>` }),
+        row({ title: 'Zona horaria de los negocios nuevos', sub: 'Cuba (UTC−4)' }),
+      ]))}
+    </div>
+    ${isMobile() ? `<div class="pt-2">${btn('Guardar cambios', { act: 'toast', arg: 'Cambios guardados', size: 'lg', kind: 'dark', block: true })}</div>` : ''}
+  </div>`)
+
+// =====================================================================
+// Hojas (ventanas desde abajo), aviso breve y tutorial
+// =====================================================================
+function sheetWrap(inner) {
+  if (isMobile()) {
+    return `<div class="absolute inset-0 z-30 flex flex-col justify-end">
+      <button data-act="closeSheet" class="anim-fade absolute inset-0 bg-slate-900/40" aria-label="Cerrar"></button>
+      <div class="anim-up relative max-h-[88%] overflow-y-auto rounded-t-3xl bg-white px-5 pb-6 pt-3"><div class="mx-auto mb-3 h-1.5 w-10 rounded-full bg-slate-200"></div>${inner}</div>
+    </div>`
+  }
+  return `<div class="absolute inset-0 z-30 flex justify-end">
+    <button data-act="closeSheet" class="anim-fade absolute inset-0 bg-slate-900/30" aria-label="Cerrar"></button>
+    <div class="anim-up relative h-full w-[420px] overflow-y-auto bg-white p-6 shadow-2xl">${inner}</div>
+  </div>`
+}
+
+function sheetHTML() {
+  const s = state.sheet
+  if (!s) return ''
+  const head = (t, sub) => `<div class="mb-5 flex items-start justify-between gap-3"><div><h2 class="text-xl font-extrabold tracking-tight">${t}</h2>${sub ? `<p class="text-sm text-slate-500">${sub}</p>` : ''}</div><button data-act="closeSheet" class="-mr-2 rounded-full p-2 text-slate-400 hover:bg-slate-100">${ic('x')}</button></div>`
+
+  if (s.type === 'cita') {
+    const a = state.appts.find((x) => x.id === s.id)
+    return sheetWrap(`
+      ${head(a.n, `Hoy · ${a.t} – ${a.e}`)}
+      <div class="mb-4">${ST[a.st]}</div>
+      ${card(`<div class="divide-y divide-slate-100 text-[15px]">
+        <div class="flex justify-between px-4 py-3"><span class="text-slate-500">Servicio</span><b>${a.s}</b></div>
+        <div class="flex justify-between px-4 py-3"><span class="text-slate-500">Precio</span><b>${cup(a.p)}</b></div>
+        <div class="flex justify-between px-4 py-3"><span class="text-slate-500">Teléfono</span><b>53 5398 1122</b></div>
+        <div class="flex justify-between px-4 py-3"><span class="text-slate-500">Visitas</span><b>5 · cliente fiel ★</b></div>
+      </div>`)}
+      <div class="mt-5 space-y-2.5">
+        ${a.st === 'pendiente' ? btn('Confirmar cita', { act: 'confirm', arg: a.id, size: 'lg', block: true, icon: 'check' }) : a.st === 'confirmada' ? btn('Ya vino · marcar como hecha', { act: 'markDone', arg: a.id, size: 'lg', block: true, icon: 'check' }) : ''}
+        ${btn('Escribir por WhatsApp', { act: 'toast', arg: 'Se abriría WhatsApp con un mensaje ya escrito', kind: 'wa', size: 'lg', block: true, icon: 'whatsapp' })}
+        <div class="grid grid-cols-3 gap-2 pt-1">
+          ${[['move', 'Mover'], ['ban', 'No vino'], ['x', 'Cancelar']].map(([i, l]) => `<button data-act="toast" data-arg="${l}: pediría confirmación" class="flex flex-col items-center gap-1 rounded-xl py-3 text-sm font-semibold ${l === 'Cancelar' ? 'text-red-600 hover:bg-red-50' : 'text-slate-600 hover:bg-slate-50'}">${ic(i)}${l}</button>`).join('')}
+        </div>
+      </div>`)
+  }
+
+  if (s.type === 'nueva') {
+    return sheetWrap(`
+      ${head('Nueva cita', s.time ? `Hoy a las ${s.time}` : 'Para un cliente que te escribió o llamó')}
+      <div class="space-y-4">
+        ${field('Cliente', `<input class="${inputCls}" placeholder="Nombre o teléfono" />`, 'Si ya vino antes, aparece al escribir.')}
+        ${field('Servicio', `<select class="${inputCls}">${SERVICES.map((x) => `<option>${x.n} · ${cup(x.p)}</option>`).join('')}</select>`)}
+        <div class="grid grid-cols-2 gap-3">${field('Día', `<select class="${inputCls}"><option>Hoy</option><option>Mañana</option><option>Otro día…</option></select>`)}${field('Hora', `<select class="${inputCls}">${['12:30', '13:00', '15:00', '17:00'].map((t) => `<option ${t === s.time ? 'selected' : ''}>${t}</option>`).join('')}</select>`)}</div>
+        ${btn('Guardar cita', { act: 'toast', arg: 'Cita guardada (simulado)', size: 'lg', block: true, tour: 'guardar' })}
+      </div>`)
+  }
+
+  if (s.type === 'cliente') {
+    const c = CUSTOMERS[s.id]
+    return sheetWrap(`
+      <div class="mb-5 flex items-center gap-3">${avatar(c.n, 'h-14 w-14 text-lg')}<div class="min-w-0 flex-1"><h2 class="truncate text-xl font-extrabold tracking-tight">${c.n}</h2><p class="text-sm text-slate-500">${c.ph}</p></div><button data-act="closeSheet" class="-mr-2 self-start rounded-full p-2 text-slate-400 hover:bg-slate-100">${ic('x')}</button></div>
+      <div class="grid grid-cols-3 gap-2">${[[c.v, 'visitas'], [c.g ? cup(c.g).replace(' CUP', '') : '0', 'CUP gastados'], ['0', 'no vino']].map(([v, l]) => `<div class="rounded-xl bg-slate-50 p-3 text-center"><p class="text-lg font-extrabold">${v}</p><p class="text-xs text-slate-500">${l}</p></div>`).join('')}</div>
+      ${c.lapsed ? `<p class="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">⏰ Hace ${c.lapsed} días que no viene.</p>` : ''}
+      <div class="mt-4">${field('Notas privadas', `<textarea class="${inputCls} min-h-[80px]" placeholder="Solo las ves tú. Ej. alérgica al acetona"></textarea>`)}</div>
+      <div class="mt-5 grid grid-cols-2 gap-2.5">${btn(c.lapsed ? 'Te echamos de menos' : 'WhatsApp', { act: 'toast', arg: 'Se abriría WhatsApp con un mensaje ya escrito', kind: 'wa', icon: 'whatsapp' })}${btn('Nueva cita', { act: 'newAppt', kind: 'secondary', icon: 'plus' })}</div>
+      <p class="mb-2 mt-6 text-sm font-bold text-slate-500">Últimas citas</p>
+      <div class="divide-y divide-slate-100 text-sm">${['13 nov · Manicura', '24 oct · Pedicura', '2 oct · Manicura'].slice(0, Math.max(1, Math.min(3, c.v))).map((x) => `<p class="py-2.5">${x}</p>`).join('')}</div>`)
+  }
+
+  if (s.type === 'servicio') {
+    const sv = s.id >= 0 ? SERVICES[s.id] : { n: '', p: '', d: 60 }
+    return sheetWrap(`
+      ${head(s.id >= 0 ? 'Editar servicio' : 'Nuevo servicio')}
+      <div class="space-y-4">
+        ${field('Nombre', `<input class="${inputCls}" value="${sv.n}" placeholder="Ej. Manicura francesa" />`)}
+        <div class="grid grid-cols-2 gap-3">${field('Precio (CUP)', `<input class="${inputCls}" value="${sv.p}" inputmode="decimal" />`)}${field('Duración', `<select class="${inputCls}">${[30, 45, 60, 90, 120].map((m) => `<option ${m === sv.d ? 'selected' : ''}>${dur(m)}</option>`).join('')}</select>`)}</div>
+        <details><summary class="flex items-center gap-2 text-sm font-bold text-slate-500"><span class="chev-rot transition">${ic('chevron', 'h-4 w-4')}</span> Más opciones</summary>
+          <div class="mt-3 space-y-2 text-sm text-slate-600"><p>· Foto del servicio</p><p>· Descripción</p><p>· Opciones con precio distinto (ej. largo del pelo)</p><p>· Depósito para reservar</p><p>· Es un extra</p></div></details>
+        ${btn('Guardar', { act: 'saveService', size: 'lg', block: true })}
+        ${s.id >= 0 ? `<button data-act="toast" data-arg="Pediría confirmación" class="w-full py-2 text-sm font-semibold text-red-600">Eliminar servicio</button>` : ''}
+      </div>`)
+  }
+
+  if (s.type === 'negocio') {
+    const b = BUSINESSES.find((x) => x.id === s.id)
+    return sheetWrap(`
+      <div class="mb-5 flex items-center gap-3">${bEmoji(b, 'h-14 w-14 text-3xl')}<div class="min-w-0 flex-1"><h2 class="truncate text-xl font-extrabold tracking-tight">${b.n}</h2><p class="truncate text-sm text-slate-500">Código ${1000 + b.id * 37} · citora.app/${b.n.toLowerCase().normalize('NFD').replace(/[^a-z0-9 ]/g, '').trim().replace(/ +/g, '-')}</p></div><button data-act="closeSheet" class="-mr-2 self-start rounded-full p-2 text-slate-400 hover:bg-slate-100">${ic('x')}</button></div>
+      <div class="mb-4 flex items-center gap-2">${bChip(b)}<span class="text-sm text-slate-500">${bSub(b)}</span></div>
+      ${b.risk ? `<p class="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">⚠ ${b.risk}.</p>` : ''}
+      <div class="grid grid-cols-3 gap-2">${[[b.r30, 'reservas en 30 días'], [`${b.steps}/6`, 'primeros pasos'], [b.last, 'última actividad']].map(([v, l]) => `<div class="flex flex-col justify-center rounded-xl bg-slate-50 px-2 py-3 text-center"><p class="whitespace-nowrap text-[15px] font-extrabold">${v}</p><p class="mt-0.5 text-xs leading-tight text-slate-500">${l}</p></div>`).join('')}</div>
+      <div class="mt-5 space-y-2.5">
+        ${btn('Escribir por WhatsApp', { act: 'toast', arg: 'Se abriría WhatsApp con el dueño', kind: 'wa', block: true, icon: 'whatsapp' })}
+        <div class="grid grid-cols-2 gap-2.5">${btn('Registrar pago', { act: 'toast', arg: 'Se abriría registrar pago', kind: 'dark', icon: 'card' })}${btn('Dar días', { act: 'toast', arg: 'Se pediría cuántos días', kind: 'secondary', icon: 'clock' })}</div>
+        ${btn('Ver su página', { act: 'toast', arg: 'Se abriría su página de reservas', kind: 'secondary', block: true, icon: 'eye' })}
+      </div>
+      <details class="mt-5"><summary class="flex items-center gap-2 text-sm font-bold text-slate-500"><span class="chev-rot transition">${ic('chevron', 'h-4 w-4')}</span> Más acciones</summary>
+        <div class="mt-2 divide-y divide-slate-100 text-sm font-semibold">${['Dar cortesía (gratis siempre)', 'Cambiar zona horaria', 'Inhabilitar negocio'].map((x) => `<button data-act="toast" data-arg="${x}: pediría confirmación" class="block w-full py-3 text-left text-slate-600">${x}</button>`).join('')}<button data-act="toast" data-arg="Pediría confirmación escribiendo el nombre" class="block w-full py-3 text-left text-red-600">Borrar dueño y negocio</button></div></details>`)
+  }
+  return ''
+}
+
+// ---------------------------------------------------------------------
+// Tutorial guiado: resalta en la pantalla lo que explica, oscurece el resto y, en los pasos
+// prácticos, pide tocar el botón de verdad. Usa citas de ejemplo: no se envía nada a nadie.
+//   target: qué se resalta (data-tour="...")   tap: hay que tocarlo para seguir
+//   screen / sheet: dónde tiene que estar la persona en ese paso
+// {plus} y {abajo} cambian según móvil u ordenador.
+// ---------------------------------------------------------------------
+const TOUR = [
+  { kind: 'intro' },
+  { screen: 'p-hoy', target: 'resumen', emoji: '🏠', title: 'Esta es tu pantalla de Hoy',
+    text: 'Cada vez que abras Citora empiezas aquí. Arriba ves <b>cuántas citas tienes hoy</b> y <b>cuánto dinero</b> vas a cobrar si vienen todos.' },
+  { screen: 'p-hoy', target: 'dia', emoji: '🕘', title: 'Tu día, hora por hora',
+    text: 'Cada tarjeta blanca es <b>un cliente</b>, con su hora a la izquierda. Los recuadros verdes son <b>huecos libres</b>: nadie ha reservado a esa hora.' },
+  { screen: 'p-hoy', target: 'confirm', tap: true, emoji: '✅', title: 'Confirma las citas nuevas',
+    text: 'Cuando alguien reserva desde tu enlace, la cita llega <b>"Por confirmar"</b>, con una raya naranja. Confirmar es decirle al cliente: <i>"Sí, te espero"</i>.',
+    doit: 'Toca <b>Confirmar</b> en la cita de Mailén', done: '¡Muy bien! Mailén ya sabe que la esperas.',
+    enter: () => { const a = state.appts.find((x) => x.id === 3); if (a) a.st = 'pendiente' } },
+  { screen: 'p-hoy', target: 'fab', tap: true, emoji: '📞', title: '¿Te pidieron cita por WhatsApp o por teléfono?',
+    text: 'Apúntala tú. Así ese hueco deja de estar libre y <b>nadie más puede reservarlo</b> a la misma hora.',
+    doit: 'Toca {plus}' },
+  { screen: 'p-hoy', sheet: { type: 'nueva' }, target: 'guardar', emoji: '✍️', title: 'Rellenas tres cosas y guardas',
+    text: '<b>Quién</b> viene, <b>qué</b> se va a hacer y <b>qué día y a qué hora</b>. Al guardar, la cita aparece en tu día como cualquier otra.' },
+  { screen: 'p-hoy', target: 'nav-p-negocio', tap: true, emoji: '🔗', title: 'Ahora, lo más importante',
+    text: 'Para que te lleguen reservas, tus clientes tienen que <b>conocer tu enlace</b>. Lo encuentras en "Mi negocio".',
+    doit: 'Toca <b>Mi negocio</b>, {abajo}' },
+  { screen: 'p-negocio', target: 'compartir', tap: true, emoji: '📣', title: 'Este es tu enlace',
+    text: 'Es como tu tienda en internet: quien lo abre ve tus servicios y <b>reserva solo</b>, sin tener que escribirte. Ponlo en tu estado de WhatsApp y en tu Instagram.',
+    doit: 'Toca el botón verde <b>Compartir</b>' },
+  { screen: 'p-negocio', target: 'nav-p-mas', tap: true, emoji: '🔔', title: 'Un último paso: los avisos',
+    text: 'Para que tu móvil <b>suene cuando alguien reserve</b>, hay que activar los avisos. Están en "Más".',
+    doit: 'Toca <b>Más</b>, {abajo}' },
+  { screen: 'p-mas', target: 'avisos', emoji: '🔔', title: 'Actívalos en "Ajustes y avisos"',
+    text: 'Hazlo en <b>cada móvil</b> que uses. Sin los avisos, las reservas te llegan igual, pero <b>no te enteras</b> hasta que abres Citora.' },
+  { kind: 'final' },
+]
+const TOUR_STEPS = TOUR.length - 2
+const tourStep = () => (state.tutorial === null ? null : TOUR[state.tutorial])
+const tourText = (s) => s.replaceAll('{plus}', isMobile() ? 'el botón <b>+</b>' : '<b>Nueva cita</b>').replaceAll('{abajo}', isMobile() ? 'abajo' : 'a la izquierda')
+
+function setTourStep(i) {
+  state.tutorial = i
+  const st = TOUR[i]
+  if (st.screen && st.screen !== state.screen) { state.screen = st.screen; state.resetScroll = true }
+  state.sheet = st.sheet ? { ...st.sheet } : null
+  st.enter?.()
+}
+
+/** Contenedor con scroll más cercano (la pantalla o una hoja) */
+function scrollParent(el) {
+  for (let p = el.parentElement; p && p.id !== 'screen'; p = p.parentElement) {
+    const oy = getComputedStyle(p).overflowY
+    if ((oy === 'auto' || oy === 'scroll') && p.scrollHeight > p.clientHeight) return p
+  }
+  return null
+}
+
+function tourModal(st, anim) {
+  const item = (n, t) => `<li class="flex items-start gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand/10 text-sm font-bold text-brand">${n}</span><span class="pt-0.5 text-[15px] text-slate-700">${t}</span></li>`
+  const check = (t) => `<li class="flex items-start gap-3"><span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">${ic('check', 'h-3.5 w-3.5')}</span><span class="text-[15px] text-slate-700">${t}</span></li>`
+  if (st.kind === 'intro') {
+    return `<div class="pointer-events-auto w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl ${anim}">
+      <p class="text-4xl">👋</p>
+      <h2 class="mt-3 text-[22px] font-extrabold leading-tight tracking-tight">Te enseñamos a usar tu panel</h2>
+      <p class="mt-1.5 text-[15px] leading-relaxed text-slate-600">Te llevamos de la mano, pantalla por pantalla. Vas a aprender a:</p>
+      <ol class="mt-4 space-y-2.5">${item(1, 'Ver tus citas del día')}${item(2, 'Confirmar una cita nueva')}${item(3, 'Apuntar una cita que te pidieron por WhatsApp')}${item(4, 'Compartir tu enlace para que te reserven')}</ol>
+      <p class="mt-5 rounded-xl bg-slate-50 p-3 text-sm leading-relaxed text-slate-500">Usamos <b>citas de ejemplo</b>: no se envía nada a nadie. Son unos 2 minutos y puedes salir cuando quieras.</p>
+      <div class="mt-5 space-y-1.5">${btn('Empezar', { act: 'nextTutorial', size: 'lg', block: true })}<button data-act="endTutorial" class="w-full rounded-xl py-2.5 text-[15px] font-semibold text-slate-500 hover:bg-slate-50">Ahora no</button></div>
+    </div>`
+  }
+  return `<div class="pointer-events-auto w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl ${anim}">
+    <p class="text-4xl">🎉</p>
+    <h2 class="mt-3 text-[22px] font-extrabold leading-tight tracking-tight">¡Ya sabes lo básico!</h2>
+    <p class="mt-1.5 text-[15px] text-slate-600">Esto es lo que aprendiste:</p>
+    <ul class="mt-4 space-y-3">${check('En <b>Hoy</b> ves tus citas del día.')}${check('<b>Confirmar</b> es decirle al cliente que lo esperas.')}${check(`Con ${isMobile() ? 'el botón <b>+</b>' : '<b>Nueva cita</b>'} apuntas las citas que te piden por WhatsApp.`)}${check('Tu <b>enlace</b> está en <b>Mi negocio</b>: compártelo para recibir reservas.')}</ul>
+    <p class="mt-5 rounded-xl bg-slate-50 p-3 text-sm leading-relaxed text-slate-500">¿Se te olvidó algo? Repite el tutorial cuando quieras en <b>Más → Tutorial paso a paso</b>.</p>
+    <div class="mt-5">${btn('Empezar a usar Citora', { act: 'finishTutorial', size: 'lg', block: true })}</div>
+  </div>`
+}
+
+let tourAnimFor = null
+function placeTour() {
+  document.getElementById('tour')?.remove()
+  const st = tourStep()
+  const screen = document.getElementById('screen')
+  if (!st || !screen) return
+  const anim = tourAnimFor !== state.tutorial ? 'tour-in' : ''
+  tourAnimFor = state.tutorial
+  const S = screen.getBoundingClientRect()
+
+  if (st.kind) {
+    screen.insertAdjacentHTML('beforeend', `<div id="tour" class="absolute inset-0 z-[45] flex items-center justify-center bg-slate-900/60 p-4">${tourModal(st, anim)}</div>`)
+    return
+  }
+
+  // Lo que se resalta: se lleva a la vista y se mide (recortado a la parte visible)
+  const t = screen.querySelector(`[data-tour="${st.target}"]`)
+  let R = null
+  if (t) {
+    const sc = scrollParent(t)
+    if (sc) {
+      const c = sc.getBoundingClientRect()
+      const r = t.getBoundingClientRect()
+      const offset = r.height < c.height * 0.45 ? c.height * 0.18 : 12
+      sc.scrollTop += r.top - (c.top + offset)
+    }
+    const r = t.getBoundingClientRect()
+    let top = r.top
+    let bottom = r.bottom
+    if (sc) {
+      const c = sc.getBoundingClientRect()
+      top = Math.max(top, c.top)
+      bottom = Math.min(bottom, c.bottom)
+    }
+    const pad = 6
+    R = { x: r.left - S.left - pad, y: top - S.top - pad, w: r.width + pad * 2, h: bottom - top + pad * 2 }
+  }
+
+  const px = (o) => Object.entries(o).map(([k, v]) => `${k}:${Math.round(v)}px`).join(';')
+  let html = ''
+  if (R) {
+    html += `<div class="pointer-events-none absolute rounded-2xl ring-2 ring-white transition-all duration-300" style="${px({ left: R.x, top: R.y, width: R.w, height: R.h })};box-shadow:0 0 0 9999px rgb(15 23 42 / .62)"></div>`
+    if (st.tap) {
+      html += `<div class="pointer-events-none absolute animate-ping rounded-2xl ring-4 ring-white/70" style="${px({ left: R.x, top: R.y, width: R.w, height: R.h })};animation-duration:1.6s"></div>`
+      // Cuatro piezas alrededor del hueco: el resto no se puede tocar, el botón resaltado sí
+      ;[[0, 0, S.width, R.y], [0, R.y + R.h, S.width, S.height - R.y - R.h], [0, R.y, R.x, R.h], [R.x + R.w, R.y, S.width - R.x - R.w, R.h]]
+        .forEach(([l, tp, w, h]) => { if (w > 0 && h > 0) html += `<div class="pointer-events-auto absolute" style="${px({ left: l, top: tp, width: w, height: h })}"></div>` })
+    } else {
+      html += `<div class="pointer-events-auto absolute inset-0"></div>`
+    }
+  } else {
+    html += `<div class="pointer-events-auto absolute inset-0 bg-slate-900/60"></div>`
+  }
+
+  // La tarjeta: debajo o encima de lo resaltado, donde haya más sitio
+  const W = isMobile() ? S.width - 24 : Math.min(380, S.width - 24)
+  const left = R ? Math.min(Math.max(R.x + R.w / 2 - W / 2, 12), S.width - W - 12) : (S.width - W) / 2
+  let pos
+  let arrow = ''
+  const NEED = 250
+  if (R && S.height - (R.y + R.h) >= NEED && S.height - (R.y + R.h) >= R.y) {
+    pos = { left, top: R.y + R.h + 14 }
+    arrow = 'top'
+  } else if (R && R.y >= NEED) {
+    pos = { left, bottom: S.height - R.y + 14 }
+    arrow = 'bottom'
+  } else {
+    pos = { left, bottom: 12 }
+  }
+  const ax = R ? Math.min(Math.max(R.x + R.w / 2 - left, 24), W - 24) : 0
+  const k = state.tutorial
+  html += `<div class="pointer-events-auto absolute rounded-2xl bg-white p-4 shadow-2xl ring-1 ring-black/5 ${anim}" style="${px({ ...pos, width: W })}">
+    ${arrow ? `<span class="absolute h-3.5 w-3.5 rotate-45 bg-white" style="left:${Math.round(ax - 7)}px;${arrow}:-7px"></span>` : ''}
+    <div class="flex items-center gap-3">
+      <span class="shrink-0 text-xs font-bold text-slate-400">Paso ${k} de ${TOUR_STEPS}</span>
+      <span class="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100"><span class="block h-full rounded-full bg-brand transition-all duration-500" style="width:${(k / TOUR_STEPS) * 100}%"></span></span>
+      <button data-act="endTutorial" class="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-slate-400 hover:bg-slate-100 hover:text-slate-600">Salir</button>
+    </div>
+    <div class="mt-3 flex gap-3">
+      <span class="text-[28px] leading-none">${st.emoji}</span>
+      <div class="min-w-0"><p class="text-[17px] font-extrabold leading-snug text-slate-900">${st.title}</p><p class="mt-1 text-[15px] leading-relaxed text-slate-600">${tourText(st.text)}</p></div>
+    </div>
+    ${st.tap ? `<div class="mt-3 flex items-center gap-2.5 rounded-xl bg-brand/10 px-3 py-2.5 text-[15px] text-brand"><span class="text-xl leading-none">👆</span><span class="flex-1">${tourText(st.doit)}</span></div>` : ''}
+    <div class="mt-3 flex min-h-[40px] items-center justify-between gap-3">
+      ${k > 1 ? `<button data-act="prevTutorial" class="rounded-lg px-2 py-1.5 text-sm font-semibold text-slate-500 hover:bg-slate-100">← Atrás</button>` : '<span></span>'}
+      ${st.tap
+        ? `<button data-act="tourDoIt" class="rounded-lg px-2 py-1.5 text-sm font-semibold text-slate-400 underline-offset-2 hover:underline">Hazlo por mí</button>`
+        : `<button data-act="nextTutorial" class="rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-white shadow-sm shadow-brand/30">Siguiente →</button>`}
+    </div>
+  </div>`
+
+  screen.insertAdjacentHTML('beforeend', `<div id="tour" class="pointer-events-none absolute inset-0 z-[45]">${html}</div>`)
+}
+
+const toastHTML = () => state.toast ? `<div class="anim-pop absolute left-1/2 top-16 z-[60] w-[88%] max-w-sm -translate-x-1/2 rounded-xl bg-slate-900 px-4 py-3 text-center text-sm font-semibold text-white shadow-xl">${state.toast}</div>` : ''
+
+// =====================================================================
+// Acciones
+// =====================================================================
+let toastTimer
+const ACTIONS = {
+  pickType: (k) => { state.type = Number(k); go('alta-negocio') },
+  currency: (k) => { state.currency = k },
+  toggleDay: (d) => { d = Number(d); state.days = state.days.includes(d) ? state.days.filter((x) => x !== d) : [...state.days, d] },
+  altaNext: (i) => { i = Number(i); go(i === ALTA_ORDER.length - 1 ? 'alta-bienvenida' : ALTA_ORDER[i + 1]) },
+  altaSkip: (v) => {
+    const [i, key] = v.split('|')
+    state.skipped[key] = true
+    if (key === 'servicios') state.done.precios = false
+    go(ALTA_ORDER[Number(i) + 1])
+  },
+  startTutorial: () => {
+    state.appts = freshAppts()
+    state.stepsOpen = false
+    state.dayTab = 'hoy'
+    state.tutorial = 0
+    go('p-hoy', true)
+  },
+  nextTutorial: () => setTourStep(state.tutorial + 1),
+  prevTutorial: () => setTourStep(state.tutorial - 1),
+  endTutorial: () => { state.tutorial = null; state.sheet = null },
+  finishTutorial: () => { state.tutorial = null; state.stepsOpen = true; go('p-hoy') },
+  tourDoIt: () => { const st = tourStep(); document.querySelector(`#screen [data-tour="${st.target}"]`)?.click() },
+  toggleSteps: () => { state.stepsOpen = !state.stepsOpen },
+  step: (id) => {
+    const s = STEPS.find((x) => x.id === id)
+    if (s.auto) return toast('Se marca sola cuando un cliente reserve desde tu enlace')
+    if (s.go && !state.done[id] && state.screen !== s.go) { state.done[id] = true; return go(s.go) }
+    state.done[id] = !state.done[id]
+    if (id === 'avisos') state.pushOn = state.done[id]
+    if (STEPS.filter((x) => !x.auto).every((x) => state.done[x.id])) { state.done.primera = true; toast('🎉 ¡Primera reserva recibida! (simulado)') }
+  },
+  dayTab: (t) => { state.dayTab = t },
+  agendaDay: (d) => { state.agendaDay = Number(d) },
+  custFilter: (f) => { state.custFilter = f },
+  bizFilter: (f) => { state.bizFilter = f },
+  confirm: (id) => { const a = state.appts.find((x) => x.id === Number(id)); if (a) { a.st = 'confirmada'; state.sheet = null; toast(`Cita de ${a.n.split(' ')[0]} confirmada`) } },
+  markDone: (id) => { const a = state.appts.find((x) => x.id === Number(id)); a.st = 'hecha'; state.sheet = null; toast('Marcada como hecha') },
+  openAppt: (id) => { state.sheet = { type: 'cita', id: Number(id) } },
+  newAppt: (time) => { state.sheet = { type: 'nueva', time } },
+  openCust: (k) => { state.sheet = { type: 'cliente', id: Number(k) } },
+  editService: (k) => { state.sheet = { type: 'servicio', id: Number(k) } },
+  saveService: () => { state.sheet = null; state.done.precios = true; toast('Servicio guardado') },
+  openBiz: (id) => { state.sheet = { type: 'negocio', id: Number(id) } },
+  closeSheet: () => { state.sheet = null },
+  tool: (id) => { state.tools.push(id); toast(`${TOOLS.find((t) => t.id === id).n} activado. Ya está en tus herramientas.`) },
+  months: (m) => { state.months = Number(m) },
+  push: () => { state.pushOn = !state.pushOn; state.done.avisos = state.pushOn },
+  color: (c) => setBrand(c),
+  shareLink: () => { state.done.compartir = true; toast('Se abriría WhatsApp con tu enlace y una imagen lista para tu estado') },
+  toast: (m) => toast(m),
+  device: (d) => { state.device = d },
+  goScreen: (s) => go(s),
+}
+
+function toast(m) {
+  state.toast = m
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => { state.toast = null; render() }, 2600)
+}
+
+function go(s, keepTutorial) {
+  const before = groupOf(state.screen)
+  const after = groupOf(s)
+  if (before !== after) state.device = after.device
+  state.screen = s
+  state.sheet = null
+  if (!keepTutorial) state.tutorial = null
+  if (s === 'alta-tipo') { state.skipped = {}; state.done = { precios: true }; state.appts = freshAppts() }
+  render(true)
+}
+
+function setBrand(hex) {
+  state.brand = hex
+  document.documentElement.style.setProperty('--brand-rgb', hexToRgb(hex))
+}
+
+// =====================================================================
+// Pintar
+// =====================================================================
+function render(resetScroll) {
+  if (state.resetScroll) { resetScroll = true; state.resetScroll = false }
+  const prevScroll = document.getElementById('scroll')?.scrollTop || 0
+  const g = groupOf(state.screen)
+
+  document.getElementById('index').innerHTML = GROUPS.map((gr) => `
+    <p class="mb-1.5 mt-5 px-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-400 first:mt-0">${gr.title}</p>
+    ${gr.items.map(([k, l]) => `<button data-go="${k}" class="block w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium transition ${state.screen === k ? 'bg-white font-bold text-slate-900 shadow-sm ring-1 ring-slate-200' : 'text-slate-600 hover:bg-white/60'}">${l}</button>`).join('')}
+  `).join('')
+
+  document.getElementById('pick').innerHTML = GROUPS.map((gr) => `<optgroup label="${gr.title}">${gr.items.map(([k, l]) => `<option value="${k}" ${state.screen === k ? 'selected' : ''}>${l}</option>`).join('')}</optgroup>`).join('')
+
+  document.getElementById('devices').innerHTML = [['movil', 'Móvil'], ['ordenador', 'Ordenador']].map(([k, l]) => `<button data-act="device" data-arg="${k}" class="rounded-md px-3 py-1 transition ${state.device === k ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}">${l}</button>`).join('')
+
+  const small = window.innerWidth < 640
+  const frame = document.getElementById('frame')
+  const inner = SCREENS[state.screen]() + sheetHTML() + toastHTML()
+  if (isMobile()) {
+    frame.className = small ? 'w-full' : 'rounded-[2.6rem] bg-slate-900 p-2.5 shadow-2xl shadow-slate-900/30'
+    frame.innerHTML = `<div id="screen" class="${state.tutorial !== null ? "touring" : ""} relative overflow-hidden ${small ? 'h-[calc(100dvh-140px)] rounded-2xl ring-1 ring-slate-200' : 'h-[800px] w-[390px] rounded-[2rem]'} bg-white">${inner}</div>`
+  } else {
+    frame.className = 'w-full max-w-[1200px] overflow-hidden rounded-xl bg-white shadow-2xl shadow-slate-900/15 ring-1 ring-slate-200'
+    frame.innerHTML = `<div class="flex items-center gap-2 border-b border-slate-200 bg-slate-100 px-4 py-2.5"><span class="h-3 w-3 rounded-full bg-red-400"></span><span class="h-3 w-3 rounded-full bg-amber-400"></span><span class="h-3 w-3 rounded-full bg-emerald-400"></span><span class="ml-4 flex-1 rounded-md bg-white px-3 py-1 text-xs text-slate-400">citora.app/${g.key === 'admin' ? 'admin' : g.key === 'alta' ? 'crear' : BIZ.slug + '/panel'}</span></div>
+      <div id="screen" class="${state.tutorial !== null ? "touring" : ""} relative h-[760px] overflow-hidden">${g.key === 'alta' ? `<div class="mx-auto h-full max-w-lg border-x border-slate-100">${inner}</div>` : inner}</div>`
+  }
+
+  const [title, bullets] = NOTES[state.screen]
+  const notes = `<div class="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
+    <p class="text-xs font-bold uppercase tracking-[0.12em] text-citora-600">Qué cambia</p>
+    <h3 class="mt-1 text-lg font-extrabold tracking-tight">${title}</h3>
+    <ul class="mt-3 space-y-2.5 text-[14px] leading-relaxed text-slate-600">${bullets.map((b) => `<li class="flex gap-2"><span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-citora-500"></span><span>${b}</span></li>`).join('')}</ul>
+    <p class="mt-5 rounded-xl bg-slate-50 p-3 text-[13px] text-slate-500">Para pedir cambios, dime el nombre de la pantalla y lo que quieres distinto. Ej.: <i>"En Hoy, quita la tarjeta de la próxima cita"</i>.</p>
+  </div>`
+  document.getElementById('notes').innerHTML = `<div class="sticky top-20">${notes}</div>`
+  document.getElementById('notes-mobile').innerHTML = `<div class="mx-auto mt-2 max-w-xl">${notes}</div>`
+
+  const sc = document.getElementById('scroll')
+  if (sc && !resetScroll) sc.scrollTop = prevScroll
+
+  // El tutorial se coloca cuando la pantalla ya está pintada (y se recoloca al terminar las animaciones)
+  if (state.tutorial !== null) {
+    requestAnimationFrame(placeTour)
+    setTimeout(placeTour, 150)
+    setTimeout(placeTour, 450)
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-go],[data-act]')
+  if (!el) return
+  // En un paso práctico del tutorial, tocar lo resaltado hace lo de siempre y pasa al siguiente paso
+  const st = tourStep()
+  const isTap = Boolean(st && st.tap && el.closest('[data-tour]')?.dataset.tour === st.target)
+  if (el.dataset.go) go(el.dataset.go, isTap)
+  else ACTIONS[el.dataset.act]?.(el.dataset.arg)
+  if (isTap) {
+    setTourStep(state.tutorial + 1)
+    if (st.done) toast(st.done)
+  }
+  render()
+})
+document.addEventListener('input', (e) => {
+  if (e.target.dataset.bind === 'name') {
+    BIZ.name = e.target.value || 'Tu negocio'
+    BIZ.slug = BIZ.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'tu-negocio'
+    const s = document.getElementById('slug')
+    if (s) s.value = BIZ.slug
+  }
+})
+document.getElementById('pick').addEventListener('change', (e) => go(e.target.value))
+window.addEventListener('resize', () => render())
+
+setBrand('#7c3aed')
+// Abrir una pantalla concreta desde la dirección: index.html#a-inicio o index.html#p-hoy/ordenador
+;(() => {
+  const [s, d, t] = decodeURIComponent(location.hash.slice(1)).split('/')
+  if (s && SCREENS[s]) { state.screen = s; state.device = groupOf(s).device }
+  if (d === 'movil' || d === 'ordenador') state.device = d
+  // ...#p-hoy/movil/tutorial3 abre el tutorial en el paso 3
+  const m = /^tutorial(\d+)$/.exec(t || '')
+  if (m) { state.stepsOpen = false; for (let i = 0; i <= Math.min(Number(m[1]), TOUR.length - 1); i++) setTourStep(i) }
+})()
+render(true)
+</script>
+</body>
+</html>
