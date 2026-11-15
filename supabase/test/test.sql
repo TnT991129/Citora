@@ -715,6 +715,7 @@ end $$;
 -- Todo el equipo con servicios propios: el masaje no es de nadie del equipo, es del dueño, y se
 -- reserva en la agenda del negocio (antes se quedaba sin horas)
 reset role;
+delete from staff_services where staff_id in ((select v from ctx where k='ana')::uuid, (select v from ctx where k='bea')::uuid);
 update staff set own_services = true where name in ('Ana', 'Bea');
 set role anon;
 do $$ declare d2 date := (select v from ctx where k='day2')::date; m uuid := (select v from ctx where k='masaje')::uuid; c uuid := (select v from ctx where k='cejas')::uuid; begin
