@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+// Estas pruebas no usan la base de datos (y en Node 20 el cliente de Supabase no se puede crear)
+vi.mock('./supabase', () => ({ supabase: {} }))
+
 import { activeTools, DEFAULT_TOOLS, mergeOnboarding, pricesUnreviewed, readOnboarding, stepsDone, type Progress } from './onboarding'
 
 const progress = (p: Partial<Progress> = {}): Progress => ({ web_total: 0, web_real: 0, bookings: 0, revenue: 0, push_on: false, visits_7d: 0, ...p })
