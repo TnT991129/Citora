@@ -21,7 +21,7 @@ export default function Team() {
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [detail, setDetail] = useState<Staff | null>(null)
+  const [detail, setDetail] = useState<{ staff: Staff; justAdded?: boolean } | null>(null)
 
   if (!allowed) return <Locked module="empleados" />
 
@@ -37,9 +37,18 @@ export default function Team() {
     const n = name.trim()
     if (n.length < 2) return setError('Escribe el nombre (al menos 2 letras).')
     setBusy(true)
-    await run(() => supabase.from('staff').insert({ business_id: business.id, name: n, position: staff.length }), `${n} añadido`)
+    setError(null)
+    // Empieza sin servicios: los crea ella misma con su enlace (se abre al momento para mandárselo)
+    const { data, error } = await supabase
+      .from('staff')
+      .insert({ business_id: business.id, name: n, position: staff.length, own_services: true })
+      .select('*')
+      .single()
     setBusy(false)
+    if (error) return setError(errorMessage(error))
     setName('')
+    await reloadStaff()
+    setDetail({ staff: data as Staff, justAdded: true })
   }
 
   const move = async (i: number, dir: -1 | 1) => {
@@ -97,7 +106,7 @@ export default function Team() {
               onRename={(n) => run(() => supabase.from('staff').update({ name: n }).eq('id', s.id), 'Nombre guardado')}
               onToggle={(v) => run(() => supabase.from('staff').update({ active: v }).eq('id', s.id))}
               onRemove={() => run(() => supabase.from('staff').delete().eq('id', s.id), `${s.name} quitado`)}
-              onDetail={() => setDetail(s)}
+              onDetail={() => setDetail({ staff: s })}
             />
           ))}
         </ul>
@@ -110,7 +119,7 @@ export default function Team() {
         </p>
       )}
 
-      {detail && <StaffDetailsModal staff={detail} onClose={() => setDetail(null)} onPhotoChanged={reloadStaff} />}
+      {detail && <StaffDetailsModal staff={detail.staff} justAdded={detail.justAdded} onClose={() => setDetail(null)} onPhotoChanged={reloadStaff} />}
     </div>
   )
 }
@@ -169,9 +178,11 @@ function ArrowBtn({ label, d, disabled, onClick }: { label: string; d: string; d
   )
 }
 
-function StaffDetailsModal({ staff, onClose, onPhotoChanged }: { staff: Staff; onClose: () => void; onPhotoChanged: () => Promise<void> | void }) {
-  const { business, services } = usePanel()
-  const [tab, setTab] = useState<'horario' | 'servicios' | 'enlace'>('horario')
+function StaffDetailsModal({ staff, justAdded, onClose, onPhotoChanged }: { staff: Staff; justAdded?: boolean; onClose: () => void; onPhotoChanged: () => Promise<void> | void }) {
+  const { business, services, reloadStaff } = usePanel()
+  const [tab, setTab] = useState<'horario' | 'servicios' | 'enlace'>(justAdded ? 'enlace' : 'horario')
+  // true = solo hace sus propios servicios (los crea con su enlace); false = hace todos si no se marca ninguno
+  const [own, setOwn] = useState(Boolean(staff.own_services))
   const [custom, setCustom] = useState<boolean | null>(null)
   const [days, setDays] = useState<StaffScheduleDay[] | null>(null)
   const [serviceIds, setServiceIds] = useState<string[] | null>(null)
@@ -243,13 +254,17 @@ function StaffDetailsModal({ staff, onClose, onPhotoChanged }: { staff: Staff; o
     if (!serviceIds) return
     setBusy(true)
     setError(null)
+    const ids = own ? serviceIds : []
+    const { error: e0 } = await supabase.from('staff').update({ own_services: own }).eq('id', staff.id)
     const { error: e1 } = await supabase.from('staff_services').delete().eq('staff_id', staff.id)
-    const { error: e2 } = serviceIds.length > 0
-      ? await supabase.from('staff_services').insert(serviceIds.map((service_id) => ({ staff_id: staff.id, service_id })))
+    const { error: e2 } = ids.length > 0
+      ? await supabase.from('staff_services').insert(ids.map((service_id) => ({ staff_id: staff.id, service_id })))
       : { error: null }
     setBusy(false)
-    if (e1 || e2) return setError(errorMessage(e1 || e2))
+    if (e0 || e1 || e2) return setError(errorMessage(e0 || e1 || e2))
+    if (!own) setServiceIds([])
     flash('Servicios guardados')
+    void reloadStaff()
   }
 
   return (
@@ -331,9 +346,26 @@ function StaffDetailsModal({ staff, onClose, onPhotoChanged }: { staff: Staff; o
 
         {tab === 'servicios' && serviceIds && (
           <div className="space-y-3">
-            <p className="text-sm text-slate-500">
-              Marca los servicios que hace {staff.name}. Si no marcas ninguno, puede con todos.
-            </p>
+            <div className="grid gap-2">
+              {([
+                [true, 'Sus propios servicios', `Los crea ${staff.name.split(' ')[0]} con su enlace (pestaña "Su enlace"). Si quieres, márcale también alguno de los tuyos.`],
+                [false, 'Todos los servicios del negocio', 'Hace todo lo que ofreces: los clientes pueden reservar cualquier servicio con esta persona.'],
+              ] as const).map(([v, t, d]) => (
+                <button
+                  key={String(v)}
+                  type="button"
+                  onClick={() => setOwn(v)}
+                  aria-pressed={own === v}
+                  className={`flex items-start gap-3 rounded-xl border p-3 text-left transition ${own === v ? 'border-brand bg-brand/5 ring-1 ring-brand' : 'border-slate-200'}`}
+                >
+                  <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${own === v ? 'border-brand bg-brand' : 'border-slate-300'}`}>
+                    {own === v && <span className="h-2 w-2 rounded-full bg-white" />}
+                  </span>
+                  <span><span className="block font-semibold">{t}</span><span className="block text-sm text-slate-500">{d}</span></span>
+                </button>
+              ))}
+            </div>
+            {own && (
             <div className="flex flex-wrap gap-2">
               {services.map((sv) => (
                 <button
@@ -347,11 +379,12 @@ function StaffDetailsModal({ staff, onClose, onPhotoChanged }: { staff: Staff; o
               ))}
               {services.length === 0 && <p className="text-sm text-slate-400">Todavía no tienes servicios creados.</p>}
             </div>
-            <Button block onClick={saveServices} loading={busy}>Guardar servicios</Button>
+            )}
+            <Button block onClick={saveServices} loading={busy}>Guardar</Button>
           </div>
         )}
 
-        {tab === 'enlace' && serviceIds && <StaffLink staff={staff} hasOwnServices={serviceIds.length > 0} />}
+        {tab === 'enlace' && serviceIds && <StaffLink staff={staff} canEditServices={own || serviceIds.length > 0} autoCreate={justAdded} />}
 
         {error && <Alert>{error}</Alert>}
       </div>
@@ -360,13 +393,19 @@ function StaffDetailsModal({ staff, onClose, onPhotoChanged }: { staff: Staff; o
 }
 
 /** Enlace privado para que el propio profesional cambie sus servicios y su horario, sin cuenta */
-function StaffLink({ staff, hasOwnServices }: { staff: Staff; hasOwnServices: boolean }) {
+function StaffLink({ staff, canEditServices, autoCreate }: { staff: Staff; canEditServices: boolean; autoCreate?: boolean }) {
   const { business, reloadStaff } = usePanel()
   const [token, setToken] = useState<string | null>(staff.edit_token || null)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const first = staff.name.split(' ')[0]
   const url = token ? staffUrl(business.slug, token) : ''
+
+  // Recién añadida: el enlace ya está listo para mandárselo
+  useEffect(() => {
+    if (autoCreate && !staff.edit_token) void act('ver')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const act = async (action: 'ver' | 'nuevo' | 'anular') => {
     if (action === 'anular' && !window.confirm(`¿Anular el enlace de ${first}? Dejará de funcionar y tendrás que mandarle uno nuevo.`)) return
@@ -396,9 +435,14 @@ function StaffLink({ staff, hasOwnServices }: { staff: Staff; hasOwnServices: bo
         Con este enlace, <b>{first}</b> cambia desde su móvil <b>sus servicios</b> (nombre, precio, duración) y <b>su horario</b>, sin crear cuenta.
         Solo puede tocar lo suyo: los servicios que comparte con otras personas del equipo los sigues cambiando tú.
       </p>
-      {!hasOwnServices && (
+      {autoCreate && (
+        <Alert kind="success">
+          <b>{first}</b> ya está en tu equipo. Mándale su enlace: con él crea sus servicios con sus precios y pone su horario. Hasta que cree alguno, no se puede reservar con ella.
+        </Alert>
+      )}
+      {!canEditServices && (
         <Alert kind="warning">
-          Primero marca en la pestaña <b>Servicios</b> lo que hace {first}. Si no marcas ninguno, hace todos y no tiene servicios propios que cambiar (solo su horario).
+          {first} hace todos los servicios del negocio, así que con el enlace solo puede cambiar su horario. Para que tenga los suyos, elige "Sus propios servicios" en la pestaña <b>Servicios</b>.
         </Alert>
       )}
       {!token ? (

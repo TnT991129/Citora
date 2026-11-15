@@ -15,6 +15,13 @@ describe('profesional elegido al cambiar los servicios', () => {
     expect(staffDoes(barbero, []), 'sin servicios elegidos todavía').toBe(true)
   })
 
+  it('con servicios propios y ninguno creado todavía, no hace nada', () => {
+    const nueva = { id: 'cami', service_ids: [], all_services: false }
+    expect(staffDoes(nueva, ['corte'])).toBe(false)
+    expect(staffDoes({ ...nueva, service_ids: ['cejas'] }, ['cejas'])).toBe(true)
+    expect(staffDoes({ service_ids: [], all_services: true }, ['corte'])).toBe(true)
+  })
+
   it('se queda con el mismo si hace los servicios', () => {
     expect(keepStaff(team, 'leo', ['corte', 'barba'])).toBe('leo')
     expect(keepStaff(team, 'bea', ['unas'])).toBe('bea')

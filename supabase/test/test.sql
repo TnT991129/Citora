@@ -685,6 +685,31 @@ do $$ begin assert owner_staff_link((select v from ctx where k='ana')::uuid, 'an
 reset role;
 set role anon;
 select expect_error($$select staff_portal('$$ || (select v from ctx where k='tok_ana2') || $$')$$, 'ENLACE_CADUCADO');
+-- Una profesional nueva con servicios propios: empieza sin ninguno y los crea ella
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+insert into staff (business_id, name, position, own_services) values (my_business_id(), 'Cami', 9, true);
+insert into ctx select 'cami', id::text from staff where name = 'Cami';
+insert into ctx select 'tok_cami', owner_staff_link((select v from ctx where k='cami')::uuid);
+reset role;
+set role anon;
+do $$ declare c jsonb := (select x from jsonb_array_elements(get_public_business('spa-mar')->'staff') x where x->>'name' = 'Cami'); begin
+  assert not (c->>'all_services')::boolean and jsonb_array_length(c->'service_ids') = 0, 'Cami no hace nada todavía: ' || c::text;
+  assert not (staff_portal((select v from ctx where k='tok_cami'))->>'all_services')::boolean, 'tiene servicios propios';
+  assert not exists (select 1 from get_available_slots('spa-mar', (select v from ctx where k='day2')::date, 60, (select v from ctx where k='cami')::uuid, null, array[(select v from ctx where k='masaje')::uuid]) where available),
+    'no se puede reservar masaje con Cami';
+end $$;
+insert into ctx select 'cejas', staff_portal_save_service((select v from ctx where k='tok_cami'), null, 'Cejas', 800, 30)::text;
+do $$ begin
+  assert exists (select 1 from get_available_slots('spa-mar', (select v from ctx where k='day2')::date, 30, (select v from ctx where k='cami')::uuid, null, array[(select v from ctx where k='cejas')::uuid]) where available),
+    'sus cejas sí se pueden reservar con ella';
+  assert (select x->'service_ids'->>0 from jsonb_array_elements(get_public_business('spa-mar')->'staff') x where x->>'name' = 'Cami') = (select v from ctx where k='cejas'), 'y salen en su lista';
+end $$;
+reset role;
+delete from services where id = (select v from ctx where k='cejas')::uuid;
+delete from staff where id = (select v from ctx where k='cami')::uuid;
+
 -- Se deja todo como estaba para las pruebas siguientes
 reset role;
 delete from staff_services where staff_id in ((select v from ctx where k='ana')::uuid, (select v from ctx where k='bea')::uuid);

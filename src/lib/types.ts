@@ -130,6 +130,8 @@ export interface Staff {
   photo_url: string | null
   /** Enlace privado para que cambie sus servicios y su horario (solo lo ve el dueño) */
   edit_token?: string | null
+  /** true = solo hace sus propios servicios (los crea con su enlace); false = sin ninguno marcado, hace todos */
+  own_services?: boolean
   active: boolean
   position: number
   created_at: string
@@ -153,6 +155,8 @@ export interface PublicStaff {
   photo_url: string | null
   /** Vacío = puede con todos los servicios */
   service_ids: string[]
+  /** false = solo hace los de service_ids aunque esté vacía (falta en bases anteriores a la 1.4) */
+  all_services?: boolean
 }
 
 export interface Discount {

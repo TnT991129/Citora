@@ -492,6 +492,9 @@ alter table public.staff add column if not exists photo_url text;
 -- servicios y su horario, sin cuenta ni contraseña. Lo crea y lo anula el dueño (owner_staff_link);
 -- todo lo que se hace con él pasa por las funciones staff_portal_* (sección 5).
 alter table public.staff add column if not exists edit_token text unique;
+-- Servicios propios (versión 1.4): true = solo hace los servicios que tiene en staff_services (al
+-- empezar, ninguno: los crea con su enlace). false = como antes: sin ninguno marcado, hace todos.
+alter table public.staff add column if not exists own_services boolean not null default false;
 
 -- Horario propio de un profesional (si no tiene ninguna fila aquí, usa el horario del negocio:
 -- ver _staff_slot_valid). Misma forma que schedule_days, pero por profesional.
@@ -1570,8 +1573,10 @@ begin
     'staff', case when plan_has(v_plan, 'empleados') then coalesce((
       select jsonb_agg(jsonb_build_object(
         'id', st.id, 'name', st.name, 'photo_url', st.photo_url,
-        -- Lista vacía = puede con todos los servicios (no ha configurado restricción)
-        'service_ids', coalesce((select jsonb_agg(ss.service_id) from staff_services ss where ss.staff_id = st.id), '[]'::jsonb))
+        -- Lista vacía = puede con todos los servicios (no ha configurado restricción), salvo si
+        -- tiene servicios propios (all_services = false): entonces solo los de la lista
+        'service_ids', coalesce((select jsonb_agg(ss.service_id) from staff_services ss where ss.staff_id = st.id), '[]'::jsonb),
+        'all_services', not st.own_services and not exists (select 1 from staff_services ss where ss.staff_id = st.id))
         order by st.position, st.created_at)
       from staff st where st.business_id = b.id and st.active), '[]'::jsonb)
       else '[]'::jsonb end,
@@ -1659,7 +1664,9 @@ $$;
 -- con todos (igual que antes de tener esta opción).
 create or replace function public._staff_can_do(p_staff uuid, p_service_ids uuid[])
 returns boolean language sql stable security definer set search_path = public as $$
-  select p_staff is null or p_service_ids is null or not exists (select 1 from staff_services where staff_id = p_staff)
+  select p_staff is null or p_service_ids is null
+      or (not coalesce((select own_services from staff where id = p_staff), false)
+          and not exists (select 1 from staff_services where staff_id = p_staff))
       or p_service_ids <@ coalesce((select array_agg(service_id) from staff_services where staff_id = p_staff), '{}'::uuid[]);
 $$;
 
@@ -2341,8 +2348,8 @@ begin
     'staff', jsonb_build_object('id', st.id, 'name', st.name, 'photo_url', st.photo_url),
     'business', jsonb_build_object('name', b.name, 'slug', b.slug, 'logo_url', b.logo_url, 'color_primary', b.color_primary,
                                    'currency', b.currency, 'usd_prices', b.usd_prices),
-    -- Sin servicios elegidos por el dueño, hace todos: entonces no tiene servicios propios que cambiar
-    'all_services', not exists (select 1 from staff_services where staff_id = st.id),
+    -- Hace todos los servicios del negocio: entonces no tiene servicios propios que cambiar
+    'all_services', not st.own_services and not exists (select 1 from staff_services where staff_id = st.id),
     'services', coalesce((
       select jsonb_agg(jsonb_build_object(
                'id', s.id, 'name', s.name, 'description', s.description, 'price', s.price,
@@ -2370,7 +2377,9 @@ declare
   v_name text := btrim(coalesce(p_name, ''));
   v_id uuid;
 begin
-  if not exists (select 1 from staff_services where staff_id = st.id) then raise exception 'SIN_SERVICIOS_PROPIOS'; end if;
+  if not st.own_services and not exists (select 1 from staff_services where staff_id = st.id) then
+    raise exception 'SIN_SERVICIOS_PROPIOS';
+  end if;
   if char_length(v_name) not between 1 and 80 or p_price is null or p_price < 0 or p_price > 99999999
      or p_duration is null or p_duration not between 5 and 600 or char_length(coalesce(p_description, '')) > 300 then
     raise exception 'DATOS_INVALIDOS';
