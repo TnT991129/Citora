@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Empty, Field, Modal, Toggle } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { cupRate, duration, money, price } from '../../lib/format'
@@ -24,8 +24,22 @@ type Editing = Omit<Partial<Service>, 'options'> & {
 const MAX_OPTIONS = 12
 
 export default function Services() {
-  const { business, services, reloadServices, onboarding, markStep } = usePanel()
+  const { business, services, staff, reloadServices, onboarding, markStep } = usePanel()
   const example = pricesUnreviewed(onboarding)
+  // De quién es cada servicio: si solo lo hace una persona del equipo, es suyo (lo pudo crear ella con su enlace)
+  const [doers, setDoers] = useState<Record<string, string[]>>({})
+  useEffect(() => {
+    if (staff.length === 0) return setDoers({})
+    supabase.from('staff_services').select('staff_id, service_id').then(({ data }) => {
+      const map: Record<string, string[]> = {}
+      for (const r of (data as { staff_id: string; service_id: string }[] | null) || []) (map[r.service_id] ||= []).push(r.staff_id)
+      setDoers(map)
+    })
+  }, [staff, services])
+  const ownerOf = (id: string) => {
+    const ids = doers[id] || []
+    return ids.length === 1 ? staff.find((x) => x.id === ids[0]) || null : null
+  }
   const [editing, setEditing] = useState<Editing | null>(null)
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -73,6 +87,8 @@ export default function Services() {
 
   const remove = async () => {
     if (!editing?.id) return
+    const who = ownerOf(editing.id)
+    if (who && !window.confirm(`Este servicio es de ${who.name}. ¿Seguro que quieres borrarlo? Dejará de salir en su lista.`)) return
     setBusy(true)
     const { error } = await supabase.from('services').delete().eq('id', editing.id)
     setBusy(false)
@@ -137,7 +153,11 @@ export default function Services() {
       </div>
       {s.photo_url && <img src={s.photo_url} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" />}
       <button className="min-w-0 flex-1 text-left" onClick={() => open({ ...s, options: s.options || [], multi_options: Boolean(s.multi_options) })}>
-        <p className="truncate font-semibold">{s.is_extra ? '+ ' : ''}{s.name}</p>
+        <p className="flex min-w-0 items-center gap-2">
+          <span className="truncate font-semibold">{s.is_extra ? '+ ' : ''}{s.name}</span>
+          {ownerOf(s.id) && <span className="shrink-0 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-bold text-brand">de {ownerOf(s.id)!.name.split(' ')[0]}</span>}
+          {s.hidden_with_staff && !s.active && <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">oculto: ya no está en el equipo</span>}
+        </p>
         <p className="text-sm text-slate-500">
           {s.options?.length
             ? `${s.options.length} opciones${s.multi_options ? ' (puede elegir varias)' : ''} · desde ${price(s.price, business.currency, rate)}`

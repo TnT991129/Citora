@@ -59,6 +59,8 @@ export interface Service {
   position: number
   active: boolean
   is_extra: boolean
+  /** Se ocultó solo porque la profesional que lo hacía dejó el equipo */
+  hidden_with_staff?: string | null
   options: ServiceOption[]
   /** El cliente puede elegir varias opciones a la vez (se suman los precios) */
   multi_options: boolean

@@ -91,6 +91,7 @@ export default function BookingFlow() {
 
   // Si cambia los servicios y el profesional elegido no los hace todos, pasa a "Cualquiera disponible"
   const changeServices = (ids: string[]) => {
+    setError(null)
     setSelected(ids)
     const kept = keepStaff(team, staffId, requiredIds(ids, services, team))
     if (kept !== staffId) {
@@ -298,10 +299,11 @@ export default function BookingFlow() {
           </div>
         )}
 
-        {error && <div className="mt-4"><Alert>{error}</Alert></div>}
       </main>
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur safe-bottom">
+        {/* Los avisos, junto al botón: así se ven aunque la lista sea larga */}
+        {error && <div className="ui-fade mx-auto mb-2 max-w-xl"><Alert>{error}</Alert></div>}
         <div className="mx-auto flex max-w-xl items-center gap-3">
           {step > 0 && <Button variant="secondary" onClick={() => go(step - 1)} disabled={busy}>Atrás</Button>}
           {step < last ? (

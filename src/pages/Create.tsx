@@ -47,7 +47,8 @@ export default function Create() {
   const [done, setDone] = useState<{ id: string; slug: string } | null>(null)
   // Medición del embudo (ver lib/analytics.ts): quién llega y hasta qué paso del asistente
   // Días de prueba y precio: los que se configuran en el administrador
-  const [prices, setPrices] = useState<Prices>({ basico: DEFAULT_PRICE, plus: DEFAULT_PRICE, ultra: DEFAULT_PRICE, trial_days: 3 })
+  // Hasta que lleguen del servidor no se dice cuántos días (antes decía "3" aunque fueran 15)
+  const [prices, setPrices] = useState<Prices>({ basico: DEFAULT_PRICE, plus: DEFAULT_PRICE, ultra: DEFAULT_PRICE, trial_days: undefined })
   useEffect(() => {
     track('visita', { page: 'crear' })
     supabase.rpc('get_public_prices').then(({ data }) => data && setPrices(data as Prices))
@@ -224,7 +225,7 @@ export default function Create() {
     }
   }
 
-  if (done) return <Welcome id={done.id} slug={done.slug} draft={draft} trialDays={prices.trial_days ?? 3} />
+  if (done) return <Welcome id={done.id} slug={done.slug} draft={draft} trialDays={prices.trial_days ?? null} />
 
   if (existing && session) {
     return (
@@ -580,7 +581,7 @@ export default function Create() {
             <p className="text-sm text-slate-700">
               <b>{businessType(draft.type).emoji} {draft.name}</b> · {draft.services.filter((s) => s.name.trim()).length} servicios · desde {money(Math.min(...draft.services.filter((s) => s.name.trim()).map((s) => s.price)), main)}
             </p>
-            <p className="mt-1 text-sm text-slate-600">Tendrás {prices.trial_days ?? 3} días gratis con todo incluido. Después, una sola mensualidad de {money(prices.basico, 'CUP')}.</p>
+            <p className="mt-1 text-sm text-slate-600">{prices.trial_days ? `Tendrás ${prices.trial_days} días gratis con todo incluido.` : 'Empiezas con una prueba gratis con todo incluido.'} Después, una sola mensualidad de {money(prices.basico, 'CUP')}.</p>
           </div>
           <p className="text-sm text-slate-500">
             ¿Ya tienes cuenta? <Link to="/entrar" className="font-semibold text-brand">Entra</Link> y tu app se creará con estos datos.
@@ -642,7 +643,7 @@ function Shell({ children }: { children: ReactNode }) {
  * Bienvenida al terminar: su negocio ya existe. Le ofrece el tutorial (no se abre solo), ver su
  * página como un cliente o ir directo al panel.
  */
-function Welcome({ id, slug, draft, trialDays }: { id: string; slug: string; draft: Draft; trialDays: number }) {
+function Welcome({ id, slug, draft, trialDays }: { id: string; slug: string; draft: Draft; trialDays: number | null }) {
   const navigate = useNavigate()
   const url = publicUrl(slug)
   const mode = draft.currency || 'CUP'
@@ -666,7 +667,7 @@ function Welcome({ id, slug, draft, trialDays }: { id: string; slug: string; dra
         <p className="ui-sheet text-5xl" aria-hidden>🎉</p>
         <p className="mt-4 text-sm font-semibold uppercase tracking-[0.16em] text-white/75">Tu app ya está lista</p>
         <h1 className="mx-auto mt-1 max-w-md text-[28px] font-extrabold leading-tight tracking-tight">Te damos la bienvenida a {draft.name}</h1>
-        <p className="mt-2 text-white/85">Tus {trialDays} días gratis con todo incluido ya empezaron.</p>
+        <p className="mt-2 text-white/85">{trialDays ? `Tus ${trialDays} días gratis con todo incluido ya empezaron.` : 'Tu prueba gratis con todo incluido ya empezó.'}</p>
       </div>
 
       <div className="mx-auto -mt-16 max-w-md px-5">

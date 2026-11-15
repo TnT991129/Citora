@@ -8,7 +8,7 @@ export const MODULES = {
   clientes: { name: 'Ficha de clientes', ready: true },
   galeria: { name: 'Galería de trabajos', ready: true },
   opiniones: { name: 'Opiniones', ready: true },
-  complementos: { name: 'Complementos o extras', ready: false },
+  complementos: { name: 'Complementos o extras', ready: true },
   espera: { name: 'Lista de espera', ready: true },
   finanzas: { name: 'Cobros y estadísticas', ready: true },
   descuentos: { name: 'Cupones de descuento', ready: true },
@@ -20,7 +20,8 @@ export const MODULES = {
 
 export type ModuleKey = keyof typeof MODULES
 
-// Hay un solo plan, con todo incluido. En la base de datos se guarda como 'ultra';
+// Hay un solo plan, con todo incluido (los dos planes Solo / Equipo están en PROXIMA-ACTUALIZACION.md).
+// En la base de datos se guarda como 'ultra';
 // los pagos antiguos pueden tener 'basico' o 'plus' y se muestran igual.
 export const SINGLE_PLAN: PlanKey = 'ultra'
 export const PLAN_LABEL = 'Plan Citora'
