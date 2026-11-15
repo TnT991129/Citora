@@ -502,6 +502,9 @@ alter table public.staff add column if not exists specialty text check (char_len
 -- y su especialidad, igual que los de cada profesional
 alter table public.businesses add column if not exists owner_name text check (char_length(owner_name) <= 40);
 alter table public.businesses add column if not exists owner_specialty text check (char_length(owner_specialty) <= 40);
+-- Servicios que se ocultaron solos porque la profesional que los hacía dejó el equipo (se desactivó):
+-- si vuelve, se muestran otra vez (ver _staff_hide_services)
+alter table public.services add column if not exists hidden_with_staff uuid;
 
 -- Horario propio de un profesional (si no tiene ninguna fila aquí, usa el horario del negocio:
 -- ver _staff_slot_valid). Misma forma que schedule_days, pero por profesional.
@@ -1117,6 +1120,35 @@ drop trigger if exists staff_services_guard on public.staff_services;
 create trigger staff_services_guard before insert or update on public.staff_services
   for each row execute function public.staff_services_guard();
 
+-- Cuando una profesional deja el equipo (se desactiva o se borra), sus servicios propios (los que
+-- solo hace ella) se ocultan: si no, pasarían a salir como del dueño y se podrían reservar con él.
+-- Si se vuelve a activar, se muestran otra vez.
+create or replace function public._staff_hide_services()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_id uuid := coalesce(new.id, old.id);
+begin
+  begin
+    if tg_op = 'DELETE' or (old.active and not new.active) then
+      update services s set active = false, hidden_with_staff = v_id
+       where s.active
+         and exists (select 1 from staff_services ss where ss.service_id = s.id and ss.staff_id = v_id)
+         and not exists (select 1 from staff_services ss join staff o on o.id = ss.staff_id
+                          where ss.service_id = s.id and ss.staff_id <> v_id and o.active);
+    elsif not old.active and new.active then
+      update services set active = true, hidden_with_staff = null where hidden_with_staff = v_id;
+    end if;
+  exception when others then
+    -- Al borrar un negocio entero no hay nada que ocultar
+    null;
+  end;
+  return coalesce(new, old);
+end;
+$$;
+drop trigger if exists staff_hide_services on public.staff;
+create trigger staff_hide_services before delete or update of active on public.staff
+  for each row execute function public._staff_hide_services();
+
 -- ---------------------------------------------------------------------
 -- 4. SEGURIDAD (RLS)
 -- ---------------------------------------------------------------------
@@ -1384,6 +1416,10 @@ begin
     new.token := old.token;
     new.business_id := old.business_id;
     new.created_at := old.created_at;
+    if new.staff_id is distinct from old.staff_id and new.staff_id is not null
+       and not exists (select 1 from staff where id = new.staff_id and business_id = new.business_id) then
+      raise exception 'PROFESIONAL_INVALIDO';
+    end if;
     if new.status = 'cancelada' and old.status <> 'cancelada' and new.cancelled_by is null then
       new.cancelled_by := 'negocio';
     end if;
@@ -1672,12 +1708,31 @@ $$;
 
 -- ¿Puede este profesional hacer estos servicios? Si no configuró servicios (ver Equipo), puede
 -- con todos (igual que antes de tener esta opción).
+-- Los servicios que cuentan para saber quién atiende: todos menos los extras que no son de nadie del
+-- equipo (un extra del dueño, como "Diseño", se puede añadir a la manicura de una profesional)
+create or replace function public._required_services(p_service_ids uuid[])
+returns uuid[] language sql stable security definer set search_path = public as $$
+  select coalesce(array_agg(x), '{}'::uuid[]) from unnest(p_service_ids) x
+  where not exists (
+    select 1 from services s where s.id = x and s.is_extra
+      and not exists (select 1 from staff_services ss join staff st on st.id = ss.staff_id where ss.service_id = x and st.active));
+$$;
+
+-- ¿Son todos servicios del dueño? (ninguno lo hace explícitamente alguien activo del equipo)
+create or replace function public._owner_does(p_service_ids uuid[])
+returns boolean language sql stable security definer set search_path = public as $$
+  select p_service_ids is not null and not exists (
+    select 1 from unnest(p_service_ids) x
+      join staff_services ss on ss.service_id = x
+      join staff st on st.id = ss.staff_id and st.active);
+$$;
+
 create or replace function public._staff_can_do(p_staff uuid, p_service_ids uuid[])
 returns boolean language sql stable security definer set search_path = public as $$
   select p_staff is null or p_service_ids is null
       or (not coalesce((select own_services from staff where id = p_staff), false)
           and not exists (select 1 from staff_services where staff_id = p_staff))
-      or p_service_ids <@ coalesce((select array_agg(service_id) from staff_services where staff_id = p_staff), '{}'::uuid[]);
+      or _required_services(p_service_ids) <@ coalesce((select array_agg(service_id) from staff_services where staff_id = p_staff), '{}'::uuid[]);
 $$;
 
 -- Busca quién puede atender un hueco. Sin profesionales: la agenda común.
@@ -1717,6 +1772,16 @@ begin
       return;
     end if;
   end loop;
+  -- Servicios del dueño (nadie del equipo los hace): van a la agenda del negocio, como sin equipo.
+  -- Solo si ningún profesional activo puede hacerlos: así no cambia nada donde el equipo lo hace todo.
+  if p_staff is null and p_service_ids is not null and _owner_does(_required_services(p_service_ids))
+     and not exists (select 1 from staff st where st.business_id = p_business and st.active
+                     and _staff_can_do(st.id, p_service_ids)) then
+    ok := _lane_free(p_business, null, p_start, p_end, p_exclude);
+    staff_id := null;
+    return next;
+    return;
+  end if;
   ok := false;
   staff_id := null;
   return next;
@@ -2089,6 +2154,7 @@ returns void language plpgsql volatile security definer set search_path = public
 declare
   a appointments;
   b businesses;
+  v_ids uuid[];
   v_pref uuid;
   v_staff uuid;
   v_lane smallint;
@@ -2107,14 +2173,15 @@ begin
   if b.max_reschedules is not null and a.reschedule_count >= b.max_reschedules then raise exception 'LIMITE_CAMBIOS'; end if;
 
   v_dur := greatest(5, (extract(epoch from (a.ends_at - a.starts_at)) / 60)::int);
-  -- Mismo profesional; si ya no está activo, cualquiera que esté libre
+  -- Mismo profesional; si ya no está activo, cualquiera que esté libre y haga sus servicios
   v_pref := (select st.id from staff st where st.id = a.staff_id and st.active);
-  v_check := _check_slot(b.id, p_date, p_time, v_dur, a.id, v_pref);
+  v_ids := (select array_agg(s.service_id) from appointment_services s where s.appointment_id = a.id and s.service_id is not null);
+  v_check := _check_slot(b.id, p_date, p_time, v_dur, a.id, v_pref, v_ids);
   if v_check = 'invalido' then raise exception 'TURNO_INVALIDO'; end if;
   if v_check = 'ocupado' then raise exception 'TURNO_OCUPADO'; end if;
 
   v_start := (p_date + p_time::time) at time zone b.timezone;
-  v_staff := (select f.staff_id from _free_staff(b.id, v_start, v_start + make_interval(mins => v_dur), v_pref, a.id) f);
+  v_staff := (select f.staff_id from _free_staff(b.id, v_start, v_start + make_interval(mins => v_dur), v_pref, a.id, v_ids) f);
   v_lane := _free_lane(b.id, v_staff, v_start, v_start + make_interval(mins => v_dur), a.id);
   if v_lane is null then raise exception 'TURNO_OCUPADO'; end if;
   begin
@@ -2386,6 +2453,7 @@ declare
   st staff := _staff_by_token(p_token);
   v_name text := btrim(coalesce(p_name, ''));
   v_id uuid;
+  v_old_price numeric;
 begin
   if not st.own_services and not exists (select 1 from staff_services where staff_id = st.id) then
     raise exception 'SIN_SERVICIOS_PROPIOS';
@@ -2402,12 +2470,19 @@ begin
             coalesce((select max(position) + 1 from services where business_id = st.business_id), 0))
     returning id into v_id;
     insert into staff_services (staff_id, service_id) values (st.id, v_id);
+    perform _notify_push(st.business_id, 'owner', null, st.name || ' añadió un servicio',
+                         v_name || ' · ' || round(p_price, 2)::text || ' · ' || p_duration || ' min');
     return v_id;
   end if;
   if not exists (select 1 from staff_services where staff_id = st.id and service_id = p_id)
      or (select count(*) from staff_services where service_id = p_id) > 1
      or exists (select 1 from services where id = p_id and jsonb_array_length(options) > 0) then
     raise exception 'SERVICIO_COMPARTIDO';
+  end if;
+  select price into v_old_price from services where id = p_id;
+  if v_old_price is distinct from round(p_price, 2) then
+    perform _notify_push(st.business_id, 'owner', null, st.name || ' cambió un precio',
+                         v_name || ': de ' || v_old_price::text || ' a ' || round(p_price, 2)::text);
   end if;
   update services set name = v_name, price = round(p_price, 2), duration_min = p_duration,
          description = nullif(btrim(coalesce(p_description, '')), ''), active = coalesce(p_active, true),
@@ -2509,6 +2584,7 @@ begin
   returning id into v_id;
 
   for v_item in select * from jsonb_array_elements(coalesce(p_services, '[]'::jsonb)) loop
+    exit when v_pos >= 50;
     if coalesce(btrim(v_item ->> 'name'), '') <> '' then
       insert into services (business_id, name, price, duration_min, position)
       values (v_id, left(btrim(v_item ->> 'name'), 80),
@@ -3609,6 +3685,9 @@ revoke execute on function public.staff_services_guard() from anon;
 revoke execute on function public.services_guard() from anon;
 revoke execute on function public._chosen_services(uuid, uuid[], jsonb, boolean) from anon, authenticated;
 revoke execute on function public._staff_by_token(text) from anon, authenticated;
+revoke execute on function public._required_services(uuid[]) from anon, authenticated;
+revoke execute on function public._owner_does(uuid[]) from anon, authenticated;
+revoke execute on function public._staff_hide_services() from anon;
 -- Supabase da permiso a los visitantes en las funciones nuevas: esta es solo para el dueño
 revoke execute on function public.owner_staff_link(uuid, text) from anon;
 revoke execute on function public.staff_schedule_days_normalize() from anon;

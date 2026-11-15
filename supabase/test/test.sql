@@ -712,9 +712,50 @@ do $$ begin
     'sus cejas sí se pueden reservar con ella';
   assert (select x->'service_ids'->>0 from jsonb_array_elements(get_public_business('spa-mar')->'staff') x where x->>'name' = 'Cami') = (select v from ctx where k='cejas'), 'y salen en su lista';
 end $$;
+-- Todo el equipo con servicios propios: el masaje no es de nadie del equipo, es del dueño, y se
+-- reserva en la agenda del negocio (antes se quedaba sin horas)
 reset role;
-delete from services where id = (select v from ctx where k='cejas')::uuid;
+update staff set own_services = true where name in ('Ana', 'Bea');
+set role anon;
+do $$ declare d2 date := (select v from ctx where k='day2')::date; m uuid := (select v from ctx where k='masaje')::uuid; c uuid := (select v from ctx where k='cejas')::uuid; begin
+  assert exists (select 1 from get_available_slots('spa-mar', d2, 60, null, null, array[m]) where available), 'el masaje del dueño se puede reservar';
+  assert not exists (select 1 from get_available_slots('spa-mar', d2, 60, null, null, array[m, c]) where available), 'masaje (dueño) + cejas (Cami) juntos no: nadie hace los dos';
+end $$;
+insert into ctx select 'r_dueno', create_booking('spa-mar', array[(select v from ctx where k='masaje')::uuid], (select v from ctx where k='day2')::date, '10:00', 'Cliente Dueño', '5350000071');
+reset role;
+do $$ begin
+  assert (select staff_id from appointments where token = (select v from ctx where k='r_dueno')) is null, 'va a la agenda del dueño';
+end $$;
+set role anon;
+-- Al cambiar la fecha sigue siendo del dueño (antes podía pasar a cualquier profesional)
+select reschedule_booking((select v from ctx where k='r_dueno'), (select v from ctx where k='day2')::date, '11:00');
+reset role;
+do $$ begin
+  assert (select staff_id from appointments where token = (select v from ctx where k='r_dueno')) is null, 'sigue con el dueño tras moverla';
+end $$;
+update appointments set status = 'cancelada' where token = (select v from ctx where k='r_dueno');
+update staff set own_services = false where name in ('Ana', 'Bea');
+
+-- El profesional de una cita tiene que ser del mismo negocio
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select expect_error($$update appointments set staff_id = gen_random_uuid() where token = '$$ || (select v from ctx where k='s1') || $$'$$, 'PROFESIONAL_INVALIDO');
+
+-- Si Cami deja el equipo, sus servicios se ocultan (si no, saldrían como del dueño); si vuelve, se ven
+update staff set active = false where id = (select v from ctx where k='cami')::uuid;
+reset role;
+do $$ begin
+  assert not (select active from services where id = (select v from ctx where k='cejas')::uuid), 'cejas oculto al desactivar a Cami';
+  assert (select hidden_with_staff from services where id = (select v from ctx where k='cejas')::uuid) = (select v from ctx where k='cami')::uuid;
+  assert (select active from services where id = (select v from ctx where k='masaje')::uuid), 'el masaje compartido no se toca';
+end $$;
+set role authenticated;
+update staff set active = true where id = (select v from ctx where k='cami')::uuid;
+reset role;
+do $$ begin assert (select active from services where id = (select v from ctx where k='cejas')::uuid), 'cejas visible al volver'; end $$;
 delete from staff where id = (select v from ctx where k='cami')::uuid;
+do $$ begin assert not (select active from services where id = (select v from ctx where k='cejas')::uuid), 'cejas oculto al quitar a Cami'; end $$;
+delete from services where id = (select v from ctx where k='cejas')::uuid;
 
 -- El dueño también atiende: su nombre y su especialidad salen en la página
 reset role;
