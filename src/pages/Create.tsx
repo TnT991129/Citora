@@ -372,9 +372,15 @@ export default function Create() {
                 key={c.key}
                 type="button"
                 onClick={() => update({ currency: c.key, services: changeCurrency(draft.services, draft.type, mode, c.key) })}
-                className={`card flex w-full items-center justify-between gap-3 text-left transition hover:ring-2 hover:ring-brand ${mode === c.key ? 'ring-2 ring-brand' : ''}`}
+                aria-pressed={mode === c.key}
+                className={`card flex w-full items-center justify-between gap-3 text-left transition hover:ring-2 hover:ring-brand ${mode === c.key ? 'border-brand bg-brand/5 ring-2 ring-brand' : ''}`}
               >
-                <span>
+                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${mode === c.key ? 'border-brand bg-brand text-white' : 'border-slate-300'}`} aria-hidden>
+                  {mode === c.key && (
+                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-10" /></svg>
+                  )}
+                </span>
+                <span className="min-w-0 flex-1">
                   <span className="block text-lg font-bold">{c.name}</span>
                   <span className="block text-sm text-slate-500">{c.hint}</span>
                 </span>
