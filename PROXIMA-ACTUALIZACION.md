@@ -152,6 +152,20 @@ menú lateral oscuro.
 (`Today.tsx`): se mantienen con el diseño nuevo. Lo mismo con los avisos de vencimiento,
 el registro de pagos y las encuestas.
 
+## Hecho el 15 de noviembre de 2026 en `staging` (versión 1.4.0, sin publicar)
+
+- Sección 0 completa (alta, bienvenida, tutorial, panel del dueño).
+- Equipo: cada profesional nueva empieza sin servicios y crea los suyos con su **enlace privado**
+  (`/:slug/equipo/:token`), con su especialidad y su horario; el dueño recibe un aviso con cada
+  cambio de precio. El dueño también atiende (nombre y especialidad en "Tú también atiendes").
+- Página de reservas agrupada por especialidad; aviso si se mezclan servicios de personas distintas.
+- Auditoría (fases A y B): los servicios del dueño se reservan en su agenda aunque haya equipo;
+  al cambiar de fecha la cita conserva quién la atiende; los servicios de quien deja el equipo se
+  ocultan solos; el profesional de una cita tiene que ser del mismo negocio; Sentry carga aparte.
+- **Pendiente de la auditoría (fase C):** reserva atendida por varias personas seguidas, partir
+  `schema.sql` en varios archivos, generar los tipos de TypeScript desde la base de datos (necesita
+  `npx supabase login`), prueba completa del navegador en GitHub y dividir los archivos grandes.
+
 ## Lo que ya existe (no hay que hacerlo)
 
 Equipo de profesionales con foto, horario y servicios propios; varias citas a la misma hora;
