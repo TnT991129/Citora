@@ -16,6 +16,7 @@ const BusinessHome = lazy(() => import('./pages/public/BusinessHome'))
 const BookingFlow = lazy(() => import('./pages/public/BookingFlow'))
 const BookingPage = lazy(() => import('./pages/public/BookingPage'))
 const MyAppointments = lazy(() => import('./pages/public/MyAppointments'))
+const StaffPortal = lazy(() => import('./pages/public/StaffPortal'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 const Terms = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Terms })))
 const Privacy = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Privacy })))
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="/:slug/client/cita/:token" element={<BookingPage />} />
         <Route path="/:slug/client/mis-citas" element={<MyAppointments />} />
         <Route path="/:slug/panel-admin/*" element={<Panel />} />
+        <Route path="/:slug/equipo/:token" element={<StaffPortal />} />
 
         {/* Direcciones de antes (enlaces ya enviados por WhatsApp): llevan a las nuevas */}
         <Route path="/:slug" element={<ToClient />} />

@@ -128,6 +128,8 @@ export interface Staff {
   business_id: string
   name: string
   photo_url: string | null
+  /** Enlace privado para que cambie sus servicios y su horario (solo lo ve el dueño) */
+  edit_token?: string | null
   active: boolean
   position: number
   created_at: string

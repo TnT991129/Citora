@@ -39,6 +39,11 @@ export function bookingUrl(slug: string, token: string): string {
   return `${siteUrl()}?c=${encodeURIComponent(slug)}&cita=${encodeURIComponent(token)}`
 }
 
+/** Enlace privado de un profesional del equipo: cambia sus servicios y su horario (ver StaffPortal) */
+export function staffUrl(slug: string, token: string): string {
+  return `${siteUrl()}?c=${encodeURIComponent(slug)}&eq=${encodeURIComponent(token)}`
+}
+
 /** Si la página se abrió con un enlace compartido (?c=… o ?p=…), cambia la dirección a la página real sin recargar */
 export function openSharedLink(): void {
   const q = new URLSearchParams(window.location.search)
@@ -51,9 +56,12 @@ export function openSharedLink(): void {
     const slug = c.toLowerCase()
     const cita = q.get('cita')
     const v = q.get('v')
-    path = cita && /^[a-zA-Z0-9]{8,64}$/.test(cita)
-      ? clientPath(slug, `cita/${cita}`)
-      : clientPath(slug, v === 'reservar' || v === 'mis-citas' ? v : '')
+    const eq = q.get('eq')
+    path = eq && /^[a-f0-9]{32,64}$/.test(eq)
+      ? `/${slug}/equipo/${eq}`
+      : cita && /^[a-zA-Z0-9]{8,64}$/.test(cita)
+        ? clientPath(slug, `cita/${cita}`)
+        : clientPath(slug, v === 'reservar' || v === 'mis-citas' ? v : '')
   } else if (valid(p)) {
     path = panelPath(p.toLowerCase())
   }

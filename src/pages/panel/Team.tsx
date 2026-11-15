@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { TimeChips } from '../../components/TimeChips'
-import { Alert, BusinessAvatar, Button, Modal, Toggle, flash } from '../../components/ui'
+import { Alert, BusinessAvatar, Button, Modal, Toggle, WhatsAppIcon, flash } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { WEEKDAYS, normalizeSlot } from '../../lib/format'
 import { imageExt, resizeImage } from '../../lib/image'
 import { supabase } from '../../lib/supabase'
 import type { Staff, StaffScheduleDay } from '../../lib/types'
+import { staffUrl } from '../../lib/url'
+import { shareLink } from '../../lib/whatsapp'
 import { usePanel } from './context'
 import { Locked, useModule } from './Locked'
 
@@ -125,32 +127,36 @@ function StaffRow({ s, first, last, onMove, onRename, onToggle, onRemove, onDeta
 }) {
   const [confirm, setConfirm] = useState(false)
   return (
-    <li className={`card flex flex-wrap items-center gap-3 ${s.active ? '' : 'opacity-60'}`}>
-      <div className="flex flex-col">
-        <ArrowBtn label="Subir" disabled={first} onClick={() => onMove(-1)} d="M6 15l6-6 6 6" />
-        <ArrowBtn label="Bajar" disabled={last} onClick={() => onMove(1)} d="M6 9l6 6 6-6" />
+    <li className={`card space-y-3 ${s.active ? '' : 'opacity-60'}`}>
+      <div className="flex items-center gap-3">
+        <div className="flex flex-col">
+          <ArrowBtn label="Subir" disabled={first} onClick={() => onMove(-1)} d="M6 15l6-6 6 6" />
+          <ArrowBtn label="Bajar" disabled={last} onClick={() => onMove(1)} d="M6 9l6 6 6-6" />
+        </div>
+        <BusinessAvatar name={s.name} logo={s.photo_url} size={40} />
+        <input
+          className="input min-w-0 flex-1"
+          defaultValue={s.name}
+          maxLength={60}
+          aria-label="Nombre"
+          onBlur={(e) => {
+            const n = e.target.value.trim()
+            if (n.length >= 2 && n !== s.name) onRename(n)
+          }}
+        />
+        <Toggle checked={s.active} onChange={onToggle} label="Activo" />
       </div>
-      <BusinessAvatar name={s.name} logo={s.photo_url} size={40} />
-      <input
-        className="input min-w-0 flex-1"
-        defaultValue={s.name}
-        maxLength={60}
-        aria-label="Nombre"
-        onBlur={(e) => {
-          const n = e.target.value.trim()
-          if (n.length >= 2 && n !== s.name) onRename(n)
-        }}
-      />
-      <button onClick={onDetail} className="text-sm font-semibold text-brand">Horario y servicios</button>
-      <Toggle checked={s.active} onChange={onToggle} label="Activo" />
-      {confirm ? (
-        <span className="flex gap-1">
-          <Button size="sm" variant="danger" onClick={onRemove}>Quitar</Button>
-          <Button size="sm" variant="ghost" onClick={() => setConfirm(false)}>No</Button>
-        </span>
-      ) : (
-        <button onClick={() => setConfirm(true)} className="rounded-lg px-2 py-1 text-sm font-medium text-red-600 hover:bg-red-50">Quitar</button>
-      )}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Button size="sm" variant="secondary" onClick={onDetail}>Horario, servicios y su enlace</Button>
+        {confirm ? (
+          <span className="flex gap-1">
+            <Button size="sm" variant="danger" onClick={onRemove}>Quitar</Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirm(false)}>No</Button>
+          </span>
+        ) : (
+          <button onClick={() => setConfirm(true)} className="rounded-lg px-2 py-1 text-sm font-medium text-red-600 hover:bg-red-50">Quitar</button>
+        )}
+      </div>
     </li>
   )
 }
@@ -165,7 +171,7 @@ function ArrowBtn({ label, d, disabled, onClick }: { label: string; d: string; d
 
 function StaffDetailsModal({ staff, onClose, onPhotoChanged }: { staff: Staff; onClose: () => void; onPhotoChanged: () => Promise<void> | void }) {
   const { business, services } = usePanel()
-  const [tab, setTab] = useState<'horario' | 'servicios'>('horario')
+  const [tab, setTab] = useState<'horario' | 'servicios' | 'enlace'>('horario')
   const [custom, setCustom] = useState<boolean | null>(null)
   const [days, setDays] = useState<StaffScheduleDay[] | null>(null)
   const [serviceIds, setServiceIds] = useState<string[] | null>(null)
@@ -276,13 +282,13 @@ function StaffDetailsModal({ staff, onClose, onPhotoChanged }: { staff: Staff; o
         </div>
 
         <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
-          {(['horario', 'servicios'] as const).map((t) => (
+          {(['horario', 'servicios', 'enlace'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold ${tab === t ? 'bg-white shadow-sm' : 'text-slate-600'}`}
             >
-              {t === 'horario' ? 'Horario' : 'Servicios'}
+              {t === 'horario' ? 'Horario' : t === 'servicios' ? 'Servicios' : 'Su enlace'}
             </button>
           ))}
         </div>
@@ -345,8 +351,80 @@ function StaffDetailsModal({ staff, onClose, onPhotoChanged }: { staff: Staff; o
           </div>
         )}
 
+        {tab === 'enlace' && serviceIds && <StaffLink staff={staff} hasOwnServices={serviceIds.length > 0} />}
+
         {error && <Alert>{error}</Alert>}
       </div>
     </Modal>
+  )
+}
+
+/** Enlace privado para que el propio profesional cambie sus servicios y su horario, sin cuenta */
+function StaffLink({ staff, hasOwnServices }: { staff: Staff; hasOwnServices: boolean }) {
+  const { business, reloadStaff } = usePanel()
+  const [token, setToken] = useState<string | null>(staff.edit_token || null)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const first = staff.name.split(' ')[0]
+  const url = token ? staffUrl(business.slug, token) : ''
+
+  const act = async (action: 'ver' | 'nuevo' | 'anular') => {
+    if (action === 'anular' && !window.confirm(`¿Anular el enlace de ${first}? Dejará de funcionar y tendrás que mandarle uno nuevo.`)) return
+    setBusy(action)
+    setError(null)
+    const { data, error } = await supabase.rpc('owner_staff_link', { p_staff: staff.id, p_action: action })
+    setBusy(null)
+    if (error) return setError(errorMessage(error))
+    setToken((data as string | null) || null)
+    if (action === 'nuevo') flash('Enlace nuevo creado. El anterior ya no funciona.')
+    if (action === 'anular') flash('Enlace anulado')
+    void reloadStaff()
+  }
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url)
+      flash('Enlace copiado')
+    } catch {
+      flash('No se pudo copiar')
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-600">
+        Con este enlace, <b>{first}</b> cambia desde su móvil <b>sus servicios</b> (nombre, precio, duración) y <b>su horario</b>, sin crear cuenta.
+        Solo puede tocar lo suyo: los servicios que comparte con otras personas del equipo los sigues cambiando tú.
+      </p>
+      {!hasOwnServices && (
+        <Alert kind="warning">
+          Primero marca en la pestaña <b>Servicios</b> lo que hace {first}. Si no marcas ninguno, hace todos y no tiene servicios propios que cambiar (solo su horario).
+        </Alert>
+      )}
+      {!token ? (
+        <Button block onClick={() => act('ver')} loading={busy === 'ver'}>Crear enlace para {first}</Button>
+      ) : (
+        <>
+          <p className="break-all rounded-xl bg-slate-50 px-3 py-2 font-mono text-xs text-slate-600">{url.replace(/^https?:\/\//, '')}</p>
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <a
+              href={shareLink(`Hola ${first}, este es tu enlace de ${business.name} para cambiar tus servicios y tu horario. Es solo para ti, no lo compartas: ${url}`)}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center gap-2 rounded-btn bg-[#25D366] px-4 py-2.5 font-semibold text-white shadow-sm"
+            >
+              <WhatsAppIcon className="h-4 w-4" /> Mandárselo por WhatsApp
+            </a>
+            <Button variant="secondary" onClick={copy}>Copiar</Button>
+          </div>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Button size="sm" variant="ghost" onClick={() => act('nuevo')} loading={busy === 'nuevo'}>Hacer uno nuevo</Button>
+            <Button size="sm" variant="ghost" onClick={() => act('anular')} loading={busy === 'anular'} className="text-red-600">Anular enlace</Button>
+          </div>
+          <p className="text-xs text-slate-500">Si {first} deja de trabajar contigo o el enlace llega a otra persona, anúlalo: deja de funcionar al momento.</p>
+        </>
+      )}
+      {error && <Alert>{error}</Alert>}
+    </div>
   )
 }

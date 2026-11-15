@@ -41,6 +41,10 @@ const MESSAGES: Record<string, string> = {
   RESPUESTA_INVALIDA: 'Responde las preguntas de estrellas y de Sí/No.',
   FALTA_OPCION: 'Elige una opción del servicio.',
   OPCIONES_INVALIDAS: 'Revisa las opciones: pon de 2 a 12, cada una con su nombre y su precio.',
+  ENLACE_CADUCADO: 'Este enlace ya no vale. Pídele al dueño del negocio que te mande uno nuevo.',
+  SERVICIO_COMPARTIDO: 'Este servicio lo hacen también otras personas del equipo: solo lo puede cambiar el dueño del negocio.',
+  SIN_SERVICIOS_PROPIOS: 'Ahora haces todos los servicios del negocio. Para tener los tuyos, el dueño tiene que elegir cuáles haces en Equipo.',
+  DATOS_INVALIDOS: 'Revisa los datos: nombre, precio y duración (de 5 minutos a 10 horas).',
   CITAS_SE_SOLAPAN: 'Al pasar a esa zona, dos citas de este negocio se pisarían. Muévelas antes o cambia la zona sin mantener la hora de las citas.',
 }
 

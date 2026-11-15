@@ -488,6 +488,11 @@ create index if not exists staff_business_idx on public.staff (business_id, posi
 -- Foto de cada profesional (se guarda en el mismo almacén "logos", carpeta del negocio)
 alter table public.staff add column if not exists photo_url text;
 
+-- Enlace privado de cada profesional (versión 1.4): con él, la propia trabajadora cambia sus
+-- servicios y su horario, sin cuenta ni contraseña. Lo crea y lo anula el dueño (owner_staff_link);
+-- todo lo que se hace con él pasa por las funciones staff_portal_* (sección 5).
+alter table public.staff add column if not exists edit_token text unique;
+
 -- Horario propio de un profesional (si no tiene ninguna fila aquí, usa el horario del negocio:
 -- ver _staff_slot_valid). Misma forma que schedule_days, pero por profesional.
 create table if not exists public.staff_schedule_days (
@@ -2304,6 +2309,124 @@ returns void language sql volatile security definer set search_path = public as 
 $$;
 
 -- ---------------------------------------------------------------------
+-- Enlace privado de un profesional (sin sesión): ve y cambia SUS servicios y SU horario.
+-- Un servicio es suyo si solo lo hace él (staff_services); los que comparte con otros
+-- profesionales, o los que tienen opciones de precio, solo los ve: los cambia el dueño.
+-- ---------------------------------------------------------------------
+create or replace function public._staff_by_token(p_token text)
+returns staff language plpgsql stable security definer set search_path = public as $$
+declare
+  st staff;
+begin
+  if p_token is null or char_length(p_token) < 32 then raise exception 'ENLACE_CADUCADO'; end if;
+  select * into st from staff where edit_token = p_token and active;
+  if not found then raise exception 'ENLACE_CADUCADO'; end if;
+  return st;
+end;
+$$;
+
+create or replace function public._slots_json(p_slots time[])
+returns jsonb language sql immutable as $$
+  select coalesce(jsonb_agg(to_char(t, 'HH24:MI') order by t), '[]'::jsonb) from unnest(p_slots) t;
+$$;
+
+create or replace function public.staff_portal(p_token text)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  st staff := _staff_by_token(p_token);
+  b businesses;
+begin
+  select * into b from businesses where id = st.business_id;
+  return jsonb_build_object(
+    'staff', jsonb_build_object('id', st.id, 'name', st.name, 'photo_url', st.photo_url),
+    'business', jsonb_build_object('name', b.name, 'slug', b.slug, 'logo_url', b.logo_url, 'color_primary', b.color_primary,
+                                   'currency', b.currency, 'usd_prices', b.usd_prices),
+    -- Sin servicios elegidos por el dueño, hace todos: entonces no tiene servicios propios que cambiar
+    'all_services', not exists (select 1 from staff_services where staff_id = st.id),
+    'services', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', s.id, 'name', s.name, 'description', s.description, 'price', s.price,
+               'duration_min', s.duration_min, 'active', s.active, 'is_extra', s.is_extra,
+               'has_options', jsonb_array_length(s.options) > 0,
+               'shared', (select count(*) from staff_services x where x.service_id = s.id) > 1)
+             order by s.is_extra, s.position, s.created_at)
+      from services s join staff_services ss on ss.service_id = s.id and ss.staff_id = st.id), '[]'::jsonb),
+    'schedule', coalesce((
+      select jsonb_agg(jsonb_build_object('weekday', d.weekday, 'is_open', d.is_open, 'slots', _slots_json(d.slots)) order by d.weekday)
+      from staff_schedule_days d where d.staff_id = st.id), '[]'::jsonb),
+    'business_schedule', coalesce((
+      select jsonb_agg(jsonb_build_object('weekday', d.weekday, 'is_open', d.is_open, 'slots', _slots_json(d.slots)) order by d.weekday)
+      from schedule_days d where d.business_id = b.id), '[]'::jsonb));
+end;
+$$;
+
+-- Crea (p_id null) o cambia uno de sus servicios. Devuelve su id.
+create or replace function public.staff_portal_save_service(
+  p_token text, p_id uuid, p_name text, p_price numeric, p_duration int,
+  p_description text default null, p_active boolean default true, p_is_extra boolean default false)
+returns uuid language plpgsql volatile security definer set search_path = public as $$
+declare
+  st staff := _staff_by_token(p_token);
+  v_name text := btrim(coalesce(p_name, ''));
+  v_id uuid;
+begin
+  if not exists (select 1 from staff_services where staff_id = st.id) then raise exception 'SIN_SERVICIOS_PROPIOS'; end if;
+  if char_length(v_name) not between 1 and 80 or p_price is null or p_price < 0 or p_price > 99999999
+     or p_duration is null or p_duration not between 5 and 600 or char_length(coalesce(p_description, '')) > 300 then
+    raise exception 'DATOS_INVALIDOS';
+  end if;
+  if p_id is null then
+    if (select count(*) from services where business_id = st.business_id) >= 200 then raise exception 'DATOS_INVALIDOS'; end if;
+    insert into services (business_id, name, price, duration_min, description, active, is_extra, position)
+    values (st.business_id, v_name, round(p_price, 2), p_duration, nullif(btrim(coalesce(p_description, '')), ''),
+            coalesce(p_active, true), coalesce(p_is_extra, false),
+            coalesce((select max(position) + 1 from services where business_id = st.business_id), 0))
+    returning id into v_id;
+    insert into staff_services (staff_id, service_id) values (st.id, v_id);
+    return v_id;
+  end if;
+  if not exists (select 1 from staff_services where staff_id = st.id and service_id = p_id)
+     or (select count(*) from staff_services where service_id = p_id) > 1
+     or exists (select 1 from services where id = p_id and jsonb_array_length(options) > 0) then
+    raise exception 'SERVICIO_COMPARTIDO';
+  end if;
+  update services set name = v_name, price = round(p_price, 2), duration_min = p_duration,
+         description = nullif(btrim(coalesce(p_description, '')), ''), active = coalesce(p_active, true),
+         is_extra = coalesce(p_is_extra, is_extra)
+   where id = p_id and business_id = st.business_id;
+  return p_id;
+end;
+$$;
+
+-- Su horario: [{weekday, is_open, slots: ["09:00", ...]}]. Vacío = usa el horario del negocio.
+create or replace function public.staff_portal_save_schedule(p_token text, p_days jsonb)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  st staff := _staff_by_token(p_token);
+  d jsonb;
+  v_day int;
+  v_open boolean;
+  v_slots time[];
+begin
+  if p_days is null or jsonb_typeof(p_days) <> 'array' or jsonb_array_length(p_days) > 7 then raise exception 'DATOS_INVALIDOS'; end if;
+  delete from staff_schedule_days where staff_id = st.id;
+  for d in select x from jsonb_array_elements(p_days) x loop
+    begin
+      v_day := (d->>'weekday')::int;
+      v_open := coalesce((d->>'is_open')::boolean, false);
+      select coalesce(array_agg(t::time), '{}') into v_slots from jsonb_array_elements_text(d->'slots') t;
+    exception when others then
+      raise exception 'DATOS_INVALIDOS';
+    end;
+    if v_day is null or v_day not between 0 and 6 or cardinality(v_slots) > 96 then raise exception 'DATOS_INVALIDOS'; end if;
+    insert into staff_schedule_days (staff_id, weekday, is_open, slots)
+    values (st.id, v_day, v_open, v_slots)
+    on conflict (staff_id, weekday) do update set is_open = excluded.is_open, slots = excluded.slots;
+  end loop;
+end;
+$$;
+
+-- ---------------------------------------------------------------------
 -- 6. FUNCIONES DEL DUEÑO (con sesión)
 -- ---------------------------------------------------------------------
 
@@ -2419,6 +2542,28 @@ begin
                     where e.slug = b.slug and e.name = 'visita' and e.created_at > now() - interval '7 days'))
     from appointments a
     where a.business_id = b.id and a.status <> 'cancelada');
+end;
+$$;
+
+-- El dueño crea, ve o anula el enlace privado de uno de sus profesionales.
+--   p_action: 'ver' (lo crea si no tiene), 'nuevo' (el anterior deja de valer) o 'anular'
+create or replace function public.owner_staff_link(p_staff uuid, p_action text default 'ver')
+returns text language plpgsql volatile security definer set search_path = public as $$
+declare
+  st staff;
+begin
+  select s.* into st from staff s join businesses b on b.id = s.business_id
+   where s.id = p_staff and b.owner_id = auth.uid();
+  if not found then raise exception 'PROFESIONAL_INVALIDO'; end if;
+  if p_action = 'anular' then
+    update staff set edit_token = null where id = st.id;
+    return null;
+  end if;
+  if p_action = 'nuevo' or st.edit_token is null then
+    st.edit_token := replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', '');
+    update staff set edit_token = st.edit_token where id = st.id;
+  end if;
+  return st.edit_token;
 end;
 $$;
 
@@ -3344,6 +3489,10 @@ grant execute on function public.check_slug_available(text) to anon, authenticat
 grant execute on function public.create_business(text, text, text, text, text, text, jsonb, jsonb, text, boolean, numeric) to authenticated;
 grant execute on function public.get_my_business_status() to authenticated;
 grant execute on function public.get_my_progress() to authenticated;
+grant execute on function public.owner_staff_link(uuid, text) to authenticated;
+grant execute on function public.staff_portal(text) to anon, authenticated;
+grant execute on function public.staff_portal_save_service(text, uuid, text, numeric, int, text, boolean, boolean) to anon, authenticated;
+grant execute on function public.staff_portal_save_schedule(text, jsonb) to anon, authenticated;
 grant execute on function public.get_payment_info() to authenticated;
 grant execute on function public.submit_payment_claim(int, numeric, text, text) to authenticated;
 grant execute on function public.save_owner_push_subscription(text, text, text) to authenticated;
@@ -3427,6 +3576,7 @@ revoke execute on function public._appointments_notify() from anon;
 revoke execute on function public.staff_services_guard() from anon;
 revoke execute on function public.services_guard() from anon;
 revoke execute on function public._chosen_services(uuid, uuid[], jsonb, boolean) from anon, authenticated;
+revoke execute on function public._staff_by_token(text) from anon, authenticated;
 revoke execute on function public.staff_schedule_days_normalize() from anon;
 
 -- Las tablas: sin acceso directo para visitantes anónimos

@@ -609,6 +609,91 @@ do $$ declare d2 date := (select v from ctx where k='day2')::date; ana uuid := (
 end $$;
 select expect_error($$select create_booking('spa-mar', array['$$ || (select v from ctx where k='masaje') || $$'::uuid], '$$ || (select v from ctx where k='day2') || $$', '10:00', 'Cliente Cinco', '5350000005', null, null, '$$ || (select v from ctx where k='ana') || $$')$$, 'TURNO_INVALIDO');
 
+-- ===== Enlace privado de un profesional (cambia sus servicios y su horario) =====
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+insert into ctx select 'tok_ana', owner_staff_link((select v from ctx where k='ana')::uuid);
+insert into ctx select 'bea', id::text from staff where name = 'Bea';
+do $$ begin
+  assert char_length((select v from ctx where k='tok_ana')) >= 32, 'enlace largo';
+  assert owner_staff_link((select v from ctx where k='ana')::uuid) = (select v from ctx where k='tok_ana'), 'ver no cambia el enlace';
+end $$;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select expect_error($$select owner_staff_link('$$ || (select v from ctx where k='ana') || $$')$$, 'PROFESIONAL_INVALIDO');
+reset role;
+set role anon;
+select expect_error($$select owner_staff_link('$$ || (select v from ctx where k='ana') || $$')$$, 'permission denied');
+select expect_error($$select staff_portal('no-vale')$$, 'ENLACE_CADUCADO');
+select expect_error($$select staff_portal(repeat('a', 64))$$, 'ENLACE_CADUCADO');
+do $$ declare p jsonb := staff_portal((select v from ctx where k='tok_ana')); begin
+  assert p->'staff'->>'name' = 'Ana', 'su nombre: ' || p::text;
+  assert (p->>'all_services')::boolean, 'sin servicios elegidos hace todos';
+  assert p->'business'->>'name' = 'Spa Mar' and not (p->'business' ? 'owner_id') and not (p->'staff' ? 'edit_token'), 'sin datos privados';
+end $$;
+-- Haciendo todos los servicios, no tiene ninguno propio que cambiar
+select expect_error($$select staff_portal_save_service('$$ || (select v from ctx where k='tok_ana') || $$', null, 'Uñas', 100, 30)$$, 'SIN_SERVICIOS_PROPIOS');
+-- El dueño les asigna el masaje a las dos (compartido)
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+insert into staff_services values ((select v from ctx where k='ana')::uuid, (select v from ctx where k='masaje')::uuid),
+                                  ((select v from ctx where k='bea')::uuid, (select v from ctx where k='masaje')::uuid);
+reset role;
+set role anon;
+insert into ctx select 'pest', staff_portal_save_service((select v from ctx where k='tok_ana'), null, ' Pestañas ', 2000, 90)::text;
+do $$ declare p jsonb := staff_portal((select v from ctx where k='tok_ana')); begin
+  assert not (p->>'all_services')::boolean, 'ya tiene servicios propios';
+  assert jsonb_array_length(p->'services') = 2, 'masaje y pestañas: ' || p::text;
+  assert (select (x->>'shared')::boolean from jsonb_array_elements(p->'services') x where x->>'id' = (select v from ctx where k='masaje')), 'el masaje es compartido';
+  assert not (select (x->>'shared')::boolean from jsonb_array_elements(p->'services') x where x->>'id' = (select v from ctx where k='pest')), 'pestañas es suyo';
+  assert (select x->>'name' from jsonb_array_elements(p->'services') x where x->>'id' = (select v from ctx where k='pest')) = 'Pestañas', 'nombre sin espacios';
+end $$;
+select staff_portal_save_service((select v from ctx where k='tok_ana'), (select v from ctx where k='pest')::uuid, 'Pestañas pelo a pelo', 2500, 120, 'Dura 2 horas', true);
+select expect_error($$select staff_portal_save_service('$$ || (select v from ctx where k='tok_ana') || $$', '$$ || (select v from ctx where k='masaje') || $$', 'Mío', 1, 30)$$, 'SERVICIO_COMPARTIDO');
+select expect_error($$select staff_portal_save_service('$$ || (select v from ctx where k='tok_ana') || $$', null, '', 100, 30)$$, 'DATOS_INVALIDOS');
+select expect_error($$select staff_portal_save_service('$$ || (select v from ctx where k='tok_ana') || $$', null, 'X', -1, 30)$$, 'DATOS_INVALIDOS');
+select expect_error($$select staff_portal_save_service('$$ || (select v from ctx where k='tok_ana') || $$', null, 'X', 100, 2)$$, 'DATOS_INVALIDOS');
+-- Su horario: se ordena, y lo raro se rechaza
+select staff_portal_save_schedule((select v from ctx where k='tok_ana'), '[{"weekday":1,"is_open":true,"slots":["10:00","09:00"]},{"weekday":0,"is_open":false,"slots":[]}]');
+do $$ declare p jsonb := staff_portal((select v from ctx where k='tok_ana')); begin
+  assert jsonb_array_length(p->'schedule') = 2, 'dos días: ' || p::text;
+  assert p->'schedule'->1->'slots'->>0 = '09:00', 'horas ordenadas: ' || p::text;
+  assert jsonb_array_length(p->'business_schedule') = 7, 've el horario del negocio';
+end $$;
+select expect_error($$select staff_portal_save_schedule('$$ || (select v from ctx where k='tok_ana') || $$', '[{"weekday":9,"is_open":true,"slots":[]}]')$$, 'DATOS_INVALIDOS');
+select expect_error($$select staff_portal_save_schedule('$$ || (select v from ctx where k='tok_ana') || $$', '[{"weekday":1,"is_open":true,"slots":["25:99"]}]')$$, 'DATOS_INVALIDOS');
+select expect_error($$select staff_portal_save_schedule('$$ || (select v from ctx where k='tok_ana') || $$', '{"no":"lista"}')$$, 'DATOS_INVALIDOS');
+reset role;
+do $$ begin
+  assert (select price from services where id = (select v from ctx where k='pest')::uuid) = 2500, 'precio cambiado';
+  assert (select business_id from services where id = (select v from ctx where k='pest')::uuid) = (select business_id from staff where name = 'Ana'), 'en su negocio';
+  assert (select count(*) from staff_schedule_days where staff_id = (select v from ctx where k='ana')::uuid) = 2, 'lo raro no cambió nada';
+end $$;
+-- El dueño crea uno nuevo: el anterior deja de valer; y al anularlo, ninguno
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+insert into ctx select 'tok_ana2', owner_staff_link((select v from ctx where k='ana')::uuid, 'nuevo');
+reset role;
+set role anon;
+select expect_error($$select staff_portal('$$ || (select v from ctx where k='tok_ana') || $$')$$, 'ENLACE_CADUCADO');
+do $$ begin assert staff_portal((select v from ctx where k='tok_ana2'))->'staff'->>'name' = 'Ana', 'el nuevo vale'; end $$;
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+do $$ begin assert owner_staff_link((select v from ctx where k='ana')::uuid, 'anular') is null; end $$;
+reset role;
+set role anon;
+select expect_error($$select staff_portal('$$ || (select v from ctx where k='tok_ana2') || $$')$$, 'ENLACE_CADUCADO');
+-- Se deja todo como estaba para las pruebas siguientes
+reset role;
+delete from staff_services where staff_id in ((select v from ctx where k='ana')::uuid, (select v from ctx where k='bea')::uuid);
+delete from services where id = (select v from ctx where k='pest')::uuid;
+delete from staff_schedule_days where staff_id = (select v from ctx where k='ana')::uuid;
+insert into staff_schedule_days (staff_id, weekday, is_open, slots)
+  select (select v from ctx where k='ana')::uuid, d, false, '{}' from generate_series(0, 6) d;
+set role anon;
+
 -- ===== Notificaciones push: guardar y quitar suscripciones =====
 select save_customer_push_subscription((select v from ctx where k='s1'), 'https://fcm.example/ep1', 'p256dh-test', 'auth-test');
 select expect_error($$select save_customer_push_subscription('no-existe', 'e', 'p', 'a')$$, 'CITA_NO_EXISTE');

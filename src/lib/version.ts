@@ -34,6 +34,11 @@ export const RELEASE_NOTES: ReleaseSection[] = [
     points: ['Te enseña a usar tu panel sobre la pantalla de verdad, con citas de ejemplo. Lo tienes en Más → Tutorial paso a paso.'],
   },
   {
+    icon: 'scissors',
+    title: 'Cada profesional, sus servicios',
+    points: ['En Mi negocio → Equipo, cada profesional tiene "Su enlace": mándaselo por WhatsApp y podrá cambiar desde su móvil sus servicios, sus precios y su horario, sin crear cuenta. Lo anulas cuando quieras.'],
+  },
+  {
     icon: 'users',
     title: 'Recupera clientes',
     points: ['En Clientes, el filtro "Hace tiempo que no vienen" y el botón "Escribirle", con un mensaje de "te echamos de menos" ya escrito.'],
