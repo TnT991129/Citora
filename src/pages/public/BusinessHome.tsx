@@ -45,7 +45,7 @@ export default function BusinessHome() {
   const rate = cupRate(business)
   const team = hasModule(business.plan, 'empleados') ? business.staff || [] : []
   // Con equipo, los servicios de cada profesional salen bajo su especialidad
-  const groups = groupServices(main, team)
+  const groups = groupServices(main, team, { name: business.owner_name, specialty: business.owner_specialty, photo_url: business.logo_url })
   const look = business.appearance || {}
   const showPrices = shows(look, 'show_prices')
   const showDurations = shows(look, 'show_durations')

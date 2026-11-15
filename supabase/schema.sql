@@ -498,6 +498,10 @@ alter table public.staff add column if not exists own_services boolean not null 
 -- Especialidad (ej. "Uñas", "Pestañas"): en la página de reservas, los servicios de cada profesional
 -- salen agrupados bajo su especialidad. La pone el dueño (Equipo) o ella misma con su enlace.
 alter table public.staff add column if not exists specialty text check (char_length(specialty) <= 40);
+-- El dueño también atiende: sus servicios (los que no son de nadie del equipo) salen con su nombre
+-- y su especialidad, igual que los de cada profesional
+alter table public.businesses add column if not exists owner_name text check (char_length(owner_name) <= 40);
+alter table public.businesses add column if not exists owner_specialty text check (char_length(owner_specialty) <= 40);
 
 -- Horario propio de un profesional (si no tiene ninguna fila aquí, usa el horario del negocio:
 -- ver _staff_slot_valid). Misma forma que schedule_days, pero por profesional.
@@ -1527,6 +1531,8 @@ begin
     'whatsapp', b.whatsapp,
     'address', b.address,
     'description', b.description,
+    'owner_name', b.owner_name,
+    'owner_specialty', b.owner_specialty,
     'logo_url', b.logo_url,
     'color_primary', b.color_primary,
     'cover_url', b.cover_url,

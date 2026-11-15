@@ -63,19 +63,26 @@ describe('servicios agrupados por especialidad', () => {
   const yane = { id: 'yane', name: 'Yaneisy Pérez', photo_url: null, specialty: null, service_ids: ['mani', 'pedi'], all_services: false }
   const todo = { id: 'bea', name: 'Bea', photo_url: null, service_ids: [] as string[] }
 
-  it('cada profesional con los suyos y lo de todos en "Del salón"', () => {
-    const g = groupServices([svc('corte'), svc('mani'), svc('pedi'), svc('masaje')], [leo, yane, todo])
+  it('cada profesional con los suyos y los que no son de nadie, del dueño', () => {
+    const g = groupServices([svc('corte'), svc('mani'), svc('pedi'), svc('masaje')], [leo, yane, todo], { name: 'Osmel', specialty: 'Masajes' })
     expect(g.map((x) => [x.key, x.title, x.services.map((s) => s.id)])).toEqual([
-      ['salon', 'Del salón', ['masaje']],
+      ['dueno', 'Masajes', ['masaje']],
       ['leo', 'Peluquería', ['corte']],
       ['yane', 'Yaneisy Pérez', ['mani', 'pedi']],
     ])
+    expect(g[0].staff?.name).toBe('Osmel')
   })
 
-  it('un servicio que hacen dos va a "Del salón"', () => {
+  it('el dueño sin especialidad: su nombre, y si tampoco, "Más servicios"', () => {
+    expect(groupServices([svc('masaje'), svc('corte')], [leo], { name: 'Osmel' })[0].title).toBe('Osmel')
+    const g = groupServices([svc('masaje'), svc('corte')], [leo])
+    expect([g[0].title, g[0].staff]).toEqual(['Más servicios', null])
+  })
+
+  it('un servicio que hacen dos va a "Con varias personas del equipo"', () => {
     const ana = { ...yane, id: 'ana', name: 'Ana', service_ids: ['mani'] }
     const g = groupServices([svc('mani'), svc('pedi')], [yane, ana])
-    expect(g.find((x) => x.key === 'salon')?.services.map((s) => s.id)).toEqual(['mani'])
+    expect(g.find((x) => x.key === 'varios')?.services.map((s) => s.id)).toEqual(['mani'])
   })
 
   it('sin equipo o con un solo grupo, todo junto y sin título', () => {

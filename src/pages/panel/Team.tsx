@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { TimeChips } from '../../components/TimeChips'
-import { Alert, BusinessAvatar, Button, Modal, Toggle, WhatsAppIcon, flash } from '../../components/ui'
+import { Alert, BusinessAvatar, Button, Field, Modal, Toggle, WhatsAppIcon, flash } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { WEEKDAYS, normalizeSlot } from '../../lib/format'
 import { imageExt, resizeImage } from '../../lib/image'
@@ -93,6 +93,8 @@ export default function Team() {
       </section>
 
       {error && <Alert>{error}</Alert>}
+
+      {staff.length > 0 && <OwnerCard />}
 
       {staff.length > 0 && (
         <ul className="space-y-2">
@@ -391,6 +393,46 @@ function StaffDetailsModal({ staff, justAdded, onClose, onPhotoChanged }: { staf
         {error && <Alert>{error}</Alert>}
       </div>
     </Modal>
+  )
+}
+
+/**
+ * El dueño también atiende: los servicios que no son de nadie del equipo son los suyos y salen en la
+ * página con su nombre y su especialidad ("Peluquería · con Osmel"), igual que los de cada profesional.
+ */
+function OwnerCard() {
+  const { business, reloadBusiness } = usePanel()
+  const [name, setName] = useState(business.owner_name || '')
+  const [specialty, setSpecialty] = useState(business.owner_specialty || '')
+  const [error, setError] = useState<string | null>(null)
+  const save = async () => {
+    const n = name.trim()
+    const sp = specialty.trim()
+    if (n === (business.owner_name || '') && sp === (business.owner_specialty || '')) return
+    const { error } = await supabase.from('businesses').update({ owner_name: n || null, owner_specialty: sp || null }).eq('id', business.id)
+    if (error) return setError(errorMessage(error))
+    flash('Guardado')
+    await reloadBusiness()
+  }
+  return (
+    <section className="card space-y-3">
+      <div className="flex items-center gap-3">
+        <span className="shrink-0"><BusinessAvatar name={business.name} logo={business.logo_url} size={40} /></span>
+        <div className="min-w-0">
+          <h2 className="font-bold">Tú también atiendes</h2>
+          <p className="text-sm text-slate-500">Los servicios que no son de nadie del equipo son los tuyos. En tu página salen con tu nombre y tu especialidad.</p>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Tu nombre">
+          <input className="input" value={name} maxLength={40} placeholder="Ej. Osmel" onChange={(e) => setName(e.target.value)} onBlur={save} />
+        </Field>
+        <Field label="Tu especialidad">
+          <input className="input" value={specialty} maxLength={40} placeholder="Ej. Peluquería" onChange={(e) => setSpecialty(e.target.value)} onBlur={save} />
+        </Field>
+      </div>
+      {error && <Alert>{error}</Alert>}
+    </section>
   )
 }
 

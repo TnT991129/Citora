@@ -38,6 +38,8 @@ export interface Business {
   loyalty_every: number | null
   loyalty_reward: string | null
   slot_capacity: number
+  owner_name?: string | null
+  owner_specialty?: string | null
   /** Primeros pasos y herramientas activas (ver lib/onboarding.ts). Falta si la base es anterior a la 1.4. */
   onboarding?: Onboarding
   plan: PlanKey | null
@@ -267,6 +269,9 @@ export interface PublicBusiness {
   whatsapp?: string
   address?: string | null
   description?: string | null
+  /** El dueño también atiende: sus servicios salen con su nombre y su especialidad */
+  owner_name?: string | null
+  owner_specialty?: string | null
   timezone?: string
   currency?: string
   usd_prices?: boolean

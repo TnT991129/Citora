@@ -327,6 +327,7 @@ function EditBooking({ booking, onClose, onDone }: {
               currency={booking.business.currency}
               rate={cupRate(biz)}
               team={team}
+              owner={{ name: biz.owner_name, specialty: biz.owner_specialty, photo_url: biz.logo_url }}
             />
           </div>
           {team.length > 0 && (

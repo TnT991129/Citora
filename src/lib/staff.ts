@@ -21,37 +21,56 @@ export function keepStaff(team: Pick<PublicStaff, 'id' | 'service_ids' | 'all_se
 }
 
 export interface ServiceGroup<S> {
-  /** 'salon' para los servicios de todos, o el id del profesional */
+  /** 'dueno' (los del dueño), 'varios' (los que hacen varias personas del equipo) o el id del profesional */
   key: string
   /** Su especialidad o su nombre; null = sin título (no hay grupos) */
   title: string | null
+  /** Quién los hace (el dueño también, con la foto del logo); null en "varios" */
   staff: Pick<PublicStaff, 'id' | 'name' | 'photo_url' | 'specialty'> | null
   services: S[]
 }
 
+/** El dueño, que también atiende: su nombre, su especialidad y, como foto, el logo del negocio */
+export interface OwnerInfo {
+  name?: string | null
+  specialty?: string | null
+  photo_url?: string | null
+}
+
 /**
- * Agrupa los servicios por quién los hace: los que hace solo un profesional (con servicios propios
- * o marcados) van bajo su especialidad; el resto, en "Del salón". Si sale un solo grupo, se devuelve
- * sin título (la página se ve como siempre).
+ * Agrupa los servicios por quién los hace: los de un solo profesional, bajo su especialidad; los que
+ * no son de nadie del equipo son del dueño (también atiende), bajo la suya; y los que hacen varias
+ * personas, en "Con varias personas del equipo". Si sale un solo grupo, se devuelve sin título (la
+ * página se ve como siempre).
  */
 export function groupServices<S extends { id: string }>(
   services: S[],
   team: Pick<PublicStaff, 'id' | 'name' | 'photo_url' | 'specialty' | 'service_ids' | 'all_services'>[],
-  salonTitle = 'Del salón',
+  owner: OwnerInfo = {},
 ): ServiceGroup<S>[] {
   const explicit = team.filter((st) => !(st.all_services ?? st.service_ids.length === 0))
   const byKey = new Map<string, S[]>()
   for (const s of services) {
-    const owners = explicit.filter((st) => st.service_ids.includes(s.id))
-    const key = owners.length === 1 ? owners[0].id : 'salon'
+    const doers = explicit.filter((st) => st.service_ids.includes(s.id))
+    const key = doers.length === 1 ? doers[0].id : doers.length > 1 ? 'varios' : 'dueno'
     byKey.set(key, [...(byKey.get(key) || []), s])
   }
   const groups: ServiceGroup<S>[] = []
-  if (byKey.has('salon')) groups.push({ key: 'salon', title: salonTitle, staff: null, services: byKey.get('salon')! })
+  if (byKey.has('dueno')) {
+    const name = owner.name?.trim() || ''
+    const specialty = owner.specialty?.trim() || ''
+    groups.push({
+      key: 'dueno',
+      title: specialty || name || 'Más servicios',
+      staff: name ? { id: 'dueno', name, photo_url: owner.photo_url || null, specialty: specialty || null } : null,
+      services: byKey.get('dueno')!,
+    })
+  }
   for (const st of team) {
     const list = byKey.get(st.id)
     if (list) groups.push({ key: st.id, title: st.specialty?.trim() || st.name, staff: st, services: list })
   }
+  if (byKey.has('varios')) groups.push({ key: 'varios', title: 'Con varias personas del equipo', staff: null, services: byKey.get('varios')! })
   if (groups.length <= 1) return [{ key: 'todos', title: null, staff: null, services }]
   return groups
 }

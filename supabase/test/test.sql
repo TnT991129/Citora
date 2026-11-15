@@ -716,6 +716,17 @@ reset role;
 delete from services where id = (select v from ctx where k='cejas')::uuid;
 delete from staff where id = (select v from ctx where k='cami')::uuid;
 
+-- El dueño también atiende: su nombre y su especialidad salen en la página
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+update businesses set owner_name = 'Mar', owner_specialty = 'Masajes' where id = my_business_id();
+reset role;
+set role anon;
+do $$ begin
+  assert get_public_business('spa-mar')->>'owner_name' = 'Mar' and get_public_business('spa-mar')->>'owner_specialty' = 'Masajes', 'el dueño en la página';
+end $$;
+
 -- Se deja todo como estaba para las pruebas siguientes
 reset role;
 delete from staff_services where staff_id in ((select v from ctx where k='ana')::uuid, (select v from ctx where k='bea')::uuid);
