@@ -100,11 +100,20 @@ export default function Create() {
       return
     }
     setSlugState('checking')
+    // Solo vale la respuesta del último enlace escrito (una anterior puede llegar más tarde)
+    let current = true
     const t = setTimeout(async () => {
-      const { data } = await supabase.rpc('check_slug_available', { p_slug: draft.slug })
-      setSlugState(data ? 'ok' : 'taken')
+      const { data, error } = await supabase.rpc('check_slug_available', { p_slug: draft.slug })
+      if (!current) return
+      // Si la comprobación falla (sin conexión, sesión caducada...), no se bloquea: al crear la
+      // app el servidor vuelve a comprobarlo y avisa si de verdad está ocupado
+      if (error) console.warn('No se pudo comprobar el enlace', error)
+      setSlugState(error ? 'idle' : data ? 'ok' : 'taken')
     }, 400)
-    return () => clearTimeout(t)
+    return () => {
+      current = false
+      clearTimeout(t)
+    }
   }, [draft.slug])
 
   const update = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }))
