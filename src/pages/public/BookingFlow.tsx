@@ -162,7 +162,7 @@ export default function BookingFlow() {
 
         {cur === 'servicio' && (
           <div className="mt-4 space-y-4">
-            <ServicePicker services={services} selected={selected} onChange={changeServices} choice={choice} onChoice={setChoice} currency={currency} rate={rate} />
+            <ServicePicker services={services} selected={selected} onChange={changeServices} choice={choice} onChoice={setChoice} currency={currency} rate={rate} team={team} />
             {hasModule(business.plan, 'descuentos') && chosen.length > 0 && (
               <CouponBox slug={business.slug} serviceIds={selected} options={optionsFor(selected, choice)} applied={coupon} onApplied={setCoupon} />
             )}

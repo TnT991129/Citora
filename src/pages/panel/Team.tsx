@@ -296,6 +296,8 @@ function StaffDetailsModal({ staff, justAdded, onClose, onPhotoChanged }: { staf
           />
         </div>
 
+        <SpecialtyField staff={staff} onSaved={reloadStaff} />
+
         <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
           {(['horario', 'servicios', 'enlace'] as const).map((t) => (
             <button
@@ -389,6 +391,36 @@ function StaffDetailsModal({ staff, justAdded, onClose, onPhotoChanged }: { staf
         {error && <Alert>{error}</Alert>}
       </div>
     </Modal>
+  )
+}
+
+/** Especialidad (ej. "Uñas"): en la página de reservas, sus servicios salen agrupados con este título */
+function SpecialtyField({ staff, onSaved }: { staff: Staff; onSaved: () => Promise<void> }) {
+  const [value, setValue] = useState(staff.specialty || '')
+  const [error, setError] = useState<string | null>(null)
+  const save = async () => {
+    const v = value.trim()
+    if (v === (staff.specialty || '')) return
+    const { error } = await supabase.from('staff').update({ specialty: v || null }).eq('id', staff.id)
+    if (error) return setError(errorMessage(error))
+    flash('Especialidad guardada')
+    await onSaved()
+  }
+  return (
+    <div>
+      <label className="label" htmlFor="especialidad">Especialidad</label>
+      <input
+        id="especialidad"
+        className="input"
+        value={value}
+        maxLength={40}
+        placeholder="Ej. Uñas, Pestañas, Peluquería"
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={save}
+      />
+      <p className="mt-1 text-xs text-slate-500">En tu página, sus servicios salen agrupados con este título.</p>
+      {error && <div className="mt-2"><Alert>{error}</Alert></div>}
+    </div>
   )
 }
 

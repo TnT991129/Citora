@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { canReload } from './reload'
-import { keepStaff, staffDoes } from './staff'
+import { groupServices, keepStaff, staffDoes } from './staff'
 
 const barbero = { id: 'leo', service_ids: ['corte', 'barba'] }
 const manicura = { id: 'ana', service_ids: ['unas'] }
@@ -54,5 +54,32 @@ describe('recarga tras publicar una versión nueva', () => {
 
   it('vuelve a poder recargar pasado medio minuto', () => {
     expect(canReload(1_000_000, 1_000_000 + 31_000)).toBe(true)
+  })
+})
+
+describe('servicios agrupados por especialidad', () => {
+  const svc = (id: string) => ({ id })
+  const leo = { id: 'leo', name: 'Leo', photo_url: null, specialty: 'Peluquería', service_ids: ['corte'], all_services: false }
+  const yane = { id: 'yane', name: 'Yaneisy Pérez', photo_url: null, specialty: null, service_ids: ['mani', 'pedi'], all_services: false }
+  const todo = { id: 'bea', name: 'Bea', photo_url: null, service_ids: [] as string[] }
+
+  it('cada profesional con los suyos y lo de todos en "Del salón"', () => {
+    const g = groupServices([svc('corte'), svc('mani'), svc('pedi'), svc('masaje')], [leo, yane, todo])
+    expect(g.map((x) => [x.key, x.title, x.services.map((s) => s.id)])).toEqual([
+      ['salon', 'Del salón', ['masaje']],
+      ['leo', 'Peluquería', ['corte']],
+      ['yane', 'Yaneisy Pérez', ['mani', 'pedi']],
+    ])
+  })
+
+  it('un servicio que hacen dos va a "Del salón"', () => {
+    const ana = { ...yane, id: 'ana', name: 'Ana', service_ids: ['mani'] }
+    const g = groupServices([svc('mani'), svc('pedi')], [yane, ana])
+    expect(g.find((x) => x.key === 'salon')?.services.map((s) => s.id)).toEqual(['mani'])
+  })
+
+  it('sin equipo o con un solo grupo, todo junto y sin título', () => {
+    expect(groupServices([svc('a'), svc('b')], [])).toEqual([{ key: 'todos', title: null, staff: null, services: [svc('a'), svc('b')] }])
+    expect(groupServices([svc('corte')], [leo])[0].title).toBeNull()
   })
 })

@@ -132,6 +132,7 @@ export interface Staff {
   edit_token?: string | null
   /** true = solo hace sus propios servicios (los crea con su enlace); false = sin ninguno marcado, hace todos */
   own_services?: boolean
+  specialty?: string | null
   active: boolean
   position: number
   created_at: string
@@ -157,6 +158,8 @@ export interface PublicStaff {
   service_ids: string[]
   /** false = solo hace los de service_ids aunque esté vacía (falta en bases anteriores a la 1.4) */
   all_services?: boolean
+  /** Ej. "Uñas": sus servicios salen agrupados con este título */
+  specialty?: string | null
 }
 
 export interface Discount {

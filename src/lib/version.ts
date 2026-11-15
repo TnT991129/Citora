@@ -36,7 +36,10 @@ export const RELEASE_NOTES: ReleaseSection[] = [
   {
     icon: 'scissors',
     title: 'Cada profesional, sus servicios',
-    points: ['En Mi negocio → Equipo, cada profesional tiene "Su enlace": mándaselo por WhatsApp y podrá cambiar desde su móvil sus servicios, sus precios y su horario, sin crear cuenta. Lo anulas cuando quieras.'],
+    points: [
+      'Al añadir a alguien en Mi negocio → Equipo, se abre "Su enlace": mándaselo por WhatsApp y desde su móvil crea sus servicios, sus precios y su horario, sin crear cuenta. Lo anulas cuando quieras.',
+      'Ponle a cada uno su especialidad (Uñas, Pestañas, Peluquería…): en tu página, los servicios ya no salen mezclados, sino agrupados por especialidad y con quién los hace.',
+    ],
   },
   {
     icon: 'users',

@@ -701,6 +701,12 @@ do $$ declare c jsonb := (select x from jsonb_array_elements(get_public_business
     'no se puede reservar masaje con Cami';
 end $$;
 insert into ctx select 'cejas', staff_portal_save_service((select v from ctx where k='tok_cami'), null, 'Cejas', 800, 30)::text;
+select staff_portal_save_profile((select v from ctx where k='tok_cami'), '  Cejas y pestañas ');
+select expect_error($$select staff_portal_save_profile('$$ || (select v from ctx where k='tok_cami') || $$', repeat('x', 41))$$, 'DATOS_INVALIDOS');
+do $$ begin
+  assert staff_portal((select v from ctx where k='tok_cami'))->'staff'->>'specialty' = 'Cejas y pestañas', 'especialidad guardada';
+  assert (select x->>'specialty' from jsonb_array_elements(get_public_business('spa-mar')->'staff') x where x->>'name' = 'Cami') = 'Cejas y pestañas', 'y se ve en la página';
+end $$;
 do $$ begin
   assert exists (select 1 from get_available_slots('spa-mar', (select v from ctx where k='day2')::date, 30, (select v from ctx where k='cami')::uuid, null, array[(select v from ctx where k='cejas')::uuid]) where available),
     'sus cejas sí se pueden reservar con ella';

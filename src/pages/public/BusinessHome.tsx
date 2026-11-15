@@ -16,6 +16,8 @@ import { track } from '../../lib/analytics'
 import { hasModule } from '../../lib/plans'
 import { Announcement, BusinessHero, Centered, Closed, PoweredBy, Stars, usePublicBusiness } from './shared'
 import { serverNow } from '../../lib/clockSkew'
+import { groupServices } from '../../lib/staff'
+import { GroupJump, GroupTitle } from './ServicePicker'
 
 const WEEK = [1, 2, 3, 4, 5, 6, 0]
 
@@ -42,6 +44,8 @@ export default function BusinessHome() {
   const minPrice = main.length ? Math.min(...main.map((s) => Number(s.price))) : 0
   const rate = cupRate(business)
   const team = hasModule(business.plan, 'empleados') ? business.staff || [] : []
+  // Con equipo, los servicios de cada profesional salen bajo su especialidad
+  const groups = groupServices(main, team)
   const look = business.appearance || {}
   const showPrices = shows(look, 'show_prices')
   const showDurations = shows(look, 'show_durations')
@@ -101,9 +105,17 @@ export default function BusinessHome() {
           {main.length === 0 ? (
             <div className="card text-slate-500">Pronto publicaremos nuestros servicios.</div>
           ) : (
-            <div className="card divide-y divide-slate-100 overflow-hidden p-0 sm:p-0">
-              {main.map((s) => (
-                <ServiceCard key={s.id} s={s} to={book(s.id)} price={showPrices ? `${hasOptions(s) ? 'desde ' : ''}${price(s.price, currency, rate)}` : null} showDuration={showDurations} />
+            <div className="space-y-3">
+              <GroupJump groups={groups} />
+              {groups.map((g) => (
+                <div key={g.key} id={`grupo-${g.key}`} className="scroll-mt-20 space-y-2">
+                  {g.title && <GroupTitle group={g} />}
+                  <div className="card divide-y divide-slate-100 overflow-hidden p-0 sm:p-0">
+                    {g.services.map((s) => (
+                      <ServiceCard key={s.id} s={s} to={book(s.id)} price={showPrices ? `${hasOptions(s) ? 'desde ' : ''}${price(s.price, currency, rate)}` : null} showDuration={showDurations} />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -144,6 +156,7 @@ export default function BusinessHome() {
                     </span>
                   )}
                   <span className="w-full truncate font-bold">{s.name}</span>
+                  {s.specialty && <span className="-mt-2 w-full truncate text-sm text-slate-500">{s.specialty}</span>}
                   <span className="rounded-full bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">Reservar con {s.name.split(' ')[0]}</span>
                 </Link>
               ))}

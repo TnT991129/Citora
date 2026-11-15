@@ -326,6 +326,7 @@ function EditBooking({ booking, onClose, onDone }: {
               onChoice={setChoice}
               currency={booking.business.currency}
               rate={cupRate(biz)}
+              team={team}
             />
           </div>
           {team.length > 0 && (

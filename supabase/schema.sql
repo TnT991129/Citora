@@ -495,6 +495,9 @@ alter table public.staff add column if not exists edit_token text unique;
 -- Servicios propios (versión 1.4): true = solo hace los servicios que tiene en staff_services (al
 -- empezar, ninguno: los crea con su enlace). false = como antes: sin ninguno marcado, hace todos.
 alter table public.staff add column if not exists own_services boolean not null default false;
+-- Especialidad (ej. "Uñas", "Pestañas"): en la página de reservas, los servicios de cada profesional
+-- salen agrupados bajo su especialidad. La pone el dueño (Equipo) o ella misma con su enlace.
+alter table public.staff add column if not exists specialty text check (char_length(specialty) <= 40);
 
 -- Horario propio de un profesional (si no tiene ninguna fila aquí, usa el horario del negocio:
 -- ver _staff_slot_valid). Misma forma que schedule_days, pero por profesional.
@@ -1576,7 +1579,8 @@ begin
         -- Lista vacía = puede con todos los servicios (no ha configurado restricción), salvo si
         -- tiene servicios propios (all_services = false): entonces solo los de la lista
         'service_ids', coalesce((select jsonb_agg(ss.service_id) from staff_services ss where ss.staff_id = st.id), '[]'::jsonb),
-        'all_services', not st.own_services and not exists (select 1 from staff_services ss where ss.staff_id = st.id))
+        'all_services', not st.own_services and not exists (select 1 from staff_services ss where ss.staff_id = st.id),
+        'specialty', st.specialty)
         order by st.position, st.created_at)
       from staff st where st.business_id = b.id and st.active), '[]'::jsonb)
       else '[]'::jsonb end,
@@ -2345,7 +2349,7 @@ declare
 begin
   select * into b from businesses where id = st.business_id;
   return jsonb_build_object(
-    'staff', jsonb_build_object('id', st.id, 'name', st.name, 'photo_url', st.photo_url),
+    'staff', jsonb_build_object('id', st.id, 'name', st.name, 'photo_url', st.photo_url, 'specialty', st.specialty),
     'business', jsonb_build_object('name', b.name, 'slug', b.slug, 'logo_url', b.logo_url, 'color_primary', b.color_primary,
                                    'currency', b.currency, 'usd_prices', b.usd_prices),
     -- Hace todos los servicios del negocio: entonces no tiene servicios propios que cambiar
@@ -2404,6 +2408,18 @@ begin
          is_extra = coalesce(p_is_extra, is_extra)
    where id = p_id and business_id = st.business_id;
   return p_id;
+end;
+$$;
+
+-- Su especialidad (ej. "Uñas"): vacía = sin especialidad
+create or replace function public.staff_portal_save_profile(p_token text, p_specialty text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  st staff := _staff_by_token(p_token);
+  v text := nullif(btrim(coalesce(p_specialty, '')), '');
+begin
+  if char_length(v) > 40 then raise exception 'DATOS_INVALIDOS'; end if;
+  update staff set specialty = v where id = st.id;
 end;
 $$;
 
@@ -3502,6 +3518,7 @@ grant execute on function public.owner_staff_link(uuid, text) to authenticated;
 grant execute on function public.staff_portal(text) to anon, authenticated;
 grant execute on function public.staff_portal_save_service(text, uuid, text, numeric, int, text, boolean, boolean) to anon, authenticated;
 grant execute on function public.staff_portal_save_schedule(text, jsonb) to anon, authenticated;
+grant execute on function public.staff_portal_save_profile(text, text) to anon, authenticated;
 grant execute on function public.get_payment_info() to authenticated;
 grant execute on function public.submit_payment_claim(int, numeric, text, text) to authenticated;
 grant execute on function public.save_owner_push_subscription(text, text, text) to authenticated;

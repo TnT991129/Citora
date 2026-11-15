@@ -23,7 +23,7 @@ interface PortalService {
 }
 interface PortalDay { weekday: number; is_open: boolean; slots: string[] }
 interface Portal {
-  staff: { id: string; name: string; photo_url: string | null }
+  staff: { id: string; name: string; photo_url: string | null; specialty?: string | null }
   business: { name: string; slug: string; logo_url: string | null; color_primary: string; currency: string; usd_prices: boolean }
   all_services: boolean
   services: PortalService[]
@@ -46,12 +46,14 @@ export default function StaffPortal() {
   const [days, setDays] = useState<PortalDay[] | null>(null)
   const [custom, setCustom] = useState(false)
   const [scheduleDirty, setScheduleDirty] = useState(false)
+  const [specialty, setSpecialty] = useState('')
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.rpc('staff_portal', { p_token: token })
     if (error) return setError(errorMessage(error))
     const p = data as Portal
     setData(p)
+    setSpecialty(p.staff.specialty || '')
     setBrandColor(p.business.color_primary)
     document.title = `${p.staff.name} · ${p.business.name}`
     const own = p.schedule.length > 0
@@ -119,6 +121,15 @@ export default function StaffPortal() {
     load()
   }
 
+  const saveSpecialty = async () => {
+    const v = specialty.trim()
+    if (v === (data.staff.specialty || '')) return
+    const { error } = await supabase.rpc('staff_portal_save_profile', { p_token: token, p_specialty: v })
+    if (error) return setError(errorMessage(error))
+    flash('Especialidad guardada')
+    load()
+  }
+
   const setDay = (w: number, patch: Partial<PortalDay>) => {
     setScheduleDirty(true)
     setDays((ds) => ds!.map((d) => (d.weekday === w ? { ...d, ...patch } : d)))
@@ -144,6 +155,12 @@ export default function StaffPortal() {
             Aquí cambias tus servicios y tu horario. Lo que guardes lo ven al momento los clientes de {b.name}. Este enlace es solo para ti: no lo compartas.
           </p>
         </div>
+
+        <section className="card">
+          <Field label="Tu especialidad" hint={`En la página de ${b.name}, tus servicios salen agrupados con este título.`}>
+            <input className="input" value={specialty} maxLength={40} placeholder="Ej. Uñas, Pestañas, Peluquería" onChange={(e) => setSpecialty(e.target.value)} onBlur={saveSpecialty} />
+          </Field>
+        </section>
 
         <section>
           <div className="mb-2 flex items-end justify-between gap-3 px-1">
