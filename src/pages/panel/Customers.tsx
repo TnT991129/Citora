@@ -16,6 +16,26 @@ type Sort = 'recientes' | 'visitas' | 'gasto' | 'nombre' | 'inactivos'
 const INACTIVE_DAYS = 45
 const TAGS = ['VIP', 'Frecuente', 'Nuevo', 'Puntual', 'Llega tarde', 'No viene']
 
+/** Hace tiempo que no viene: su última visita fue hace 45 días o más y no tiene ninguna cita pendiente */
+function isLapsed(c: CustomerSummary): boolean {
+  if (c.next_at || !c.last_visit) return false
+  return Math.floor((serverNow() - new Date(c.last_visit).getTime()) / 86400000) >= INACTIVE_DAYS
+}
+
+type Filter = 'todos' | 'fieles' | 'lejos' | 'nuevos'
+const FILTERS: Record<Filter, { label: string; test: (c: CustomerSummary) => boolean }> = {
+  todos: { label: 'Todos', test: () => true },
+  fieles: { label: 'Fieles', test: (c) => c.visits >= 5 },
+  lejos: { label: 'Hace tiempo que no vienen', test: isLapsed },
+  nuevos: { label: 'Nuevos', test: (c) => c.visits <= 1 && serverNow() - new Date(c.first_at).getTime() < 30 * 86400000 },
+}
+
+/** "Te echamos de menos": para escribir a quien hace tiempo que no viene */
+export function missYouMessage(customer: string, business: string, url: string): string {
+  const first = customer.trim().split(/\s+/)[0] || ''
+  return `¡Hola${first ? ` ${first}` : ''}! Hace tiempo que no te vemos por ${business} y te echamos de menos. 😊 Cuando quieras, reserva tu cita aquí: ${url}`
+}
+
 export default function Customers() {
   const allowed = useModule('clientes')
   const { business } = usePanel()
@@ -35,14 +55,18 @@ export default function Customers() {
     if (allowed) load()
   }, [allowed, load])
 
+  const [filter, setFilter] = useState<Filter>('todos')
+
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
     const digits = term.replace(/\D/g, '')
     const out = (list || []).filter((c) =>
-      !term ||
-      c.name.toLowerCase().includes(term) ||
-      (digits.length >= 3 && c.phone.includes(digits)) ||
-      c.tags.some((t) => t.toLowerCase().includes(term)),
+      FILTERS[filter].test(c) && (
+        !term ||
+        c.name.toLowerCase().includes(term) ||
+        (digits.length >= 3 && c.phone.includes(digits)) ||
+        c.tags.some((t) => t.toLowerCase().includes(term))
+      ),
     )
     const by: Record<Sort, (a: CustomerSummary, b: CustomerSummary) => number> = {
       recientes: () => 0, // ya vienen ordenados por actividad
@@ -52,8 +76,8 @@ export default function Customers() {
       // Primero quien tiene más tiempo sin venir (sin ninguna visita, al final)
       inactivos: (a, b) => (a.last_visit || '9999').localeCompare(b.last_visit || '9999'),
     }
-    return [...out].sort(by[sort])
-  }, [list, q, sort])
+    return [...out].sort(by[filter === 'lejos' && sort === 'recientes' ? 'inactivos' : sort])
+  }, [list, q, sort, filter])
 
   if (!allowed) return <Locked module="clientes" />
   if (error) return <Alert>{error}</Alert>
@@ -81,6 +105,26 @@ export default function Customers() {
         </select>
       </div>
 
+      <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4" role="tablist" aria-label="Filtrar clientes">
+        {(Object.keys(FILTERS) as Filter[]).map((k) => (
+          <button
+            key={k}
+            role="tab"
+            aria-selected={filter === k}
+            onClick={() => setFilter(k)}
+            className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${filter === k ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'}`}
+          >
+            {FILTERS[k].label}
+            {k !== 'todos' && <span className="ml-1 opacity-60">{list.filter(FILTERS[k].test).length}</span>}
+          </button>
+        ))}
+      </div>
+      {filter === 'lejos' && (
+        <p className="rounded-xl bg-brand/5 p-3 text-sm text-slate-600 ring-1 ring-brand/15">
+          Escríbeles para que vuelvan. El mensaje ya va escrito y puedes cambiarlo antes de enviarlo.
+        </p>
+      )}
+
       {list.length === 0 && (
         <div className="card text-center text-slate-600">
           Cuando tus clientes reserven, aparecerán aquí con su historial.
@@ -90,10 +134,10 @@ export default function Customers() {
       <ul className="space-y-2">
         {filtered.map((c) => {
           const daysSince = c.last_visit ? Math.floor((serverNow() - new Date(c.last_visit).getTime()) / 86400000) : null
-          const inactive = !c.next_at && daysSince !== null && daysSince >= INACTIVE_DAYS
+          const inactive = isLapsed(c)
           return (
-          <li key={c.phone}>
-            <button onClick={() => setOpen(c)} className="card flex w-full items-center justify-between gap-3 text-left hover:ring-slate-300">
+          <li key={c.phone} className="relative">
+            <button onClick={() => setOpen(c)} className={`card flex w-full items-center justify-between gap-3 text-left hover:ring-slate-300 ${inactive && c.phone.length >= 8 ? 'pb-14 sm:pb-4 sm:pr-36' : ''}`}>
               <div className="min-w-0">
                 <p className="truncate font-semibold">
                   {c.name}
@@ -109,6 +153,16 @@ export default function Customers() {
               </div>
               <span className="shrink-0 font-semibold">{money(c.spent, business.currency)}</span>
             </button>
+            {inactive && c.phone.length >= 8 && (
+              <a
+                href={waLink(c.phone, missYouMessage(c.name, business.name, publicUrl(business.slug)))}
+                target="_blank"
+                rel="noreferrer"
+                className="absolute bottom-3 left-4 inline-flex items-center gap-1.5 rounded-lg bg-[#25D366] px-3 py-1.5 text-sm font-semibold text-white shadow-sm sm:bottom-auto sm:left-auto sm:right-4 sm:top-1/2 sm:-translate-y-1/2"
+              >
+                <WhatsAppIcon className="h-4 w-4" /> Escribirle
+              </a>
+            )}
           </li>
           )
         })}

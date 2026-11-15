@@ -4,7 +4,7 @@
 import { detectSource, isBot } from './visitor'
 import { supabase, supabaseConfigured } from './supabase'
 
-type EventName = 'visita' | 'crear_paso' | 'negocio_creado' | 'reserva_hecha'
+type EventName = 'visita' | 'crear_paso' | 'negocio_creado' | 'reserva_hecha' | 'paso_saltado'
 type Page = 'portada' | 'crear' | 'entrar' | 'negocio' | 'reservar'
 
 const VISITOR = 'citora:visitante'

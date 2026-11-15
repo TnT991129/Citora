@@ -999,6 +999,31 @@ select submit_survey_answer((select v from ctx where k = 'encuesta2')::uuid, '{"
 set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 select admin_delete_survey((select v from ctx where k = 'encuesta2')::uuid);
 
+-- ===== Primeros pasos (versión 1.4) =====
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+do $$ declare p jsonb := get_my_progress(); begin
+  assert p ? 'web_total' and p ? 'web_real' and p ? 'push_on' and p ? 'visits_7d' and p ? 'bookings' and p ? 'revenue', 'progreso: ' || p::text;
+  assert (p->>'web_real')::int <= (p->>'web_total')::int and (p->>'web_total')::int <= (p->>'bookings')::int, 'progreso coherente: ' || p::text;
+  assert jsonb_typeof(p->'push_on') = 'boolean';
+end $$;
+-- El dueño guarda sus pasos; lo que no es un objeto o es enorme se ignora
+update businesses set onboarding = '{"tools":["recordatorios","cupones"],"skipped":["servicios"],"steps":{"ver":"2026-11-16T10:00:00Z"}}'
+  where owner_id = '11111111-1111-1111-1111-111111111111';
+do $$ begin assert (select onboarding->'tools'->>1 from businesses where owner_id = '11111111-1111-1111-1111-111111111111') = 'cupones', 'herramientas guardadas'; end $$;
+update businesses set onboarding = '[1,2]' where owner_id = '11111111-1111-1111-1111-111111111111';
+update businesses set onboarding = jsonb_build_object('x', (select string_agg(md5(i::text), '') from generate_series(1, 600) i)) where owner_id = '11111111-1111-1111-1111-111111111111';
+do $$ begin assert (select onboarding->'skipped'->>0 from businesses where owner_id = '11111111-1111-1111-1111-111111111111') = 'servicios', 'se conserva si no es válido'; end $$;
+-- Sin negocio: nada
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+do $$ begin assert get_my_progress() is null, 'el administrador no tiene progreso'; end $$;
+-- Evento nuevo del asistente
+reset role;
+set role anon;
+select track_event(gen_random_uuid(), gen_random_uuid(), 'paso_saltado', 'crear', null, 3, null, 'movil');
+reset role;
+do $$ begin assert exists (select 1 from analytics_events where name = 'paso_saltado' and step = 3), 'paso saltado medido'; end $$;
+set role authenticated;
+
 -- ===== Borrar dueños =====
 reset role;
 set role authenticated;

@@ -5,7 +5,9 @@ import { cupRate, duration, money, price } from '../../lib/format'
 import { imageExt, resizeImage } from '../../lib/image'
 import { supabase } from '../../lib/supabase'
 import type { Service, ServiceOption } from '../../lib/types'
+import { pricesUnreviewed } from '../../lib/onboarding'
 import { usePanel } from './context'
+import { Icon } from './Panel'
 import { RateCard } from './RateCard'
 
 // Las opciones nuevas no tienen id todavía: se lo pone la base de datos al guardar
@@ -22,7 +24,8 @@ type Editing = Omit<Partial<Service>, 'options'> & {
 const MAX_OPTIONS = 12
 
 export default function Services() {
-  const { business, services, reloadServices } = usePanel()
+  const { business, services, reloadServices, onboarding, markStep } = usePanel()
+  const example = pricesUnreviewed(onboarding)
   const [editing, setEditing] = useState<Editing | null>(null)
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -63,6 +66,8 @@ export default function Services() {
     setBusy(false)
     if (error) return setError(errorMessage(error))
     setEditing(null)
+    // Cambió un servicio: ya no son los de ejemplo
+    markStep('precios')
     reloadServices()
   }
 
@@ -150,6 +155,16 @@ export default function Services() {
         <Button size="sm" onClick={() => open({ name: '', price: 0, duration_min: 60, is_extra: false, options: [], multi_options: false })}>+ Servicio</Button>
       </div>
       <p className="text-sm text-slate-500">Los servicios ocultos no aparecen en tu web, pero se guardan. Las citas ya hechas mantienen su precio.</p>
+
+      {example && (
+        <div className="flex items-start gap-3 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900 ring-1 ring-amber-200">
+          <Icon name="alert" className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+          <div>
+            <b>Estos son de ejemplo.</b> Toca cada uno y cambia los precios y duraciones por los tuyos: tus clientes los ven tal cual.
+            <button onClick={() => markStep('precios')} className="mt-2 block font-bold text-amber-900 underline">Ya los revisé, están bien</button>
+          </div>
+        </div>
+      )}
 
       <RateCard />
 

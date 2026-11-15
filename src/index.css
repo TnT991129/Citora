@@ -49,6 +49,8 @@ body { min-height: 100dvh; }
 @media (prefers-reduced-motion: reduce) {
   .ui-page, .ui-fade, .ui-sheet, .ui-toast { animation: none; }
 }
+/* Durante el tutorial la pantalla no se anima: si no, el resaltado no coincide con el botón */
+body.touring .ui-page { animation: none; }
 
 /* ---------------------------------------------------------------------
    Modo oscuro (clase "dark" en <html>, ver src/lib/theme.ts).

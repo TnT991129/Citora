@@ -1,42 +1,56 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { InstallReminder } from '../../components/InstallReminder'
-import { Alert, Button, CopyButton, LinkButton, WhatsAppIcon } from '../../components/ui'
-import { buildMessage, fetchAppointments, isActive } from '../../lib/appointments'
+import { Alert, Button, Modal, WhatsAppIcon } from '../../components/ui'
+import { buildMessage, fetchAppointments, isActive, servicesText } from '../../lib/appointments'
 import { errorMessage } from '../../lib/errors'
 import { addDays, dateKey, money, timeOf, todayKey, dayTitle } from '../../lib/format'
 import { hasModule } from '../../lib/plans'
 import { supabase } from '../../lib/supabase'
 import type { Appointment } from '../../lib/types'
-import { publicUrl } from '../../lib/url'
-import { shareLink, waLink } from '../../lib/whatsapp'
-import { AppointmentRow } from './AppointmentList'
+import { waLink } from '../../lib/whatsapp'
 import { AppointmentModal } from './AppointmentModal'
 import { usePanel } from './context'
 import { DayTimeline, PublishFreeSlots, useDaySlots } from './DayTimeline'
+import { FirstSteps, useFirstStepsVisible } from './FirstSteps'
 import { Icon } from './Panel'
 import { NewAppointment } from './NewAppointment'
 import { RateCard } from './RateCard'
+import { demoDay, demoSlots } from './tutorial'
 import { serverNow } from '../../lib/clockSkew'
 
 export default function Today() {
-  const { business, status, link } = usePanel()
+  const { business, status, services, link, tutorial } = usePanel()
   const tz = business.timezone
   const today = todayKey(tz)
   const tomorrow = addDays(today, 1)
-  const [list, setList] = useState<Appointment[] | null>(null)
+  const [params, setParams] = useSearchParams()
+  const [real, setReal] = useState<Appointment[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState<Appointment | null>(null)
   const [adding, setAdding] = useState<{ date: string; time: string } | null>(null)
   const [tab, setTab] = useState<'hoy' | 'mañana'>('hoy')
   const [publishing, setPublishing] = useState(false)
+  const [remind, setRemind] = useState(false)
+  const [confirming, setConfirming] = useState<string | null>(null)
   const [refresh, setRefresh] = useState(0)
   const day = tab === 'hoy' ? today : tomorrow
-  const slots = useDaySlots(day, refresh)
+  const realSlots = useDaySlots(day, refresh)
+  const stepsVisible = useFirstStepsVisible()
+
+  // Tutorial: un día de ejemplo que nunca se guarda
+  const demo = tutorial.active
+  const [demoList, setDemoList] = useState<Appointment[]>([])
+  useEffect(() => {
+    if (demo) {
+      setTab('hoy')
+      setDemoList(demoDay(today, tz, services, business.id))
+    }
+  }, [demo, today, tz, services, business.id])
 
   const load = useCallback(async () => {
     try {
-      setList(await fetchAppointments(business, today, addDays(today, 30)))
+      setReal(await fetchAppointments(business, today, addDays(today, 30)))
       setRefresh((n) => n + 1)
     } catch (e) {
       setError(errorMessage(e))
@@ -47,56 +61,73 @@ export default function Today() {
     load()
   }, [load])
 
-  if (error) return <Alert>{error}</Alert>
+  // "Nueva cita" del menú lateral del ordenador: ?nueva=1
+  useEffect(() => {
+    if (params.get('nueva') !== '1') return
+    params.delete('nueva')
+    setParams(params, { replace: true })
+    if (!demo) setAdding({ date: today, time: '' })
+  }, [params, setParams, today, demo])
+
+  const list = demo ? demoList : real
+  const slots = useMemo(() => (demo ? demoSlots() : realSlots), [demo, realSlots])
+
+  if (error && !demo) return <Alert>{error}</Alert>
   if (!list) return <TodaySkeleton />
 
   const todays = list.filter((a) => dateKey(a.starts_at, tz) === today)
   const tomorrows = list.filter((a) => dateKey(a.starts_at, tz) === tomorrow && isActive(a))
   const pending = list.filter((a) => a.status === 'pendiente')
-  // Las de hoy ya salen arriba en la línea de tiempo: aquí solo las de otros días
-  const pendingLater = pending.filter((a) => dateKey(a.starts_at, tz) !== today)
-  const upcomingCount = list.filter((a) => isActive(a)).length
-  const income = todays.filter((a) => a.status === 'completada').reduce((s, a) => s + Number(a.total), 0)
-  const expected = todays.filter(isActive).reduce((s, a) => s + Number(a.total), 0)
+  const activeToday = todays.filter(isActive)
+  const expected = activeToday.reduce((s, a) => s + Number(a.total), 0)
   const now = serverNow()
-  const next = todays.find((a) => isActive(a) && new Date(a.ends_at).getTime() > now)
-  const url = publicUrl(business.slug)
+  const next = activeToday.find((a) => new Date(a.ends_at).getTime() > now)
   const canWhatsApp = hasModule(status.effective_plan, 'whatsapp')
-  const dayCount = (tab === 'hoy' ? todays.filter(isActive) : tomorrows).length
+  const dayCount = (tab === 'hoy' ? activeToday : tomorrows).length
   const freeCount = slots?.filter((s) => s.available).length ?? 0
   const changed = () => { setOpen(null); setAdding(null); load() }
 
+  const confirm = async (a: Appointment) => {
+    if (demo) {
+      setDemoList((l) => l.map((x) => (x.id === a.id ? { ...x, status: 'confirmada' } : x)))
+      return
+    }
+    setConfirming(a.id)
+    const { error } = await supabase.from('appointments').update({ status: 'confirmada' }).eq('id', a.id)
+    setConfirming(null)
+    if (error) setError(errorMessage(error))
+    else load()
+  }
+
+  const openAppt = (a: Appointment) => !demo && setOpen(a)
+  const newAppt = (time = '') => !demo && setAdding({ date: day, time })
+
   return (
     <div className="space-y-5">
-      <InstallReminder appName={business.name} pushLink={link('ajustes')} />
+      {!stepsVisible && !demo && <InstallReminder appName={business.name} pushLink={link('ajustes')} />}
 
       <div className="flex items-end justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0" data-tour="resumen">
           <p className="text-sm font-medium text-slate-500">{greeting(tz)}</p>
           <h1 className="text-2xl font-extrabold leading-tight tracking-tight sm:text-3xl">{dayTitle(today)}</h1>
+          <p className="mt-1 text-[15px] text-slate-500">
+            <b className="text-slate-900">{activeToday.length === 1 ? '1 cita' : `${activeToday.length} citas`}</b>
+            {pending.length > 0 && <> · <b className="text-amber-700">{pending.length} por confirmar</b></>}
+            {expected > 0 && <> · {money(expected, business.currency)} previstos</>}
+          </p>
         </div>
-        <Button onClick={() => setAdding({ date: day, time: '' })} className="shrink-0" aria-label="Nueva cita">
-          <Icon name="plus" className="h-4 w-4" /> <span className="sm:hidden">Cita</span><span className="hidden sm:inline">Nueva cita</span>
+        <Button onClick={() => newAppt()} className="hidden shrink-0 lg:inline-flex" data-tour="fab">
+          <Icon name="plus" className="h-4 w-4" /> Nueva cita
         </Button>
       </div>
 
-      <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
-        <Stat icon="calendar" label="Citas hoy" value={String(todays.filter(isActive).length)} />
-        <Stat icon="clock" label="Por confirmar" value={String(pending.length)} highlight={pending.length > 0} />
-        <Stat
-          icon="cash"
-          label="Cobrado hoy"
-          value={money(income, business.currency)}
-          sub={expected > income ? `de ${money(expected, business.currency)}` : undefined}
-          progress={expected > 0 ? income / expected : undefined}
-        />
-      </div>
+      {!demo && <FirstSteps />}
 
       <RateCard />
 
       {next && (
         <button
-          onClick={() => setOpen(next)}
+          onClick={() => openAppt(next)}
           className="relative flex w-full items-center gap-4 overflow-hidden rounded-2xl bg-brand bg-btn-grad p-4 text-left text-white shadow-lg shadow-brand/25 transition active:scale-[0.99] sm:p-5"
         >
           <span aria-hidden className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-white/10" />
@@ -111,6 +142,30 @@ export default function Today() {
         </button>
       )}
 
+      {pending.length > 0 && (
+        <section>
+          <h2 className="mb-2.5 font-extrabold tracking-tight">Por confirmar</h2>
+          <div className="space-y-2">
+            {pending.map((a, i) => (
+              <div key={a.id} className="card flex items-center gap-3 p-3 sm:p-3.5">
+                <button onClick={() => openAppt(a)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                  <span aria-hidden className="h-10 w-1 shrink-0 rounded-full bg-amber-400" />
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold">{a.customer_name}</span>
+                    <span className="block truncate text-sm text-slate-500">
+                      {dateKey(a.starts_at, tz) === today ? 'Hoy' : dayTitle(dateKey(a.starts_at, tz))}, {timeOf(a.starts_at, tz, true)} · {servicesText(a)}
+                    </span>
+                  </span>
+                </button>
+                <Button size="sm" onClick={() => confirm(a)} loading={confirming === a.id} data-tour={i === 0 ? 'confirm' : undefined}>
+                  Confirmar
+                </Button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section>
         <div className="mb-2.5 flex items-center justify-between gap-2">
           <div className="inline-flex rounded-full bg-slate-100 p-1" role="tablist" aria-label="Día">
@@ -119,15 +174,15 @@ export default function Today() {
                 key={t}
                 role="tab"
                 aria-selected={tab === t}
-                onClick={() => setTab(t)}
+                onClick={() => !demo && setTab(t)}
                 className={`rounded-full px-4 py-1.5 text-sm font-bold capitalize transition ${tab === t ? 'bg-white text-slate-900 shadow' : 'text-slate-500'}`}
               >
                 {t}
               </button>
             ))}
           </div>
-          <Button size="sm" variant="secondary" onClick={() => setPublishing(true)} disabled={!slots} className="shrink-0">
-            <Icon name="sparkles" className="h-4 w-4 text-brand" /> Publicar mis huecos
+          <Button size="sm" variant="ghost" onClick={() => !demo && setPublishing(true)} disabled={!slots} className="shrink-0 text-brand">
+            <Icon name="sparkles" className="h-4 w-4" /> Publicar huecos
           </Button>
         </div>
         <p className="mb-2.5 text-sm text-slate-500">
@@ -135,55 +190,73 @@ export default function Today() {
           {slots && slots.length > 0 && <> · <b className="text-emerald-700">{freeCount === 1 ? '1 hueco libre' : `${freeCount} huecos libres`}</b></>}
           {slots && freeCount > 0 && ' · toca uno para añadir una cita'}
         </p>
-        <DayTimeline
-          day={day}
-          isToday={tab === 'hoy'}
-          list={list}
-          slots={slots}
-          onOpen={setOpen}
-          onPick={(time) => setAdding({ date: day, time })}
-        />
+        <div data-tour="dia">
+          <DayTimeline
+            day={day}
+            isToday={tab === 'hoy'}
+            list={list}
+            slots={slots}
+            onOpen={openAppt}
+            onPick={(time) => newAppt(time)}
+          />
+        </div>
       </section>
 
-      {pendingLater.length > 0 && (
-        <section>
-          <h2 className="mb-2.5 font-extrabold tracking-tight">Por confirmar en los próximos días</h2>
-          <div className="space-y-2">
-            {pendingLater.map((a) => (
-              <div key={a.id}>
-                <p className="mb-1 text-xs font-semibold text-slate-500">{dayTitle(dateKey(a.starts_at, tz))}</p>
-                <AppointmentRow a={a} onClick={() => setOpen(a)} />
-              </div>
-            ))}
-          </div>
-        </section>
+      {canWhatsApp && tab === 'hoy' && tomorrows.length > 0 && !demo && (
+        remind ? <TomorrowReminders list={tomorrows} onClose={() => setRemind(false)} /> : (
+          <button onClick={() => setRemind(true)} className="card flex w-full items-center gap-3 text-left transition hover:bg-slate-50">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#25D366]/15 text-[#128C7E]"><WhatsAppIcon className="h-5 w-5" /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold">Mañana tienes {tomorrows.length === 1 ? '1 cita' : `${tomorrows.length} citas`}</span>
+              <span className="block truncate text-sm text-slate-500">Recuérdaselas por WhatsApp, una detrás de otra</span>
+            </span>
+            <span className="shrink-0 rounded-lg bg-[#25D366] px-3 py-1.5 text-sm font-semibold text-white">Avisar</span>
+          </button>
+        )
       )}
 
-      {canWhatsApp && tomorrows.length > 0 && <TomorrowReminders list={tomorrows} />}
-
-      <section className="card">
-        <h2 className="flex items-center gap-2 font-extrabold tracking-tight"><Icon name="globe" className="h-5 w-5 text-brand" /> Tu enlace de reservas</h2>
-        <p className="mt-2 break-all rounded-xl bg-slate-50 px-3 py-2 font-mono text-sm font-semibold text-brand">{url.replace(/^https?:\/\//, '')}</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <CopyButton text={url} label="Copiar enlace" />
-          <LinkButton href={shareLink(`¡Reserva tu cita en ${business.name} desde aquí! ${url}`)} variant="whatsapp" size="sm" newTab>
-            <WhatsAppIcon className="h-4 w-4" /> Compartir
-          </LinkButton>
-          <LinkButton href={url} variant="secondary" size="sm" newTab>Ver mi app</LinkButton>
-        </div>
-        <p className="mt-3 text-xs text-slate-500">
-          Ponlo en tu biografía de Instagram y en tu estado de WhatsApp. Próximos 30 días: {upcomingCount} citas.
-        </p>
-      </section>
-
-      <p className="text-center text-sm text-slate-500">
-        <Link to={link('agenda')} className="font-semibold text-brand">Ver toda la agenda →</Link>
-      </p>
+      {/* Botón + del móvil (en el ordenador está "Nueva cita" arriba y en el menú lateral) */}
+      <button
+        onClick={() => newAppt()}
+        data-tour="fab"
+        className="fixed bottom-[calc(76px+env(safe-area-inset-bottom))] right-4 z-20 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand bg-btn-grad text-white shadow-lg shadow-brand/40 transition active:scale-95 md:bottom-6 lg:hidden"
+        aria-label="Nueva cita"
+      >
+        <Icon name="plus" className="h-6 w-6" />
+      </button>
 
       {open && <AppointmentModal appointment={open} onClose={() => setOpen(null)} onChanged={changed} />}
       {adding && <NewAppointment defaultDate={adding.date} defaultTime={adding.time} onClose={() => setAdding(null)} onCreated={changed} />}
       {publishing && slots && <PublishFreeSlots when={tab} slots={slots} onClose={() => setPublishing(false)} />}
+      {demo && tutorial.step?.sheet === 'nueva' && <DemoNewSheet />}
     </div>
+  )
+}
+
+/** La hoja de "Nueva cita" del tutorial: igual que la de verdad, pero de ejemplo (no guarda nada) */
+function DemoNewSheet() {
+  const { services } = usePanel()
+  const s = services.find((x) => x.active && !x.is_extra)
+  const field = (label: string, value: string) => (
+    <div>
+      <p className="label">{label}</p>
+      <div className="input bg-slate-50 text-slate-700">{value}</div>
+    </div>
+  )
+  return (
+    <Modal
+      open
+      onClose={() => {}}
+      title="Nueva cita"
+      footer={<Button block size="lg" data-tour="guardar">Guardar cita</Button>}
+    >
+      <div className="space-y-4">
+        {field('Quién viene', 'Juana Gómez · 53 5555 0000')}
+        {field('Qué se va a hacer', s ? s.name : 'Tu servicio')}
+        {field('Qué día y a qué hora', 'Hoy, 1:00 p. m.')}
+        <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-500">Es una cita de ejemplo: no se guarda.</p>
+      </div>
+    </Modal>
   )
 }
 
@@ -191,7 +264,7 @@ export default function Today() {
  * Recordatorios de mañana. Con "Avisar a todos" se van enviando uno detrás de otro: al volver de
  * WhatsApp ya está listo el siguiente, a un toque. Cada envío queda apuntado (como en Recordatorios).
  */
-function TomorrowReminders({ list }: { list: Appointment[] }) {
+function TomorrowReminders({ list, onClose }: { list: Appointment[]; onClose: () => void }) {
   const { business } = usePanel()
   const tz = business.timezone
   const withPhone = list.filter((a) => a.customer_phone.length >= 8 && (a.status === 'pendiente' || a.status === 'confirmada'))
@@ -212,7 +285,10 @@ function TomorrowReminders({ list }: { list: Appointment[] }) {
 
   return (
     <section className="card">
-      <h2 className="flex items-center gap-2 font-extrabold tracking-tight"><Icon name="bell" className="h-5 w-5 text-brand" /> Recordatorios para mañana</h2>
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="flex items-center gap-2 font-extrabold tracking-tight"><Icon name="bell" className="h-5 w-5 text-brand" /> Recordatorios para mañana</h2>
+        <button onClick={onClose} className="-mr-1 -mt-1 rounded-full p-1.5 text-slate-400 hover:bg-slate-100" aria-label="Cerrar"><Icon name="x" className="h-4 w-4" /></button>
+      </div>
       <p className="text-sm text-slate-500">
         {withPhone.length === 0 ? 'Ninguna cita de mañana tiene teléfono.' : toSend.length === 0 ? '¡Todos avisados! ✅' : `${done} de ${withPhone.length} avisados`}
       </p>
@@ -286,24 +362,6 @@ function TomorrowReminders({ list }: { list: Appointment[] }) {
   )
 }
 
-function Stat({ icon, label, value, sub, highlight, progress }: { icon: string; label: string; value: string; sub?: string; highlight?: boolean; progress?: number }) {
-  return (
-    <div className={`card p-3 sm:p-4 ${highlight ? 'ring-2 ring-amber-300' : ''}`}>
-      <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${highlight ? 'bg-amber-100 text-amber-700' : 'bg-brand/10 text-brand'}`}>
-        <Icon name={icon} className="h-[18px] w-[18px]" />
-      </span>
-      <p className={`mt-2 truncate font-extrabold tracking-tight sm:text-2xl ${value.length > 7 ? 'text-[15px]' : 'text-lg'}`} title={value}>{value}</p>
-      <p className="truncate text-xs font-medium text-slate-500">{label}</p>
-      {sub && <p className="truncate text-[11px] text-slate-400">{sub}</p>}
-      {progress !== undefined && (
-        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100" title={`${Math.round(progress * 100)} % cobrado`}>
-          <div className="h-full rounded-full bg-emerald-500 transition-all duration-700" style={{ width: `${Math.min(100, Math.round(progress * 100))}%` }} />
-        </div>
-      )}
-    </div>
-  )
-}
-
 /** Silueta de la pantalla mientras cargan las citas (parece más rápido que una ruedita) */
 function TodaySkeleton() {
   const bar = 'animate-pulse rounded-xl bg-slate-200'
@@ -312,9 +370,7 @@ function TodaySkeleton() {
       <div className="space-y-2">
         <div className={`h-4 w-28 ${bar}`} />
         <div className={`h-8 w-56 ${bar}`} />
-      </div>
-      <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
-        {[0, 1, 2].map((i) => <div key={i} className={`h-[104px] ${bar}`} />)}
+        <div className={`h-4 w-64 ${bar}`} />
       </div>
       <div className={`h-20 ${bar}`} />
       <div className={`h-9 w-48 rounded-full ${bar}`} />

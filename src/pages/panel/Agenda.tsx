@@ -52,8 +52,9 @@ export default function Agenda() {
   const weekStart = mondayOf(day)
   const monthStart = `${day.slice(0, 7)}-01`
   const monthEnd = addDays(shiftMonth(monthStart, 1), -1)
-  const from = view === 'dia' ? day : view === 'semana' ? weekStart : monthStart
-  const to = view === 'dia' ? day : view === 'semana' ? addDays(weekStart, 6) : monthEnd
+  // En la vista de día se carga la semana entera: así la tira de arriba enseña cuántas citas hay cada día
+  const from = view === 'mes' ? monthStart : weekStart
+  const to = view === 'mes' ? monthEnd : addDays(weekStart, 6)
 
   const load = useCallback(async () => {
     setList(null)
@@ -72,7 +73,7 @@ export default function Agenda() {
   const move = (dir: -1 | 1) => setDay(view === 'dia' ? addDays(day, dir) : view === 'semana' ? addDays(day, 7 * dir) : shiftMonth(day, dir))
   const visible = (list || []).filter((a) => showCancelled || a.status !== 'cancelada')
   const byDay = (d: string) => visible.filter((a) => dateKey(a.starts_at, tz) === d)
-  const active = visible.filter(isActive)
+  const active = (view === 'dia' ? byDay(day) : visible).filter(isActive)
   const periodTotal = active.reduce((s, a) => s + Number(a.total), 0)
   const [y, m] = day.split('-').map(Number)
   const title =
@@ -148,7 +149,32 @@ export default function Agenda() {
       {error && <Alert>{error}</Alert>}
       {!list && !error && <PageLoader />}
 
-      {list && view === 'dia' && dayList(day, false)}
+      {list && view === 'dia' && (
+        <>
+          {/* La semana: un punto por cita; toca un día para verlo */}
+          <div className="grid grid-cols-7 gap-1.5">
+            {Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)).map((d) => {
+              const n = byDay(d).filter(isActive).length
+              const sel = d === day
+              return (
+                <button
+                  key={d}
+                  onClick={() => setDay(d)}
+                  aria-pressed={sel}
+                  className={`flex flex-col items-center gap-1 rounded-2xl py-2.5 transition ${sel ? 'bg-brand text-white shadow-md shadow-brand/30' : d === today ? 'bg-white ring-1 ring-brand/40' : 'bg-white ring-1 ring-slate-200/80'}`}
+                >
+                  <span className={`text-[11px] font-semibold ${sel ? 'text-white/80' : 'text-slate-400'}`}>{WEEKDAYS_SHORT[weekdayOf(d)]}</span>
+                  <span className="text-lg font-extrabold leading-none">{Number(d.slice(8))}</span>
+                  <span className="flex h-1.5 gap-0.5" aria-label={`${n} ${n === 1 ? 'cita' : 'citas'}`}>
+                    {Array.from({ length: Math.min(n, 4) }, (_, k) => <span key={k} className={`h-1.5 w-1.5 rounded-full ${sel ? 'bg-white/80' : 'bg-brand/50'}`} />)}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          {dayList(day, false)}
+        </>
+      )}
 
       {list && view === 'semana' && (
         <>

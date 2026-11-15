@@ -1,7 +1,7 @@
 // Versión de Citora y lo nuevo en ella. Al publicar una versión nueva: cambiar APP_VERSION (y la de
 // package.json) y escribir sus novedades aquí. A cada dueño se le muestran una sola vez al entrar a
 // su panel (ver components/WhatsNew.tsx).
-export const APP_VERSION: string = '1.3.0'
+export const APP_VERSION: string = '1.4.0'
 
 export interface ReleaseSection {
   icon: string
@@ -11,29 +11,34 @@ export interface ReleaseSection {
 
 export const RELEASE_NOTES: ReleaseSection[] = [
   {
-    icon: 'home',
-    title: 'Tu día, de un vistazo',
+    icon: 'grid',
+    title: 'Un panel más sencillo',
     points: [
-      'La pantalla Hoy ahora es una línea de tiempo: cada cita ocupa lo que dura y tiene un color según si está por confirmar, confirmada o hecha.',
-      'Una raya roja marca la hora actual y ves enseguida dónde te quedan huecos libres.',
-      'Pasa de Hoy a Mañana con un toque.',
-      'Debajo de "Cobrado hoy", una barra con cuánto llevas cobrado de lo que esperas ganar.',
+      'Abajo tienes ahora "Mi negocio": tu enlace para compartir, tus servicios, tu horario y la apariencia de tu página, todo junto.',
+      'En "Más" solo ves las herramientas que usas. Las demás siguen ahí: actívalas con un toque cuando las necesites.',
+      'Los días que te quedan de prueba se ven arriba, junto a tu nombre.',
+    ],
+  },
+  {
+    icon: 'home',
+    title: 'Hoy, más claro',
+    points: [
+      'Arriba, en una línea: cuántas citas tienes, cuántas faltan por confirmar y cuánto vas a cobrar.',
+      'Las citas por confirmar tienen su botón "Confirmar" a la vista.',
+      'Para apuntar una cita, el botón + de abajo a la derecha.',
     ],
   },
   {
     icon: 'sparkles',
-    title: 'Llena tus huecos libres',
-    points: [
-      'Toca un hueco libre y se abre "Nueva cita" con esa hora ya puesta.',
-      'Botón "Publicar mis huecos": te escribe el mensaje con tus horas libres y tu enlace, listo para tu estado de WhatsApp o Instagram.',
-    ],
+    title: 'Tutorial paso a paso',
+    points: ['Te enseña a usar tu panel sobre la pantalla de verdad, con citas de ejemplo. Lo tienes en Más → Tutorial paso a paso.'],
   },
   {
-    icon: 'bell',
-    title: 'Recordatorios más rápidos',
-    points: ['Con "Avisar a todos" vas enviando los recordatorios de mañana uno detrás de otro: al volver de WhatsApp ya tienes el siguiente listo.'],
+    icon: 'users',
+    title: 'Recupera clientes',
+    points: ['En Clientes, el filtro "Hace tiempo que no vienen" y el botón "Escribirle", con un mensaje de "te echamos de menos" ya escrito.'],
   },
 ]
 
 /** Consejo final para sacarle partido a la versión */
-export const RELEASE_TIP = 'Por la mañana, pulsa "Publicar mis huecos" y ponlo en tu estado de WhatsApp: es la forma más fácil de llenar el día.'
+export const RELEASE_TIP = 'Entra en Clientes → "Hace tiempo que no vienen" y escríbeles: es la forma más fácil de llenar tu agenda esta semana.'

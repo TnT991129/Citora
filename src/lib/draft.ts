@@ -1,6 +1,7 @@
 import { currencyFields, generateSlots, type CurrencyMode } from './format'
 import { load, remove, save } from './storage'
 import { supabase } from './supabase'
+import { DEFAULT_TOOLS, saveOnboarding, type SkipKey } from './onboarding'
 import { businessType, type ServiceTemplate } from './templates'
 
 // Borrador del asistente "Crear mi app". Se guarda en el móvil para no perder nada.
@@ -21,6 +22,7 @@ export interface Draft {
   close: string
   every: number
   capacity?: number // clientes por turno (los borradores antiguos no lo tienen: 1)
+  skipped?: SkipKey[] // pasos que saltó (se le recuerdan en su panel)
 }
 
 const KEY = 'citora:borrador'
@@ -103,6 +105,8 @@ export async function createBusinessFromDraft(d: Draft): Promise<{ id: string; s
     const { error: e2 } = await supabase.from('businesses').update({ slot_capacity: capacity }).eq('id', created.id)
     if (e2) console.warn('No se pudo guardar los clientes por turno', e2)
   }
+  // Primeros pasos: lo que saltó y las herramientas de inicio (si falla, el panel usa lo de siempre)
+  await saveOnboarding(created.id, { tools: [...DEFAULT_TOOLS], skipped: d.skipped || [] })
   clearDraft()
   return created
 }

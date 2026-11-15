@@ -14,7 +14,7 @@ Cada pantalla trae al lado una nota "Qué cambia". Se puede abrir una pantalla c
 `index.html#p-hoy`, `#a-negocios`, `#p-hoy/ordenador` o `#p-hoy/movil/tutorial3`. **Copiar el
 diseño de ahí, no reinventarlo.** La web de los clientes no cambia.
 
-### 0.1 Crear la app (`Create.tsx`)
+### 0.1 Crear la app (`Create.tsx`) — ✅ hecho el 15 de noviembre de 2026 (versión 1.4.0, en `staging`)
 
 - Mismos 6 pasos. Debajo de la barra de progreso, cuánto falta ("Unos 3 minutos", "Último paso").
 - Cada paso con una frase corta de para qué sirve, no párrafos.
@@ -28,14 +28,14 @@ diseño de ahí, no reinventarlo.** La web de los clientes no cambia.
 - **Si salta Servicios**, el panel le avisa: "Tus clientes verán los precios de ejemplo. Revísalos
   antes de compartir" (en Primeros pasos, en Mi negocio y en Servicios) hasta que los revise.
 
-### 0.2 Bienvenida (sustituye a "¡Tu app está lista!")
+### 0.2 Bienvenida (sustituye a "¡Tu app está lista!") — ✅ hecho (1.4.0)
 
 - "Te damos la bienvenida a {negocio}" (en neutro, sin "Bienvenido/a"), con una vista previa de su
   página de reservas.
 - Tres botones: **Hacer el tutorial · 2 minutos**, **Ver mi página como un cliente**, **Ahora no,
   ir a mi panel**. El tutorial ya no se abre solo.
 
-### 0.3 Tutorial paso a paso (sustituye a `Tour.tsx`)
+### 0.3 Tutorial paso a paso (sustituye a `Tour.tsx`) — ✅ hecho (1.4.0, `panel/tutorial.tsx`)
 
 Guiado sobre la pantalla real: oscurece todo menos lo que explica, con una tarjeta y una flecha
 que lo señala. En los pasos prácticos hay que **tocar el botón de verdad** para seguir (el resto no
@@ -57,7 +57,13 @@ Usa **citas de ejemplo**: no confirma ni envía nada real.
 En ordenador cambian los textos ("a la izquierda" en vez de "abajo", "Nueva cita" en vez de "+").
 Durante el tutorial, la pantalla no se anima (si no, el resaltado no coincide con el botón).
 
-### 0.4 Panel del dueño
+### 0.4 Panel del dueño — ✅ hecho (1.4.0)
+
+Diferencias con el prototipo: Hoy mantiene la línea de tiempo proporcional de la 1.3.0 y las citas
+por confirmar salen en su propia lista con el botón "Confirmar"; Agenda conserva Día/Semana/Mes y
+añade la tira de la semana con puntos en la vista de día. Ajustes mantiene sus campos, con los avisos
+arriba.
+
 
 - **Barra de abajo:** Hoy · Agenda · Clientes · **Mi negocio** (nueva) · Más. Servicios sale de la
   barra. Arriba, junto al nombre: "Prueba · 11 días" (lleva a Mensualidad). En ordenador, menú
@@ -126,7 +132,7 @@ menú lateral oscuro.
   - Grupos: dónde te pagan, precio y prueba, contacto, encuestas (se mueven aquí) y técnico.
   - "Guardar cambios" arriba.
 
-### 0.6 Lo que necesita base de datos o datos nuevos
+### 0.6 Lo que necesita base de datos o datos nuevos — ✅ hecho (columna `businesses.onboarding`, `get_my_progress`, evento `paso_saltado`)
 
 - **Primeros pasos por negocio** (para el panel del dueño y la columna x/6 del administrador):
   guardar en el servidor qué pasos tiene hechos cada negocio. Así se ve en cualquier móvil y lo

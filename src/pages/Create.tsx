@@ -3,12 +3,13 @@ import { Link, useNavigate } from 'react-router-dom'
 import { TimeChips } from '../components/TimeChips'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { CapacityStepper } from '../components/CapacityStepper'
-import { Alert, Button, BusinessAvatar, CitoraLogo, CopyButton, Field, LinkButton, WhatsAppIcon } from '../components/ui'
+import { Alert, Button, BusinessAvatar, CitoraLogo, Field } from '../components/ui'
 import { useSession } from '../lib/auth'
 import { setBrandColor } from '../lib/brand'
 import { ColorPicker } from '../components/ColorPicker'
 import { track } from '../lib/analytics'
 import { changeCurrency, createBusinessFromDraft, draftSlots, loadDraft, newDraft, saveDraft, type Draft } from '../lib/draft'
+import { DEFAULT_TOOLS, saveOnboarding, type SkipKey } from '../lib/onboarding'
 import { errorMessage } from '../lib/errors'
 import { cleanPhone, currencyFields, CURRENCY_MODES, duration, money, price, slugify, WEEKDAYS_SHORT } from '../lib/format'
 import { supabase } from '../lib/supabase'
@@ -16,9 +17,21 @@ import { BUSINESS_TYPES, businessType } from '../lib/templates'
 import { DEFAULT_PRICE } from '../lib/plans'
 import type { Prices } from '../lib/types'
 import { panelPath, publicUrl, siteUrl } from '../lib/url'
-import { shareLink } from '../lib/whatsapp'
 
 const STEPS = ['Tipo', 'Negocio', 'Moneda', 'Servicios', 'Horario', 'Cuenta']
+/** Cuánto le falta, según el paso */
+const TIME_LEFT = ['Unos 3 minutos', 'Unos 3 minutos', 'Unos 2 minutos', 'Menos de 2 minutos', 'Un minuto', 'Último paso']
+/** Los pasos que se pueden saltar (se cambian después en el panel) y el texto del botón */
+const SKIP: Partial<Record<number, { key: SkipKey; label: string }>> = {
+  2: { key: 'moneda', label: 'Saltar, uso CUP' },
+  3: { key: 'servicios', label: 'Saltar, los reviso después' },
+  4: { key: 'horario', label: 'Saltar, de lunes a sábado de 9:00 a 18:00' },
+}
+const SKIP_NAMES: Record<SkipKey, string> = {
+  moneda: 'la moneda (CUP)',
+  servicios: 'los servicios (de ejemplo)',
+  horario: 'el horario (de lunes a sábado, de 9:00 a 18:00)',
+}
 
 export default function Create() {
   const session = useSession()
@@ -31,7 +44,7 @@ export default function Create() {
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [done, setDone] = useState<{ slug: string } | null>(null)
+  const [done, setDone] = useState<{ id: string; slug: string } | null>(null)
   // Medición del embudo (ver lib/analytics.ts): quién llega y hasta qué paso del asistente
   // Días de prueba y precio: los que se configuran en el administrador
   const [prices, setPrices] = useState<Prices>({ basico: DEFAULT_PRICE, plus: DEFAULT_PRICE, ultra: DEFAULT_PRICE, trial_days: 3 })
@@ -127,20 +140,48 @@ export default function Create() {
       return
     }
     setError(null)
+    // Si antes lo saltó y ahora lo rellena, ya no cuenta como saltado
+    const sk = SKIP[step]
+    const d = sk && draft.skipped?.includes(sk.key) ? { ...draft, skipped: draft.skipped.filter((k) => k !== sk.key) } : draft
+    if (d !== draft) setDraft(d)
+    await advance(d)
+  }
+
+  const advance = async (d: Draft) => {
     if (step === 4 && session) {
-      await finish()
+      await finish(d)
       return
     }
     setStep((s) => s + 1)
     window.scrollTo(0, 0)
   }
 
-  const finish = async () => {
+  /** "Saltar": se queda con lo de siempre para ese paso y se le recuerda en su panel */
+  const skip = async () => {
+    const sk = SKIP[step]
+    if (!sk) return
+    setError(null)
+    let patch: Partial<Draft>
+    if (sk.key === 'moneda') {
+      patch = { currency: 'CUP', usd_rate: null, services: changeCurrency(draft.services, draft.type, mode, 'CUP') }
+    } else if (sk.key === 'servicios') {
+      patch = { services: newDraft(draft.type, mode).services }
+    } else {
+      const base = newDraft(draft.type, mode)
+      patch = { days: base.days, mode: 'intervalo', open: '09:00', close: '18:00', every: base.every, capacity: 1 }
+    }
+    const d: Draft = { ...draft, ...patch, skipped: Array.from(new Set([...(draft.skipped || []), sk.key])) }
+    setDraft(d)
+    track('paso_saltado', { step })
+    await advance(d)
+  }
+
+  const finish = async (d: Draft = draft) => {
     setBusy(true)
     setError(null)
     try {
-      const created = await createBusinessFromDraft(draft)
-      setDone({ slug: created.slug })
+      const created = await createBusinessFromDraft(d)
+      setDone({ id: created.id, slug: created.slug })
     } catch (e) {
       setError(errorMessage(e))
     } finally {
@@ -166,7 +207,7 @@ export default function Create() {
         return
       }
       const created = await createBusinessFromDraft(draft)
-      setDone({ slug: created.slug })
+      setDone({ id: created.id, slug: created.slug })
     } catch (e) {
       setError(errorMessage(e))
     } finally {
@@ -174,7 +215,7 @@ export default function Create() {
     }
   }
 
-  if (done) return <Success slug={done.slug} name={draft.name} />
+  if (done) return <Welcome id={done.id} slug={done.slug} draft={draft} trialDays={prices.trial_days ?? 3} />
 
   if (existing && session) {
     return (
@@ -210,13 +251,14 @@ export default function Create() {
   }
 
   const totalSteps = session ? 5 : 6
+  const skipLabel = SKIP[step]?.label
 
   return (
     <Shell>
       <div className="mb-5">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-xs font-bold uppercase tracking-[0.16em] text-brand">Paso {step + 1} de {totalSteps}</span>
-          <span className="font-semibold text-slate-500">{STEPS[step]}</span>
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <span className="text-xs font-bold uppercase tracking-[0.16em] text-brand">Paso {step + 1} de {totalSteps} · {STEPS[step]}</span>
+          <span className="shrink-0 text-xs font-semibold text-slate-500">{step === totalSteps - 1 ? 'Último paso' : TIME_LEFT[step]}</span>
         </div>
         {/* Un tramo por paso: se ve cuánto falta de un vistazo */}
         <div className="mt-2.5 flex gap-1.5">
@@ -229,7 +271,7 @@ export default function Create() {
       {step === 0 && (
         <section>
           <h1 className="text-2xl font-bold">¿Qué tipo de negocio tienes?</h1>
-          <p className="mt-1 text-slate-600">Te prepararemos servicios típicos que podrás cambiar.</p>
+          <p className="mt-1 text-slate-600">Te preparamos servicios, precios y horario típicos para empezar. Podrás cambiarlo todo.</p>
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {BUSINESS_TYPES.map((t) => (
               <button
@@ -253,7 +295,7 @@ export default function Create() {
         <section className="space-y-4">
           <div>
             <h1 className="text-2xl font-bold">Tu negocio</h1>
-            <p className="mt-1 text-slate-600">Así lo verán tus clientes.</p>
+            <p className="mt-1 text-slate-600">Así te verán tus clientes cuando abran tu enlace.</p>
           </div>
           <Field label="Nombre del negocio">
             <input
@@ -314,7 +356,7 @@ export default function Create() {
       {step === 2 && (
         <section>
           <h1 className="text-2xl font-bold">¿En qué moneda cobras?</h1>
-          <p className="mt-1 text-slate-600">Así verán tus clientes los precios. Podrás cambiarlo después en Ajustes.</p>
+          <p className="mt-1 text-slate-600">Es la moneda en la que tus clientes verán tus precios.</p>
           <div className="mt-5 space-y-3">
             {CURRENCY_MODES.map((c) => (
               <button
@@ -360,9 +402,8 @@ export default function Create() {
         <section>
           <h1 className="text-2xl font-bold">Tus servicios</h1>
           <p className="mt-1 text-slate-600">
-            Cambia nombres, precios (en {main}) y duración. Podrás editarlos después.
+            Te dejamos estos de ejemplo. Cambia lo que no sea igual que en tu negocio (precios en {main}).
             {rate > 0 && ` Tus clientes verán también el cambio en CUP (1 USD = ${money(rate, 'CUP')}).`}
-            {' '}Los servicios complementarios (extras) los añades después desde tu panel.
           </p>
           <div className="mt-5 space-y-3">
             {draft.services.map((s, i) => (
@@ -425,8 +466,8 @@ export default function Create() {
       {step === 4 && (
         <section className="space-y-5">
           <div>
-            <h1 className="text-2xl font-bold">Tu horario</h1>
-            <p className="mt-1 text-slate-600">Qué días trabajas y a qué horas pueden empezar las citas.</p>
+            <h1 className="text-2xl font-bold">¿Cuándo trabajas?</h1>
+            <p className="mt-1 text-slate-600">Tus clientes solo podrán reservar en estos días y horas.</p>
           </div>
           <div>
             <span className="label">Días de trabajo</span>
@@ -507,7 +548,7 @@ export default function Create() {
         <section className="space-y-4">
           <div>
             <h1 className="text-2xl font-bold">Crea tu cuenta</h1>
-            <p className="mt-1 text-slate-600">Con ella entrarás a tu panel para ver tus citas.</p>
+            <p className="mt-1 text-slate-600">Con este correo y contraseña entrarás a tu panel.</p>
           </div>
           <Field label="Correo electrónico">
             <input className="input" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tucorreo@ejemplo.com" />
@@ -515,6 +556,11 @@ export default function Create() {
           <Field label="Contraseña" hint="Mínimo 6 caracteres.">
             <input className="input" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </Field>
+          {(draft.skipped || []).length > 0 && (
+            <div className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900 ring-1 ring-amber-200">
+              <b>Dejaste para después:</b> {(draft.skipped || []).map((k) => SKIP_NAMES[k]).join(', ')}. Te lo recordaremos en tu panel.
+            </div>
+          )}
           <div className="card bg-slate-50">
             <p className="text-sm text-slate-700">
               <b>{businessType(draft.type).emoji} {draft.name}</b> · {draft.services.filter((s) => s.name.trim()).length} servicios · desde {money(Math.min(...draft.services.filter((s) => s.name.trim()).map((s) => s.price)), main)}
@@ -530,16 +576,28 @@ export default function Create() {
       {error && <div className="mt-5"><Alert>{error}</Alert></div>}
 
       {step > 0 && (
-        <div className="sticky bottom-0 -mx-4 mt-6 flex gap-3 border-t border-slate-200 bg-slate-50/95 px-4 py-3 backdrop-blur safe-bottom">
-          <Button variant="secondary" onClick={() => { setError(null); setStep((s) => s - 1) }} disabled={busy}>
-            Atrás
-          </Button>
-          {step < 5 ? (
-            <Button block onClick={next} loading={busy} disabled={step === 1 && slugState === 'checking'}>
-              {step === 4 && session ? 'Crear mi app' : 'Siguiente'}
+        <div className="sticky bottom-0 -mx-4 mt-6 border-t border-slate-200 bg-slate-50/95 px-4 py-3 backdrop-blur safe-bottom">
+          <div className="flex gap-3">
+            <Button variant="secondary" onClick={() => { setError(null); setStep((s) => s - 1) }} disabled={busy}>
+              Atrás
             </Button>
-          ) : (
-            <Button block onClick={signUpAndCreate} loading={busy}>Crear mi app</Button>
+            {step < 5 ? (
+              <Button block onClick={next} loading={busy} disabled={step === 1 && slugState === 'checking'}>
+                {step === 4 && session ? 'Crear mi app' : 'Siguiente'}
+              </Button>
+            ) : (
+              <Button block onClick={signUpAndCreate} loading={busy}>Crear mi app</Button>
+            )}
+          </div>
+          {skipLabel && (
+            <button
+              type="button"
+              onClick={skip}
+              disabled={busy}
+              className="mt-2 w-full rounded-xl py-2.5 text-[15px] font-semibold text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
+            >
+              {skipLabel}
+            </button>
           )}
         </div>
       )}
@@ -565,35 +623,96 @@ function Shell({ children }: { children: ReactNode }) {
   )
 }
 
-function Success({ slug, name }: { slug: string; name: string }) {
+/**
+ * Bienvenida al terminar: su negocio ya existe. Le ofrece el tutorial (no se abre solo), ver su
+ * página como un cliente o ir directo al panel.
+ */
+function Welcome({ id, slug, draft, trialDays }: { id: string; slug: string; draft: Draft; trialDays: number }) {
+  const navigate = useNavigate()
   const url = publicUrl(slug)
+  const mode = draft.currency || 'CUP'
+  const main = currencyFields(mode).currency
+  const services = draft.services.filter((s) => s.name.trim()).slice(0, 3)
+  const later = (draft.skipped || []).filter((k) => k !== 'moneda')
   useEffect(() => {
     track('negocio_creado')
   }, [])
+
+  const seePage = () => {
+    window.open(url, '_blank', 'noopener')
+    void saveOnboarding(id, { tools: [...DEFAULT_TOOLS], skipped: draft.skipped || [], steps: { ver: new Date().toISOString() } })
+  }
+
   return (
-    <Shell>
-      <div className="text-center">
-        <div className="ui-sheet mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 ring-8 ring-emerald-50">
-          <svg viewBox="0 0 24 24" className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12l5 5 9-10" /></svg>
+    <div className="min-h-dvh bg-white">
+      <div className="relative overflow-hidden bg-brand bg-btn-grad px-6 pb-24 pt-12 text-center text-white">
+        <span aria-hidden className="pointer-events-none absolute -left-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
+        <span aria-hidden className="pointer-events-none absolute -right-12 top-16 h-32 w-32 rounded-full bg-white/10" />
+        <p className="ui-sheet text-5xl" aria-hidden>🎉</p>
+        <p className="mt-4 text-sm font-semibold uppercase tracking-[0.16em] text-white/75">Tu app ya está lista</p>
+        <h1 className="mx-auto mt-1 max-w-md text-[28px] font-extrabold leading-tight tracking-tight">Te damos la bienvenida a {draft.name}</h1>
+        <p className="mt-2 text-white/85">Tus {trialDays} días gratis con todo incluido ya empezaron.</p>
+      </div>
+
+      <div className="mx-auto -mt-16 max-w-md px-5">
+        <div className="ui-sheet overflow-hidden rounded-2xl bg-white shadow-xl shadow-slate-900/10 ring-1 ring-slate-200">
+          <div className="flex items-center gap-1.5 truncate border-b border-slate-100 bg-slate-50 px-3 py-2 text-[11px] text-slate-400">
+            <span className="h-2 w-2 shrink-0 rounded-full bg-slate-300" />
+            {url.replace(/^https?:\/\//, '')}
+          </div>
+          <div className="bg-brand bg-btn-grad px-4 py-4 text-white">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/20 text-lg">{businessType(draft.type).emoji}</span>
+              <div className="min-w-0">
+                <p className="truncate font-extrabold leading-tight">{draft.name}</p>
+                <p className="truncate text-xs text-white/80">{businessType(draft.type).name}</p>
+              </div>
+            </div>
+          </div>
+          <div className="divide-y divide-slate-100 px-4">
+            {services.map((s, i) => (
+              <div key={i} className="flex justify-between gap-3 py-2.5 text-sm">
+                <span className="min-w-0 font-semibold">
+                  <span className="block truncate">{s.name}</span>
+                  <span className="block text-xs font-normal text-slate-400">{duration(s.duration_min)}</span>
+                </span>
+                <span className="shrink-0 font-bold">{money(s.price, main)}</span>
+              </div>
+            ))}
+          </div>
+          <div className="px-4 pb-4 pt-1">
+            <div className="rounded-btn bg-brand bg-btn-grad py-2.5 text-center text-sm font-bold text-white">Reservar cita</div>
+          </div>
         </div>
-        <h1 className="mt-5 text-3xl font-extrabold tracking-tight">¡Tu app está lista!</h1>
-        {/* Antes decía "3 días gratis" fijo, aunque la prueba dura lo que se configure en el administrador */}
-        <p className="mt-2 text-slate-600">Tu prueba gratis con todo incluido ya empezó. Comparte tu enlace para empezar a recibir reservas.</p>
       </div>
-      <div className="card mt-6">
-        <p className="text-sm font-medium text-slate-500">Tu enlace</p>
-        <p className="mt-1 break-all text-lg font-bold text-brand">{url.replace(/^https?:\/\//, '')}</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <CopyButton text={url} label="Copiar enlace" />
-          <LinkButton href={shareLink(`¡Ya puedes reservar tu cita en ${name} desde aquí! ${url}`)} variant="whatsapp" size="sm" newTab>
-            <WhatsAppIcon className="h-4 w-4" /> Compartir
-          </LinkButton>
-        </div>
+
+      <div className="mx-auto max-w-md space-y-2.5 px-5 pb-10 pt-6">
+        {later.length > 0 && (
+          <p className="mb-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">
+            Dejaste <b>{later.map((k) => (k === 'servicios' ? 'los servicios' : 'el horario')).join(' y ')}</b> para después. Revísalo antes de compartir tu enlace: te lo recordamos en tu panel.
+          </p>
+        )}
+        <Button block size="lg" onClick={() => navigate(`${panelPath(slug)}?tutorial=1`)}>
+          <Icon name="sparkles" /> Hacer el tutorial · 2 minutos
+        </Button>
+        <Button block size="lg" variant="secondary" onClick={seePage}>
+          <Icon name="eye" /> Ver mi página como un cliente
+        </Button>
+        <Link to={panelPath(slug)} className="block w-full rounded-xl py-3 text-center text-[15px] font-semibold text-slate-500 transition hover:bg-slate-50">
+          Ahora no, ir a mi panel
+        </Link>
       </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <LinkButton href={url} variant="secondary" size="lg" newTab>Ver mi app</LinkButton>
-        <Link to={panelPath(slug)} className="inline-flex items-center justify-center rounded-btn bg-brand bg-btn-grad px-5 py-3.5 font-semibold text-white shadow-md shadow-brand/25 transition hover:brightness-110">Ir a mi panel</Link>
-      </div>
-    </Shell>
+    </div>
+  )
+}
+
+function Icon({ name }: { name: 'sparkles' | 'eye' }) {
+  const d = name === 'sparkles'
+    ? 'M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z'
+    : 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12zM12 15a3 3 0 100-6 3 3 0 000 6z'
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d={d} />
+    </svg>
   )
 }

@@ -1,5 +1,7 @@
 import { createContext, useContext } from 'react'
+import type { Onboarding, Progress, StepId } from '../../lib/onboarding'
 import type { Business, MyStatus, Service, Staff } from '../../lib/types'
+import type { TourStep } from './tutorial'
 
 export interface PanelCtx {
   business: Business
@@ -16,10 +18,20 @@ export interface PanelCtx {
   link: (sub?: string) => string
   /** El dueño cambió su enlace: se actualiza la dirección del panel */
   slugChanged: (slug: string) => void
-  /** Vuelve a mostrar el recorrido guiado del panel */
+  /** Abre el tutorial paso a paso */
   showTour: () => void
   /** Vuelve a mostrar las novedades de la versión actual */
   showNews: () => void
+  /** Primeros pasos y herramientas activas (ver lib/onboarding.ts) */
+  onboarding: Onboarding
+  updateOnboarding: (patch: Onboarding) => void
+  /** Apunta que hizo un primer paso (una sola vez) */
+  markStep: (id: StepId) => void
+  /** Cifras del servidor para Primeros pasos, Mi negocio y Mensualidad (null si no cargaron) */
+  progress: Progress | null
+  refreshProgress: () => Promise<void>
+  /** Tutorial en marcha: Hoy enseña citas de ejemplo y nada se guarda */
+  tutorial: { active: boolean; step: TourStep | null }
 }
 
 export const PanelContext = createContext<PanelCtx | null>(null)

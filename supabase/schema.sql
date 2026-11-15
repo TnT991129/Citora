@@ -517,6 +517,27 @@ alter table public.businesses add column if not exists slot_capacity int not nul
   check (slot_capacity between 1 and 50);
 alter table public.appointments add column if not exists lane smallint not null default 0;
 
+-- Primeros pasos y modo sencillo del panel (versión 1.4). Lo escribe el propio dueño desde su panel
+-- (lo limpia businesses_guard):
+--   tools     herramientas que se ven en "Más" (ej. ["recordatorios","opiniones","estadisticas"])
+--   skipped   pasos que saltó al crear su app ("moneda", "servicios", "horario")
+--   steps     cuándo hizo cada primer paso: {"precios": "2026-11-16T10:00:00Z", "ver": ..., "prueba": ..., "compartir": ...}
+--   tutorial  cuándo terminó el tutorial
+--   all_done  ya vio "¡Todo listo!" en Primeros pasos (la tarjeta deja de salir)
+alter table public.businesses add column if not exists onboarding jsonb not null default '{}'::jsonb;
+
+-- A los negocios que aún no tienen herramientas elegidas se les dejan las tres de siempre y las que
+-- ya usan (así al actualizar nadie pierde de vista nada de lo que usa)
+update public.businesses b set onboarding = b.onboarding || jsonb_build_object('tools', to_jsonb(array_remove(array[
+    'recordatorios', 'opiniones', 'estadisticas',
+    case when exists (select 1 from public.waitlist x where x.business_id = b.id) then 'espera' end,
+    case when exists (select 1 from public.discounts x where x.business_id = b.id) then 'cupones' end,
+    case when exists (select 1 from public.packages x where x.business_id = b.id) then 'bonos' end,
+    case when exists (select 1 from public.gallery_photos x where x.business_id = b.id) then 'galeria' end,
+    case when exists (select 1 from public.expenses x where x.business_id = b.id) then 'gastos' end
+  ], null)))
+where not (b.onboarding ? 'tools');
+
 -- Dos citas activas no se solapan en la misma silla del mismo profesional (las citas sin profesional
 -- comparten las sillas del negocio)
 do $$
@@ -576,7 +597,7 @@ create table if not exists public.analytics_events (
   id bigint generated always as identity primary key,
   visitor_id uuid not null,
   session_id uuid not null,
-  name text not null check (name in ('visita', 'crear_paso', 'negocio_creado', 'reserva_hecha')),
+  name text not null,
   page text check (char_length(page) <= 30),
   slug text check (char_length(slug) <= 60),
   step smallint check (step between 0 and 20),
@@ -588,6 +609,11 @@ create index if not exists analytics_events_time_idx on public.analytics_events 
 create index if not exists analytics_events_visitor_idx on public.analytics_events (visitor_id, created_at);
 create index if not exists analytics_events_slug_idx on public.analytics_events (slug, created_at) where slug is not null;
 alter table public.analytics_events enable row level security;
+-- Los nombres de evento válidos (paso_saltado: saltó un paso del asistente, con su número en step).
+-- Se rehace la regla para poder añadir nombres nuevos sin tocar los datos.
+alter table public.analytics_events drop constraint if exists analytics_events_name_check;
+alter table public.analytics_events add constraint analytics_events_name_check
+  check (name in ('visita', 'crear_paso', 'negocio_creado', 'reserva_hecha', 'paso_saltado'));
 -- Sin políticas: nadie la lee ni la escribe directamente.
 
 -- Encuestas a los dueños: el administrador pregunta (ej. "¿Te está gustando Citora?") y cada negocio
@@ -961,6 +987,10 @@ begin
   end if;
   if new.cover_url is not null and new.cover_url !~ '^https://' then
     new.cover_url := null;
+  end if;
+  -- Primeros pasos: un objeto pequeño; si no, se deja como estaba
+  if new.onboarding is null or jsonb_typeof(new.onboarding) <> 'object' or pg_column_size(new.onboarding) > 4000 then
+    new.onboarding := case when tg_op = 'UPDATE' then old.onboarding else '{}'::jsonb end;
   end if;
   if tg_op = 'INSERT' then
     if not _is_valid_timezone(new.timezone) then raise exception 'ZONA_INVALIDA'; end if;
@@ -2362,6 +2392,36 @@ returns jsonb language sql stable security definer set search_path = public as $
   from businesses where owner_id = auth.uid();
 $$;
 
+-- Cómo le va al dueño desde que empezó (Primeros pasos, Mi negocio y Mensualidad).
+--   web_total   reservas hechas por clientes desde su enlace (sin canceladas)
+--   web_real    las mismas, sin las que hizo el propio dueño con su WhatsApp (reserva de prueba)
+--   push_on     tiene los avisos activados en algún móvil
+--   visits_7d   personas distintas que abrieron su página en los últimos 7 días
+--   bookings / web / revenue   desde que creó su app (revenue: citas hechas)
+create or replace function public.get_my_progress()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  b businesses;
+  v_phone text;
+begin
+  select * into b from businesses where owner_id = auth.uid();
+  if not found then return null; end if;
+  v_phone := right(regexp_replace(coalesce(b.whatsapp, ''), '\D', '', 'g'), 8);
+  return (
+    select jsonb_build_object(
+      'web_total', count(*) filter (where a.source = 'web'),
+      'web_real', count(*) filter (where a.source = 'web'
+                    and (v_phone = '' or right(regexp_replace(a.customer_phone, '\D', '', 'g'), 8) <> v_phone)),
+      'bookings', count(*),
+      'revenue', coalesce(sum(a.total) filter (where a.status = 'completada'), 0),
+      'push_on', exists (select 1 from push_subscriptions ps where ps.business_id = b.id and ps.kind = 'owner'),
+      'visits_7d', (select count(distinct e.visitor_id) from analytics_events e
+                    where e.slug = b.slug and e.name = 'visita' and e.created_at > now() - interval '7 days'))
+    from appointments a
+    where a.business_id = b.id and a.status <> 'cancelada');
+end;
+$$;
+
 -- Datos para pagar (tarjeta y WhatsApp del administrador)
 create or replace function public.get_payment_info()
 returns jsonb language plpgsql stable security definer set search_path = public as $$
@@ -3021,7 +3081,7 @@ create or replace function public.track_event(
 returns void language plpgsql volatile security definer set search_path = public as $$
 begin
   if p_visitor is null or p_session is null
-     or p_name not in ('visita', 'crear_paso', 'negocio_creado', 'reserva_hecha') then
+     or p_name not in ('visita', 'crear_paso', 'negocio_creado', 'reserva_hecha', 'paso_saltado') then
     return;
   end if;
   if (select count(*) from analytics_events
@@ -3283,6 +3343,7 @@ grant execute on function public.check_slug_available(text) to anon, authenticat
 
 grant execute on function public.create_business(text, text, text, text, text, text, jsonb, jsonb, text, boolean, numeric) to authenticated;
 grant execute on function public.get_my_business_status() to authenticated;
+grant execute on function public.get_my_progress() to authenticated;
 grant execute on function public.get_payment_info() to authenticated;
 grant execute on function public.submit_payment_claim(int, numeric, text, text) to authenticated;
 grant execute on function public.save_owner_push_subscription(text, text, text) to authenticated;

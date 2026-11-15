@@ -27,6 +27,8 @@ export default function Schedule() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
+  // "Opciones avanzadas" plegado al entrar, salvo si ya atiende a varios a la vez o viene de "Clientes por turno"
+  const [advancedOpen] = useState(() => (business.slot_capacity || 1) > 1 || window.location.hash === '#clientes-por-turno')
 
   useEffect(() => {
     ;(async () => {
@@ -104,21 +106,6 @@ export default function Schedule() {
     <div className="space-y-5 pb-16">
       <h1 className="text-2xl font-extrabold">Horario</h1>
 
-      <section id="clientes-por-turno" className="card scroll-mt-20 space-y-3 ring-2 ring-brand/20">
-        <div>
-          <h2 className="text-lg font-bold">Clientes por turno</h2>
-          <p className="text-sm text-slate-500">
-            Cuántos clientes pueden reservar a la misma hora. Por ejemplo, si tienes 2 manicuras trabajando a la vez, pon 2.
-          </p>
-        </div>
-        <CapacityStepper value={capacity} onChange={(n) => { setDirty(true); setCapacity(n) }} />
-        {hasTeam && (
-          <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            Tienes profesionales en Equipo: cada uno atiende a un cliente a la vez. Este número se aplica a las citas sin profesional asignado.
-          </p>
-        )}
-        {dirty && <p className="text-sm font-semibold text-brand">Recuerda pulsar «Guardar cambios» abajo.</p>}
-      </section>
 
       <p className="text-sm text-slate-500">Para cada día, las horas a las que puede empezar una cita.</p>
 
@@ -189,6 +176,28 @@ export default function Schedule() {
           {slots.length === 0 && <li className="py-2 text-sm text-slate-400">Ninguna</li>}
         </ul>
       </section>
+
+      <details className="group" open={advancedOpen}>
+        <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-bold text-slate-500">
+          <svg viewBox="0 0 24 24" className="h-4 w-4 transition group-open:rotate-90" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M9 6l6 6-6 6" /></svg>
+          Opciones avanzadas
+        </summary>
+        <section id="clientes-por-turno" className="card mt-3 scroll-mt-20 space-y-3">
+          <div>
+            <h2 className="text-lg font-bold">Clientes por turno</h2>
+            <p className="text-sm text-slate-500">
+              Cuántos clientes pueden reservar a la misma hora. Por ejemplo, si tienes 2 manicuras trabajando a la vez, pon 2.
+            </p>
+          </div>
+          <CapacityStepper value={capacity} onChange={(n) => { setDirty(true); setCapacity(n) }} />
+          {hasTeam && (
+            <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              Tienes profesionales en Equipo: cada uno atiende a un cliente a la vez. Este número se aplica a las citas sin profesional asignado.
+            </p>
+          )}
+          {dirty && <p className="text-sm font-semibold text-brand">Recuerda pulsar «Guardar cambios» abajo.</p>}
+        </section>
+      </details>
 
       {error && <Alert>{error}</Alert>}
 

@@ -8,7 +8,9 @@ import { isPushSubscribed, pushSupported, subscribeOwnerPush, unsubscribePush } 
 import { supabase } from '../../lib/supabase'
 import { BUSINESS_TYPES } from '../../lib/templates'
 import { panelUrl, publicUrl } from '../../lib/url'
+import { InstallButton } from '../../components/InstallButton'
 import { usePanel } from './context'
+import { Icon } from './Panel'
 
 export default function Settings() {
   const { business, reloadBusiness, slugChanged, link } = usePanel()
@@ -88,6 +90,9 @@ export default function Settings() {
     <div className="space-y-5 pb-10">
       <h1 className="text-2xl font-extrabold">Ajustes</h1>
 
+      <PushSection />
+      <InstallButton appName="tu panel" label="Instalar el panel en este móvil" block />
+
       <section className="card space-y-4">
         <h2 className="font-bold">Logo</h2>
         <div className="flex items-center gap-4">
@@ -164,8 +169,6 @@ export default function Settings() {
       {error && <Alert>{error}</Alert>}
       <Button block size="lg" onClick={save} loading={busy}>Guardar cambios</Button>
 
-      <PushSection />
-
       <section className="card">
         <h2 className="font-bold">Cuenta</h2>
         <p className="mt-1 text-sm text-slate-500">Código de tu negocio: <b>{business.code}</b> (úsalo al pagar).</p>
@@ -175,7 +178,9 @@ export default function Settings() {
   )
 }
 
+/** Lo más importante de Ajustes, arriba y grande: sin avisos, el dueño no se entera de las reservas */
 function PushSection() {
+  const { markStep, refreshProgress } = usePanel()
   const [on, setOn] = useState<boolean | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -191,17 +196,29 @@ function PushSection() {
     setBusy(false)
     if (!ok) return flash('No se pudo activar. Revisa los permisos de notificaciones del navegador.')
     setOn(v)
-    flash(v ? 'Avisos activados en este dispositivo' : 'Avisos desactivados en este dispositivo')
+    if (v) markStep('avisos')
+    void refreshProgress()
+    flash(v ? 'Avisos activados en este móvil' : 'Avisos desactivados en este móvil')
   }
 
   return (
-    <section className="card space-y-2">
-      <h2 className="font-bold">Avisos en este dispositivo</h2>
-      <p className="text-sm text-slate-500">
-        Recibe una notificación cuando un cliente reserve, cancele o cambie una cita. Instala la app en tu móvil para no perdértelas.
-      </p>
-      {on !== null && <Toggle checked={on} onChange={toggle} label="Avisos de citas nuevas y cambios" />}
-      {busy && <p className="text-xs text-slate-400">Guardando…</p>}
+    <section className={`card ${on === false ? 'bg-amber-50/70 ring-1 ring-amber-200' : ''}`}>
+      <div className="flex items-start gap-3">
+        <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${on ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
+          <Icon name="bell" className="h-6 w-6" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="font-bold">Avisos en este móvil</h2>
+          <p className="text-sm text-slate-600">
+            {on
+              ? 'Te avisaremos al momento cuando alguien reserve, cambie o cancele.'
+              : 'Ahora mismo no te enteras cuando un cliente reserva. Actívalos en cada móvil que uses.'}
+          </p>
+        </div>
+        {on !== null && <Toggle checked={on} onChange={toggle} label="Avisos en este móvil" />}
+      </div>
+      {on === false && <Button block className="mt-4" onClick={() => toggle(true)} loading={busy}><Icon name="bell" className="h-4 w-4" /> Activar avisos</Button>}
+      {busy && on !== false && <p className="mt-2 text-xs text-slate-400">Guardando…</p>}
     </section>
   )
 }

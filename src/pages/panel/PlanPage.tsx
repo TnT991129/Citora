@@ -29,7 +29,12 @@ interface PaymentRow {
 }
 
 export default function PlanPage({ blocked }: { blocked?: boolean }) {
-  const { business, status } = usePanel()
+  const { business, status, progress } = usePanel()
+  // Prueba: cuántos días le quedan y qué parte ya usó (para la barra)
+  const trialLeft = daysLeft(status.trial_ends_at)
+  const trialTotal = Math.max(1, Math.round((new Date(status.trial_ends_at).getTime() - new Date(business.created_at).getTime()) / 86400000))
+  const trialUsed = Math.min(100, Math.max(4, Math.round(((trialTotal - Math.max(trialLeft, 0)) / trialTotal) * 100)))
+  const sinceDays = Math.max(1, Math.ceil((Date.now() - new Date(business.created_at).getTime()) / 86400000))
   const [info, setInfo] = useState<PaymentInfo | null>(null)
   const [history, setHistory] = useState<PaymentRow[]>([])
   const [claims, setClaims] = useState<PaymentClaim[]>([])
@@ -106,21 +111,52 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-extrabold">{blocked ? 'Activa tu app' : 'Tu plan'}</h1>
+        <h1 className="text-2xl font-extrabold">{blocked ? 'Activa tu app' : 'Mensualidad'}</h1>
         {blocked && <p className="mt-1 text-slate-600">Tu prueba o tu mensualidad terminó. Paga la mensualidad para que tus clientes vuelvan a reservar. No se ha borrado nada.</p>}
       </div>
 
-      <section className="card flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm text-slate-500">Estado</p>
+      <section className="card">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-lg font-bold">
-            {status.status === 'prueba' && <>Prueba gratis (todo incluido) · {daysLeft(status.trial_ends_at)} días</>}
+            {status.status === 'prueba' && <>Prueba gratis, con todo incluido</>}
             {status.status === 'activo' && <>{PLAN_LABEL} · pagado hasta el {fullDateFromIso(status.paid_until!, business.timezone)}</>}
             {status.status === 'vencido' && <>Inhabilitada</>}
           </p>
+          {status.status === 'prueba'
+            ? <span className="chip bg-brand/10 text-brand">{trialLeft <= 0 ? 'Último día' : `Quedan ${trialLeft} ${trialLeft === 1 ? 'día' : 'días'}`}</span>
+            : <StatusBadge status={status.status} />}
         </div>
-        <StatusBadge status={status.status} />
+        {status.status === 'prueba' && (
+          <>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full rounded-full bg-brand transition-all duration-700" style={{ width: `${trialUsed}%` }} />
+            </div>
+            <p className="mt-2 text-sm text-slate-500">
+              Termina el {fullDateFromIso(status.trial_ends_at, business.timezone)}. Si no pagas, tu página deja de aceptar reservas, pero no se borra nada.
+            </p>
+          </>
+        )}
       </section>
+
+      {progress && progress.bookings > 0 && !blocked && (
+        <section>
+          <h2 className="mb-2 px-1 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+            {status.status === 'prueba' ? `En estos ${sinceDays} ${sinceDays === 1 ? 'día' : 'días'}, Citora te trajo` : 'Desde que usas Citora'}
+          </h2>
+          <div className="grid grid-cols-3 gap-2.5">
+            {[
+              [String(progress.bookings), progress.bookings === 1 ? 'reserva' : 'reservas'],
+              [String(progress.web_total), 'por tu enlace'],
+              [money(progress.revenue, business.currency).replace(/\s*(CUP|USD)$/, ''), `${business.currency} en citas hechas`],
+            ].map(([v, l]) => (
+              <div key={l} className="card p-3.5 text-center">
+                <p className="truncate text-2xl font-extrabold tracking-tight">{v}</p>
+                <p className="text-xs font-medium text-slate-500">{l}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="card">
         <div className="flex flex-wrap items-baseline justify-between gap-2">

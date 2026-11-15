@@ -1,4 +1,5 @@
 import type { Appearance } from './appearance'
+import type { Onboarding } from './onboarding'
 
 export type PlanKey = 'basico' | 'plus' | 'ultra'
 export type BusinessStatus = 'prueba' | 'activo' | 'vencido'
@@ -37,6 +38,8 @@ export interface Business {
   loyalty_every: number | null
   loyalty_reward: string | null
   slot_capacity: number
+  /** Primeros pasos y herramientas activas (ver lib/onboarding.ts). Falta si la base es anterior a la 1.4. */
+  onboarding?: Onboarding
   plan: PlanKey | null
   trial_ends_at: string
   paid_until: string | null

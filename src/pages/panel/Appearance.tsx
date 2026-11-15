@@ -111,72 +111,6 @@ export default function Appearance() {
           <Section title="Colores" hint="El color principal se usa en botones, portada y detalles de tu web.">
             <ColorPicker value={color} onChange={setColor} />
           </Section>
-
-          <Section title="Degradado" hint="Mezcla tu color con un segundo color. Se puede usar en la portada y en los botones.">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-              {GRADIENT_PRESETS.map(([name, c1, c2]) => {
-                const on = color === c1 && look.color2 === c2
-                return (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => {
-                      setColor(c1)
-                      set({ color2: c2, cover_style: coverValue === 'image' ? 'image' : 'gradient' })
-                    }}
-                    className={`overflow-hidden rounded-xl text-left text-xs font-semibold ${on ? 'ring-2 ring-slate-900' : 'ring-1 ring-slate-200'}`}
-                  >
-                    <span className="block h-10" style={{ backgroundImage: `linear-gradient(${look.gradient_angle || 135}deg, ${c1}, ${c2})` }} />
-                    <span className="block bg-white px-2 py-1">{name}</span>
-                  </button>
-                )
-              })}
-            </div>
-            {look.color2 ? (
-              <div className="space-y-4 border-t border-slate-100 pt-3">
-                <div>
-                  <p className="mb-2 text-sm font-medium text-slate-700">Segundo color</p>
-                  <ColorPicker value={look.color2} onChange={(c) => set({ color2: c })} size={30} />
-                </div>
-                <div>
-                  <p className="mb-1 text-sm font-medium text-slate-700">Dirección</p>
-                  <div className="flex gap-2">
-                    {GRADIENT_ANGLES.map((g) => (
-                      <button
-                        key={g.value}
-                        type="button"
-                        onClick={() => set({ gradient_angle: g.value })}
-                        className={`h-11 w-11 rounded-xl text-lg font-bold text-white ${(look.gradient_angle || 135) === g.value ? 'ring-2 ring-slate-900 ring-offset-2' : ''}`}
-                        style={{ backgroundImage: `linear-gradient(${g.value}deg, ${color}, ${look.color2})` }}
-                        aria-label={`Dirección ${g.label}`}
-                      >
-                        {g.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <ToggleRow checked={Boolean(look.gradient_buttons)} onChange={(v) => set({ gradient_buttons: v })} label="Botones con degradado" />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => set({ color2: undefined, gradient_buttons: false, cover_style: look.cover_style === 'gradient' ? 'color' : look.cover_style })}
-                >
-                  Quitar degradado
-                </Button>
-              </div>
-            ) : (
-              <p className="text-sm text-slate-500">Elige una combinación para empezar. Después puedes cambiar cada color.</p>
-            )}
-          </Section>
-
-          <Section title="Fondo de la página">
-            <Choices
-              value={look.page_bg || 'gray'}
-              onChange={(v) => set({ page_bg: v as Look['page_bg'] })}
-              options={(Object.keys(PAGE_BACKGROUNDS) as (keyof typeof PAGE_BACKGROUNDS)[]).map((k) => ({ value: k, label: PAGE_BACKGROUNDS[k] }))}
-            />
-          </Section>
-
           <Section title="Portada" hint="Una foto de tu local o de tu trabajo, en horizontal. Se oscurece un poco para que el nombre se lea bien.">
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" size="sm" onClick={() => fileRef.current?.click()} loading={uploading}>
@@ -202,75 +136,141 @@ export default function Appearance() {
               </div>
             )}
           </Section>
-
-          <Section title="Tipo de letra">
-            <div className="grid gap-2 sm:grid-cols-2">
-              {(Object.keys(FONTS) as FontKey[]).map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => set({ font: k })}
-                  className={`rounded-xl p-3 text-left transition ${font === k ? 'bg-brand/10 ring-2 ring-brand' : 'bg-white ring-1 ring-slate-200 hover:ring-slate-300'}`}
-                  style={{ fontFamily: FONTS[k].family }}
-                >
-                  <span className="block text-lg font-bold">{FONTS[k].name}</span>
-                  <span className="block text-sm text-slate-500">{FONTS[k].style}</span>
-                </button>
-              ))}
+          <details className="group space-y-5">
+            <summary className="flex cursor-pointer list-none items-center gap-2 py-1 text-sm font-bold text-slate-500">
+              <svg viewBox="0 0 24 24" className="h-4 w-4 transition group-open:rotate-90" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M9 6l6 6-6 6" /></svg>
+              Personalizar más: degradado, fondo, letra, botones, textos, redes y qué mostrar
+            </summary>
+            <div className="mt-4 space-y-5">
+              <Section title="Degradado" hint="Mezcla tu color con un segundo color. Se puede usar en la portada y en los botones.">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                  {GRADIENT_PRESETS.map(([name, c1, c2]) => {
+                    const on = color === c1 && look.color2 === c2
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => {
+                          setColor(c1)
+                          set({ color2: c2, cover_style: coverValue === 'image' ? 'image' : 'gradient' })
+                        }}
+                        className={`overflow-hidden rounded-xl text-left text-xs font-semibold ${on ? 'ring-2 ring-slate-900' : 'ring-1 ring-slate-200'}`}
+                      >
+                        <span className="block h-10" style={{ backgroundImage: `linear-gradient(${look.gradient_angle || 135}deg, ${c1}, ${c2})` }} />
+                        <span className="block bg-white px-2 py-1">{name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+                {look.color2 ? (
+                  <div className="space-y-4 border-t border-slate-100 pt-3">
+                    <div>
+                      <p className="mb-2 text-sm font-medium text-slate-700">Segundo color</p>
+                      <ColorPicker value={look.color2} onChange={(c) => set({ color2: c })} size={30} />
+                    </div>
+                    <div>
+                      <p className="mb-1 text-sm font-medium text-slate-700">Dirección</p>
+                      <div className="flex gap-2">
+                        {GRADIENT_ANGLES.map((g) => (
+                          <button
+                            key={g.value}
+                            type="button"
+                            onClick={() => set({ gradient_angle: g.value })}
+                            className={`h-11 w-11 rounded-xl text-lg font-bold text-white ${(look.gradient_angle || 135) === g.value ? 'ring-2 ring-slate-900 ring-offset-2' : ''}`}
+                            style={{ backgroundImage: `linear-gradient(${g.value}deg, ${color}, ${look.color2})` }}
+                            aria-label={`Dirección ${g.label}`}
+                          >
+                            {g.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <ToggleRow checked={Boolean(look.gradient_buttons)} onChange={(v) => set({ gradient_buttons: v })} label="Botones con degradado" />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => set({ color2: undefined, gradient_buttons: false, cover_style: look.cover_style === 'gradient' ? 'color' : look.cover_style })}
+                    >
+                      Quitar degradado
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500">Elige una combinación para empezar. Después puedes cambiar cada color.</p>
+                )}
+              </Section>
+              <Section title="Fondo de la página">
+                <Choices
+                  value={look.page_bg || 'gray'}
+                  onChange={(v) => set({ page_bg: v as Look['page_bg'] })}
+                  options={(Object.keys(PAGE_BACKGROUNDS) as (keyof typeof PAGE_BACKGROUNDS)[]).map((k) => ({ value: k, label: PAGE_BACKGROUNDS[k] }))}
+                />
+              </Section>
+              <Section title="Tipo de letra">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {(Object.keys(FONTS) as FontKey[]).map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => set({ font: k })}
+                      className={`rounded-xl p-3 text-left transition ${font === k ? 'bg-brand/10 ring-2 ring-brand' : 'bg-white ring-1 ring-slate-200 hover:ring-slate-300'}`}
+                      style={{ fontFamily: FONTS[k].family }}
+                    >
+                      <span className="block text-lg font-bold">{FONTS[k].name}</span>
+                      <span className="block text-sm text-slate-500">{FONTS[k].style}</span>
+                    </button>
+                  ))}
+                </div>
+              </Section>
+              <Section title="Forma de los botones">
+                <div className="grid grid-cols-3 gap-2">
+                  {(Object.keys(BUTTON_SHAPES) as ButtonShape[]).map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => set({ buttons: k })}
+                      className={`flex flex-col items-center gap-2 rounded-xl p-3 text-sm font-semibold ${buttons === k ? 'bg-brand/10 ring-2 ring-brand' : 'bg-white ring-1 ring-slate-200'}`}
+                    >
+                      <span className="block h-7 w-full bg-brand" style={{ borderRadius: BUTTON_SHAPES[k].radius }} />
+                      {BUTTON_SHAPES[k].name}
+                    </button>
+                  ))}
+                </div>
+              </Section>
+              <Section title="Textos">
+                <Field label="Frase bajo el nombre" hint="Corta. Ej. «Barbería clásica desde 2015».">
+                  <input className="input" maxLength={80} value={look.tagline || ''} onChange={(e) => set({ tagline: e.target.value })} />
+                </Field>
+                <Field label="Aviso destacado" hint="Sale arriba de todo. Déjalo vacío para quitarlo. Ej. «Esta semana 20% en tintes».">
+                  <input className="input" maxLength={160} value={look.announcement || ''} onChange={(e) => set({ announcement: e.target.value })} />
+                </Field>
+                <Field label="Texto del botón de reservar" hint="Por defecto: «Reservar cita».">
+                  <input className="input" maxLength={30} value={look.book_label || ''} placeholder="Reservar cita" onChange={(e) => set({ book_label: e.target.value })} />
+                </Field>
+                <Field label="Mensaje después de reservar" hint="Lo ve el cliente al terminar su reserva. Ej. «¡Gracias! Te esperamos con un café».">
+                  <textarea className="input min-h-[70px]" maxLength={300} value={look.thanks_message || ''} onChange={(e) => set({ thanks_message: e.target.value })} />
+                </Field>
+              </Section>
+              <Section title="Redes y ubicación" hint="Salen como botones en tu portada.">
+                <Field label="Instagram"><AtInput value={look.instagram} onChange={(v) => set({ instagram: v })} placeholder="tu_negocio" /></Field>
+                <Field label="Facebook"><AtInput value={look.facebook} onChange={(v) => set({ facebook: v })} placeholder="tu.negocio" /></Field>
+                <Field label="TikTok"><AtInput value={look.tiktok} onChange={(v) => set({ tiktok: v })} placeholder="tu_negocio" /></Field>
+                <Field label="Enlace de Google Maps" hint="En Google Maps: busca tu local → Compartir → Copiar enlace.">
+                  <input className="input" type="url" inputMode="url" value={look.maps_url || ''} placeholder="https://maps.app.goo.gl/…" onChange={(e) => set({ maps_url: e.target.value.trim() })} />
+                </Field>
+                {look.maps_url && !look.maps_url.startsWith('https://') && <Alert kind="warning">El enlace debe empezar por https://</Alert>}
+              </Section>
+              <Section title="Qué mostrar en tu web">
+                <div className="space-y-3">
+                  <ToggleRow checked={shows(look, 'show_prices')} onChange={(v) => set({ show_prices: v })} label="Precios de los servicios" />
+                  <ToggleRow checked={shows(look, 'show_durations')} onChange={(v) => set({ show_durations: v })} label="Duración de los servicios" />
+                  <ToggleRow checked={shows(look, 'show_hours')} onChange={(v) => set({ show_hours: v })} label="Días que abres" />
+                  <ToggleRow checked={shows(look, 'show_gallery')} onChange={(v) => set({ show_gallery: v })} label="Galería de trabajos" />
+                  <ToggleRow checked={shows(look, 'show_reviews')} onChange={(v) => set({ show_reviews: v })} label="Opiniones y estrellas" />
+                </div>
+                {!shows(look, 'show_prices') && <p className="text-sm text-slate-500">El precio sí se muestra al cliente al confirmar su reserva.</p>}
+              </Section>
             </div>
-          </Section>
-
-          <Section title="Forma de los botones">
-            <div className="grid grid-cols-3 gap-2">
-              {(Object.keys(BUTTON_SHAPES) as ButtonShape[]).map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => set({ buttons: k })}
-                  className={`flex flex-col items-center gap-2 rounded-xl p-3 text-sm font-semibold ${buttons === k ? 'bg-brand/10 ring-2 ring-brand' : 'bg-white ring-1 ring-slate-200'}`}
-                >
-                  <span className="block h-7 w-full bg-brand" style={{ borderRadius: BUTTON_SHAPES[k].radius }} />
-                  {BUTTON_SHAPES[k].name}
-                </button>
-              ))}
-            </div>
-          </Section>
-
-          <Section title="Textos">
-            <Field label="Frase bajo el nombre" hint="Corta. Ej. «Barbería clásica desde 2015».">
-              <input className="input" maxLength={80} value={look.tagline || ''} onChange={(e) => set({ tagline: e.target.value })} />
-            </Field>
-            <Field label="Aviso destacado" hint="Sale arriba de todo. Déjalo vacío para quitarlo. Ej. «Esta semana 20% en tintes».">
-              <input className="input" maxLength={160} value={look.announcement || ''} onChange={(e) => set({ announcement: e.target.value })} />
-            </Field>
-            <Field label="Texto del botón de reservar" hint="Por defecto: «Reservar cita».">
-              <input className="input" maxLength={30} value={look.book_label || ''} placeholder="Reservar cita" onChange={(e) => set({ book_label: e.target.value })} />
-            </Field>
-            <Field label="Mensaje después de reservar" hint="Lo ve el cliente al terminar su reserva. Ej. «¡Gracias! Te esperamos con un café».">
-              <textarea className="input min-h-[70px]" maxLength={300} value={look.thanks_message || ''} onChange={(e) => set({ thanks_message: e.target.value })} />
-            </Field>
-          </Section>
-
-          <Section title="Redes y ubicación" hint="Salen como botones en tu portada.">
-            <Field label="Instagram"><AtInput value={look.instagram} onChange={(v) => set({ instagram: v })} placeholder="tu_negocio" /></Field>
-            <Field label="Facebook"><AtInput value={look.facebook} onChange={(v) => set({ facebook: v })} placeholder="tu.negocio" /></Field>
-            <Field label="TikTok"><AtInput value={look.tiktok} onChange={(v) => set({ tiktok: v })} placeholder="tu_negocio" /></Field>
-            <Field label="Enlace de Google Maps" hint="En Google Maps: busca tu local → Compartir → Copiar enlace.">
-              <input className="input" type="url" inputMode="url" value={look.maps_url || ''} placeholder="https://maps.app.goo.gl/…" onChange={(e) => set({ maps_url: e.target.value.trim() })} />
-            </Field>
-            {look.maps_url && !look.maps_url.startsWith('https://') && <Alert kind="warning">El enlace debe empezar por https://</Alert>}
-          </Section>
-
-          <Section title="Qué mostrar en tu web">
-            <div className="space-y-3">
-              <ToggleRow checked={shows(look, 'show_prices')} onChange={(v) => set({ show_prices: v })} label="Precios de los servicios" />
-              <ToggleRow checked={shows(look, 'show_durations')} onChange={(v) => set({ show_durations: v })} label="Duración de los servicios" />
-              <ToggleRow checked={shows(look, 'show_hours')} onChange={(v) => set({ show_hours: v })} label="Días que abres" />
-              <ToggleRow checked={shows(look, 'show_gallery')} onChange={(v) => set({ show_gallery: v })} label="Galería de trabajos" />
-              <ToggleRow checked={shows(look, 'show_reviews')} onChange={(v) => set({ show_reviews: v })} label="Opiniones y estrellas" />
-            </div>
-            {!shows(look, 'show_prices') && <p className="text-sm text-slate-500">El precio sí se muestra al cliente al confirmar su reserva.</p>}
-          </Section>
+          </details>
         </div>
 
         {/* Vista previa */}
