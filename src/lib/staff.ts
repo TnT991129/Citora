@@ -74,3 +74,32 @@ export function groupServices<S extends { id: string }>(
   if (groups.length <= 1) return [{ key: 'todos', title: null, staff: null, services }]
   return groups
 }
+
+type TeamRule = Pick<PublicStaff, 'id' | 'service_ids' | 'all_services'>
+
+/**
+ * Los servicios que cuentan para saber quién atiende (como _required_services en la base de datos):
+ * todos menos los extras que no son de nadie del equipo (un extra del dueño se puede sumar a la
+ * manicura de una profesional).
+ */
+export function requiredIds(ids: string[], services: { id: string; is_extra?: boolean }[], team: TeamRule[]): string[] {
+  return ids.filter((id) => {
+    const s = services.find((x) => x.id === id)
+    return !(s?.is_extra && !team.some((st) => st.service_ids.includes(id)))
+  })
+}
+
+/**
+ * Quién puede atender estos servicios (como _free_staff): alguien del equipo, el dueño (si ninguno es
+ * de nadie del equipo y nadie del equipo puede con ellos) o nadie (son de personas distintas).
+ */
+export function whoAttends(ids: string[], services: { id: string; is_extra?: boolean }[], team: TeamRule[]): 'equipo' | 'dueno' | null {
+  if (team.length === 0) return 'dueno'
+  const req = requiredIds(ids, services, team)
+  if (team.some((st) => staffDoes(st, req))) return 'equipo'
+  if (req.every((id) => !team.some((st) => st.service_ids.includes(id)))) return 'dueno'
+  return null
+}
+
+/** El aviso cuando se mezclan servicios de personas distintas en una sola cita */
+export const MIXED_PEOPLE = 'Estos servicios los hacen personas distintas del equipo y nadie hace todos. Reserva primero uno y después haz otra reserva para el otro.'

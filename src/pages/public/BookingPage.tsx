@@ -9,7 +9,7 @@ import { errorMessage } from '../../lib/errors'
 import { cupRate, dateKey, duration, longDate, money, price, timeOf, todayKey, weekdayOf, dayTitle } from '../../lib/format'
 import { buildAppointmentIcs, downloadIcs } from '../../lib/ics'
 import { hasModule } from '../../lib/plans'
-import { keepStaff, staffDoes } from '../../lib/staff'
+import { keepStaff, MIXED_PEOPLE, requiredIds, staffDoes, whoAttends } from '../../lib/staff'
 import { isPushSubscribed, pushSupported, subscribeCustomerPush } from '../../lib/push'
 import { rememberBooking } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
@@ -264,12 +264,14 @@ function EditBooking({ booking, onClose, onDone }: {
   const total = same ? Number(booking.total) : chosen.reduce((a, s) => a + Number(s.price), 0)
   const rate = same ? booking.usd_rate : biz ? cupRate(biz) : null
   const team = biz && hasModule(biz.plan, 'empleados') ? biz.staff || [] : []
-  const eligibleTeam = team.filter((s) => staffDoes(s, selected))
+  const eligibleTeam = team.filter((s) => staffDoes(s, requiredIds(selected, services, team)))
+  const who = whoAttends(selected, services, team)
   const openDays = new Set((biz?.schedule || []).filter((d) => d.is_open).map((d) => d.weekday))
   const closed = new Set(biz?.closed_days || [])
 
   const save = async () => {
     if (!same && !hasMainService(services, selected)) return setError('Elige al menos un servicio principal.')
+    if (!same && who === null) return setError(MIXED_PEOPLE)
     const noOption = !same && missingOption(services, selected, choice)
     if (noOption) return setError(`Elige una opción de «${noOption.name}».`)
     if (!date || !time) return setError('Elige el día y la hora.')
@@ -283,7 +285,7 @@ function EditBooking({ booking, onClose, onDone }: {
       p_time: time,
       p_name: name.trim(),
       p_note: note.trim() || null,
-      p_staff: staffId,
+      p_staff: who === 'dueno' ? null : staffId,
       p_options: optionsFor(selected, choice),
     })
     setBusy(false)
@@ -316,7 +318,7 @@ function EditBooking({ booking, onClose, onDone }: {
                 const next = ids.filter((id) => services.some((s) => s.id === id))
                 setSelected(next)
                 // Si el profesional elegido no hace los nuevos servicios, pasa a "Cualquiera"
-                const kept = keepStaff(team, staffId, next)
+                const kept = keepStaff(team, staffId, requiredIds(next, services, team))
                 if (kept !== staffId) {
                   setStaffId(kept)
                   setTime(null)
@@ -330,7 +332,7 @@ function EditBooking({ booking, onClose, onDone }: {
               owner={{ name: biz.owner_name, specialty: biz.owner_specialty, photo_url: biz.logo_url }}
             />
           </div>
-          {team.length > 0 && (
+          {team.length > 0 && who !== 'dueno' && (
             <div>
               <h3 className="mb-2 font-bold">¿Con quién?</h3>
               <div className="flex flex-wrap gap-2">
@@ -364,7 +366,7 @@ function EditBooking({ booking, onClose, onDone }: {
             />
             {date && (
               <div className="mt-3">
-                <SlotPicker slug={biz.slug} date={date} duration={minutes || 60} value={time} onChange={setTime} staff={staffId} serviceIds={selected} excludeToken={booking.token} />
+                <SlotPicker slug={biz.slug} date={date} duration={minutes || 60} value={time} onChange={setTime} staff={who === 'dueno' ? null : staffId} serviceIds={selected} excludeToken={booking.token} />
               </div>
             )}
           </div>

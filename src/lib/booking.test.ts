@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { canReload } from './reload'
-import { groupServices, keepStaff, staffDoes } from './staff'
+import { groupServices, keepStaff, requiredIds, staffDoes, whoAttends } from './staff'
 
 const barbero = { id: 'leo', service_ids: ['corte', 'barba'] }
 const manicura = { id: 'ana', service_ids: ['unas'] }
@@ -88,5 +88,29 @@ describe('servicios agrupados por especialidad', () => {
   it('sin equipo o con un solo grupo, todo junto y sin título', () => {
     expect(groupServices([svc('a'), svc('b')], [])).toEqual([{ key: 'todos', title: null, staff: null, services: [svc('a'), svc('b')] }])
     expect(groupServices([svc('corte')], [leo])[0].title).toBeNull()
+  })
+})
+
+describe('quién atiende una cita', () => {
+  const services = [{ id: 'corte' }, { id: 'mani' }, { id: 'masaje' }, { id: 'diseno', is_extra: true }]
+  const leo = { id: 'leo', service_ids: ['corte'], all_services: false }
+  const yane = { id: 'yane', service_ids: ['mani'], all_services: false }
+
+  it('alguien del equipo, el dueño o nadie', () => {
+    expect(whoAttends(['corte'], services, [leo, yane])).toBe('equipo')
+    expect(whoAttends(['masaje'], services, [leo, yane])).toBe('dueno')
+    expect(whoAttends(['corte', 'mani'], services, [leo, yane])).toBeNull()
+    expect(whoAttends(['masaje', 'mani'], services, [leo, yane])).toBeNull()
+    expect(whoAttends(['corte', 'mani'], services, [])).toBe('dueno')
+  })
+
+  it('un extra del dueño se puede sumar al servicio de una profesional', () => {
+    expect(requiredIds(['mani', 'diseno'], services, [leo, yane])).toEqual(['mani'])
+    expect(whoAttends(['mani', 'diseno'], services, [leo, yane])).toBe('equipo')
+  })
+
+  it('si alguien del equipo hace todo, el dueño no atiende', () => {
+    const todo = { id: 'bea', service_ids: [] as string[] }
+    expect(whoAttends(['masaje'], services, [leo, todo])).toBe('equipo')
   })
 })

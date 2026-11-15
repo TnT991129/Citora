@@ -5,7 +5,7 @@ import { Alert, Button, Field, PageLoader } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { cupRate, duration, money, price, time12, weekdayOf, zonedToIso, dayTitle } from '../../lib/format'
 import { hasModule } from '../../lib/plans'
-import { keepStaff, staffDoes } from '../../lib/staff'
+import { keepStaff, MIXED_PEOPLE, requiredIds, staffDoes, whoAttends } from '../../lib/staff'
 import { track } from '../../lib/analytics'
 import { load, rememberBooking, save } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
@@ -67,16 +67,21 @@ export default function BookingFlow() {
   const rate = cupRate(business)
   const team = hasModule(business.plan, 'empleados') ? business.staff || [] : []
   const chosenIds = chosen.map((s) => s.id)
+  // Quién puede atender: alguien del equipo, el dueño (sus servicios) o nadie (son de personas distintas)
+  const who = whoAttends(chosenIds, services, team)
   // Solo se puede elegir a quien haga todos los servicios escogidos (si no marcó ninguno, hace todos)
-  const eligibleTeam = team.filter((s) => staffDoes(s, chosenIds))
+  const eligibleTeam = team.filter((s) => staffDoes(s, requiredIds(chosenIds, services, team)))
+  const ownerName = business.owner_name?.trim() || business.name
   const openDays = new Set((business.schedule || []).filter((d) => d.is_open).map((d) => d.weekday))
   const closed = new Set(business.closed_days || [])
   const isOpen = (key: string) => openDays.has(weekdayOf(key)) && !closed.has(key)
-  // Con equipo, el cliente elige con quién antes del día y la hora
-  const steps: StepKey[] = team.length > 0 ? ['servicio', 'equipo', 'fecha', 'datos', 'confirmar'] : ['servicio', 'fecha', 'datos', 'confirmar']
+  // Con equipo, el cliente elige con quién antes del día y la hora (no si son servicios del dueño)
+  const withTeam = team.length > 0 && who !== 'dueno'
+  const steps: StepKey[] = withTeam ? ['servicio', 'equipo', 'fecha', 'datos', 'confirmar'] : ['servicio', 'fecha', 'datos', 'confirmar']
   const cur = steps[Math.min(step, steps.length - 1)]
   const last = steps.length - 1
-  const person = team.find((s) => s.id === staffId) || null
+  // Con servicios del dueño la cita es con él: no se manda ningún profesional
+  const person = withTeam ? team.find((s) => s.id === staffId) || null : null
 
   const go = (n: number) => {
     setError(null)
@@ -87,7 +92,7 @@ export default function BookingFlow() {
   // Si cambia los servicios y el profesional elegido no los hace todos, pasa a "Cualquiera disponible"
   const changeServices = (ids: string[]) => {
     setSelected(ids)
-    const kept = keepStaff(team, staffId, ids)
+    const kept = keepStaff(team, staffId, requiredIds(ids, services, team))
     if (kept !== staffId) {
       setStaffId(kept)
       setTime(null)
@@ -104,6 +109,7 @@ export default function BookingFlow() {
     if (cur === 'servicio' && !hasMainService(services, selected)) {
       return setError(chosen.length ? 'Elige también un servicio principal: los complementos se añaden a un servicio.' : 'Elige al menos un servicio.')
     }
+    if (cur === 'servicio' && who === null) return setError(MIXED_PEOPLE)
     const noOption = cur === 'servicio' && missingOption(services, selected, choice)
     if (noOption) return setError(`Elige una opción de «${noOption.name}».`)
     if (cur === 'fecha' && (!date || !time)) return setError('Elige el día y la hora.')
@@ -192,12 +198,12 @@ export default function BookingFlow() {
           <div className="mt-4 space-y-5">
             {team.length > 0 && (
               <div className="flex items-center gap-3 rounded-2xl bg-white p-3 ring-1 ring-slate-200">
-                <Initial name={person?.name || '?'} any={!person} />
+                <Initial name={withTeam ? person?.name || '?' : ownerName} any={withTeam && !person} />
                 <p className="min-w-0 flex-1 text-sm">
                   <span className="block text-slate-500">Tu cita con</span>
-                  <span className="block truncate font-bold">{person?.name || 'Cualquiera disponible'}</span>
+                  <span className="block truncate font-bold">{withTeam ? person?.name || 'Cualquiera disponible' : ownerName}</span>
                 </p>
-                <button onClick={() => go(steps.indexOf('equipo'))} className="text-sm font-semibold text-brand">Cambiar</button>
+                {withTeam && <button onClick={() => go(steps.indexOf('equipo'))} className="text-sm font-semibold text-brand">Cambiar</button>}
               </div>
             )}
             <div className="card">
@@ -249,7 +255,7 @@ export default function BookingFlow() {
             <div className="card space-y-3">
               <Row label="Día" value={<span>{dayTitle(date!)}</span>} />
               <Row label="Hora" value={time12(time!)} />
-              {team.length > 0 && <Row label="Con" value={person?.name || 'Cualquiera disponible'} />}
+              {team.length > 0 && <Row label="Con" value={withTeam ? person?.name || 'Cualquiera disponible' : ownerName} />}
               <Row label="Nombre" value={name} />
               <Row label="Teléfono" value={phone} />
               <div className="border-t border-slate-100 pt-3">
