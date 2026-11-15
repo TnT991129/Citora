@@ -3577,6 +3577,8 @@ revoke execute on function public.staff_services_guard() from anon;
 revoke execute on function public.services_guard() from anon;
 revoke execute on function public._chosen_services(uuid, uuid[], jsonb, boolean) from anon, authenticated;
 revoke execute on function public._staff_by_token(text) from anon, authenticated;
+-- Supabase da permiso a los visitantes en las funciones nuevas: esta es solo para el dueño
+revoke execute on function public.owner_staff_link(uuid, text) from anon;
 revoke execute on function public.staff_schedule_days_normalize() from anon;
 
 -- Las tablas: sin acceso directo para visitantes anónimos
