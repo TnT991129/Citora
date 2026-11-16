@@ -436,9 +436,9 @@ set role authenticated;
 set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 do $$ declare s jsonb := admin_stats(); begin
   assert (s->'totals'->>'businesses')::int = 2;
-  -- Leo pagó (declaración aprobada → plan único 'ultra'); Spa Mar pagó el básico tras quitarle la cortesía
-  assert (s->'by_plan'->>'ultra')::int = 1, 'por plan: ' || (s->'by_plan');
-  assert (s->'by_plan'->>'basico')::int = 1;
+  -- Leo pagó Equipo (declaración aprobada) y Spa Mar también, tras quitarle la cortesía
+  assert (s->'by_plan'->>'ultra')::int = 2, 'por plan: ' || (s->'by_plan')::text;
+  assert (s->'by_plan'->>'basico')::int = 0;
   assert (s->'by_plan'->>'prueba')::int = 0;
   assert jsonb_array_length(s->'months') = 12;
   assert (s->'totals'->>'converted')::int = 1, 'conversión: ' || (s->'totals');
