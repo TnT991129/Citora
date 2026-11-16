@@ -10,6 +10,7 @@ import { staffUrl } from '../../lib/url'
 import { shareLink } from '../../lib/whatsapp'
 import { usePanel } from './context'
 import { Locked, useModule } from './Locked'
+import { DistributeServices } from './TeamServices'
 
 const MAX = 20
 const ORDER = [1, 2, 3, 4, 5, 6, 0]
@@ -17,11 +18,12 @@ const ORDER = [1, 2, 3, 4, 5, 6, 0]
 /** Profesionales del negocio: cada uno tiene su propia agenda */
 export default function Team() {
   const allowed = useModule('empleados')
-  const { business, staff, reloadStaff } = usePanel()
+  const { business, staff, services, reloadStaff } = usePanel()
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [detail, setDetail] = useState<{ staff: Staff; justAdded?: boolean } | null>(null)
+  const [distributing, setDistributing] = useState(false)
 
   if (!allowed) return <Locked module="empleados" />
 
@@ -63,6 +65,8 @@ export default function Team() {
   }
 
   const active = staff.filter((s) => s.active).length
+  // Equipo de antes de la 1.4: alguien hace todos los servicios porque nunca se repartieron
+  const undistributed = staff.some((s) => s.active && !s.own_services)
 
   return (
     <div className="max-w-xl space-y-4">
@@ -94,6 +98,25 @@ export default function Team() {
 
       {error && <Alert>{error}</Alert>}
 
+      {active > 0 && services.length > 0 && (
+        undistributed ? (
+          <section className="card space-y-3 ring-2 ring-brand/25">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl" aria-hidden>✂️</span>
+              <div>
+                <h2 className="font-bold">Reparte los servicios de tu salón</h2>
+                <p className="text-sm text-slate-600">
+                  Ahora cada servicio puede ser de una persona: las uñas para tu manicura, las pestañas para tu lashista… Tus clientes los verán agrupados por persona y solo podrán reservar cada uno con quien lo hace.
+                </p>
+              </div>
+            </div>
+            <Button block onClick={() => setDistributing(true)}>Repartir servicios</Button>
+          </section>
+        ) : (
+          <Button block variant="secondary" onClick={() => setDistributing(true)}>Repartir servicios entre el equipo</Button>
+        )
+      )}
+
       {staff.length > 0 && <OwnerCard />}
 
       {staff.length > 0 && (
@@ -121,6 +144,7 @@ export default function Team() {
         </p>
       )}
 
+      {distributing && <DistributeServices onClose={() => setDistributing(false)} />}
       {detail && <StaffDetailsModal staff={detail.staff} justAdded={detail.justAdded} onClose={() => setDetail(null)} onPhotoChanged={reloadStaff} />}
     </div>
   )

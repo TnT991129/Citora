@@ -115,7 +115,7 @@ export default function MyBusiness() {
             title="Equipo"
             sub={!hasModule(status.effective_plan, 'empleados') ? 'Varias personas, cada una con sus servicios' : team ? `${team} ${team === 1 ? 'profesional' : 'profesionales'}` : 'Solo tú · añade a quien trabaje contigo'}
             to={link('equipo')}
-            right={!hasModule(status.effective_plan, 'empleados') ? <Chip tone="brand">Plan Equipo</Chip> : undefined}
+            right={!hasModule(status.effective_plan, 'empleados') ? <Chip tone="brand">Plan Equipo</Chip> : staff.some((s) => s.active && !s.own_services) ? <Chip>Reparte servicios</Chip> : undefined}
           />
           <Row icon="scroll" title="Reglas de reserva" sub="Cancelaciones, antelación, depósito y lo que leen tus clientes" to={link('politicas')} />
         </RowList>
