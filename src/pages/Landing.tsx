@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { CitoraLogo } from '../components/ui'
 import { track } from '../lib/analytics'
 import { setBrandColor } from '../lib/brand'
 import { money } from '../lib/format'
-import { DEFAULT_PRICE, INCLUDED, MODULES } from '../lib/plans'
+import { DEFAULT_PRICE, DEFAULT_TEAM_PRICE, includedIn, MODULES, PLANS } from '../lib/plans'
 import { supabase } from '../lib/supabase'
 import { BUSINESS_TYPES } from '../lib/templates'
 import type { Prices } from '../lib/types'
@@ -41,7 +41,7 @@ const FAQ = [
 ]
 
 export default function Landing() {
-  const [prices, setPrices] = useState<Prices>({ basico: DEFAULT_PRICE, plus: DEFAULT_PRICE, ultra: DEFAULT_PRICE, trial_days: 3 })
+  const [prices, setPrices] = useState<Prices>({ basico: DEFAULT_PRICE, plus: DEFAULT_PRICE, ultra: DEFAULT_TEAM_PRICE, trial_days: 15 })
   const [menuOpen, setMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [showSticky, setShowSticky] = useState(false)
@@ -68,7 +68,7 @@ export default function Landing() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  const trial = prices.trial_days ?? 3
+  const trial = prices.trial_days ?? 15
   const price = prices.basico
   const freeLine = `${trial} días gratis · Sin tarjeta · Lista en 5 minutos`
 
@@ -96,7 +96,7 @@ export default function Landing() {
 
       <Calculator price={price} trial={trial} />
 
-      <Pricing price={price} trial={trial} />
+      <Pricing price={price} teamPrice={prices.ultra || DEFAULT_TEAM_PRICE} trial={trial} />
 
       <Faq />
 
@@ -467,34 +467,44 @@ function Calculator({ price, trial }: { price: number; trial: number }) {
 }
 
 /* ---- 8. Precio ---- */
-function Pricing({ price, trial }: { price: number; trial: number }) {
-  const perDay = useMemo(() => Math.round(price / 30), [price])
+function Pricing({ price, teamPrice, trial }: { price: number; teamPrice: number; trial: number }) {
   const extras = ['App instalable en el móvil', 'Tu enlace, tus colores y tu logo']
+  const solo = [...includedIn('basico').map((m) => MODULES[m].name), ...extras]
+  const plans = [
+    { key: 'basico', name: PLANS.basico.name, who: 'Si atiendes tú solo', price, items: solo, highlight: false },
+    {
+      key: 'ultra', name: PLANS.ultra.name, who: 'Para salones con varias personas', price: teamPrice, highlight: true,
+      items: ['Todo lo de Solo', 'Tu equipo: cada persona con sus servicios y su horario', 'Un enlace para que cada una cambie sus precios', 'Tus clientes eligen con quién reservar'],
+    },
+  ]
   return (
     <section id="precio" className="lp-lazy scroll-mt-16 bg-slate-50 px-4 py-20 sm:py-28">
       <div className="mx-auto max-w-5xl">
-        <SectionHead eyebrow="Precio" title="Un solo plan. Todo incluido." sub={`Sin módulos escondidos ni cobros sorpresa. Pruébalo ${trial} días gratis.`} />
-        <div data-reveal="zoom" className="lp-border mx-auto mt-12 max-w-3xl shadow-2xl shadow-rose-500/20">
-          <div className="grid gap-8 bg-[#0b0b14] p-7 text-white sm:p-10 md:grid-cols-[1fr_1.2fr]">
-            <div>
-              <p className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-rose-200 ring-1 ring-white/15">Plan Citora</p>
-              <p className="mt-5 text-6xl font-extrabold tracking-tight">{money(price, 'CUP')}</p>
-              <p className="text-white/60">al mes · unos <b className="text-white">{money(perDay, 'CUP')} al día</b></p>
-              <Link to="/crear" className="lp-cta mt-8 flex items-center justify-center gap-2 rounded-2xl py-4 text-lg font-bold text-white">
-                Empezar {trial} días gratis <Ico name="arrow" className="h-5 w-5" />
-              </Link>
-              <p className="mt-3 text-center text-xs text-white/50">Sin tarjeta · Sin permanencia</p>
+        <SectionHead eyebrow="Precio" title="Dos planes. Todo incluido." sub={`Sin módulos escondidos ni cobros sorpresa. Pruébalo ${trial} días gratis con todo, equipo incluido.`} />
+        <div className="mx-auto mt-12 grid max-w-4xl gap-5 md:grid-cols-2">
+          {plans.map((p, i) => (
+            <div key={p.key} data-reveal="zoom" style={{ ['--i' as string]: i }} className={`${p.highlight ? 'lp-border shadow-2xl shadow-rose-500/20' : 'rounded-3xl ring-1 ring-slate-200'}`}>
+              <div className={`flex h-full flex-col rounded-[inherit] p-7 sm:p-9 ${p.highlight ? 'bg-[#0b0b14] text-white' : 'bg-white text-slate-900'}`}>
+                <p className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-bold ${p.highlight ? 'bg-white/10 text-rose-200 ring-1 ring-white/15' : 'bg-slate-100 text-slate-600'}`}>{p.who}</p>
+                <p className="mt-4 text-lg font-extrabold">{p.name}</p>
+                <p className="mt-1 text-5xl font-extrabold tracking-tight">{money(p.price, 'CUP')}</p>
+                <p className={p.highlight ? 'text-white/60' : 'text-slate-500'}>al mes · unos <b className={p.highlight ? 'text-white' : 'text-slate-900'}>{money(Math.round(p.price / 30), 'CUP')} al día</b></p>
+                <ul className="mt-6 grid flex-1 content-start gap-2.5 text-sm">
+                  {p.items.map((name) => (
+                    <li key={name} className={`flex items-start gap-2 ${p.highlight ? 'text-white/85' : 'text-slate-700'}`}>
+                      <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-rose-400 to-orange-400 text-white"><Ico name="check" className="h-2.5 w-2.5" /></span>
+                      {name}
+                    </li>
+                  ))}
+                </ul>
+                <Link to="/crear" className={`mt-8 flex items-center justify-center gap-2 rounded-2xl py-4 text-lg font-bold ${p.highlight ? 'lp-cta text-white' : 'bg-slate-900 text-white hover:bg-slate-800'}`}>
+                  Empezar {trial} días gratis <Ico name="arrow" className="h-5 w-5" />
+                </Link>
+              </div>
             </div>
-            <ul className="grid content-center gap-2.5 text-sm sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">
-              {[...INCLUDED.map((m) => MODULES[m].name), ...extras].map((name) => (
-                <li key={name} className="flex items-start gap-2 text-white/85">
-                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-rose-400 to-orange-400 text-white"><Ico name="check" className="h-2.5 w-2.5" /></span>
-                  {name}
-                </li>
-              ))}
-            </ul>
-          </div>
+          ))}
         </div>
+        <p className="mt-4 text-center text-sm text-slate-500">Sin tarjeta · Sin permanencia · Al acabar la prueba eliges el plan que te va mejor</p>
         <div className="mt-10 grid gap-4 text-sm sm:grid-cols-3">
           {[
             ['phone', 'Pagas por Transfermóvil o EnZona', 'Subes la captura desde tu panel y listo.'],

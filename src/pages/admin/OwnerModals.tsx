@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Field, flash, Modal } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
-import { fullDateFromIso } from '../../lib/format'
-import { SINGLE_PLAN } from '../../lib/plans'
+import { fullDateFromIso, money } from '../../lib/format'
+import { PLANS, type PaidPlan } from '../../lib/plans'
 import { supabase } from '../../lib/supabase'
 import { TIMEZONES, tzLabel, tzNow } from '../../lib/timezones'
 import type { PlanKey } from '../../lib/types'
@@ -107,26 +107,29 @@ export function DeleteModal({ owner, onClose, onDone }: { owner: AdminOwner; onC
   )
 }
 
-export function ActivateModal({ business, prices, onClose, onDone }: {
+export function ActivateModal({ business, prices, onClose, onDone, plan: initialPlan = 'basico' }: {
   business: { id: string; name: string; code: string }
   prices: Prices
   onClose: () => void
   onDone: () => void
+  /** El plan que eligió el dueño (o el que tiene); se puede cambiar */
+  plan?: PaidPlan
 }) {
+  const [plan, setPlan] = useState<PaidPlan>(initialPlan)
   const [months, setMonths] = useState(1)
   const [amount, setAmount] = useState<number>(prices.basico)
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => setAmount(prices.basico * months), [months, prices])
+  useEffect(() => setAmount((plan === 'ultra' ? prices.ultra : prices.basico) * months), [months, prices, plan])
 
   const activate = async () => {
     setBusy(true)
     setError(null)
     const { data, error } = await supabase.rpc('admin_activate_plan', {
       p_business: business.id,
-      p_plan: SINGLE_PLAN,
+      p_plan: plan,
       p_months: months,
       p_amount: amount,
       p_note: note,
@@ -146,6 +149,20 @@ export function ActivateModal({ business, prices, onClose, onDone }: {
     >
       <div className="space-y-4">
         <p className="text-sm text-slate-600">Código <b className="font-mono">{business.code}</b>. Comprueba que el pago llegó a tu tarjeta antes de activar.</p>
+        <div className="grid grid-cols-2 gap-2">
+          {(['basico', 'ultra'] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setPlan(k)}
+              aria-pressed={plan === k}
+              className={`rounded-xl border p-3 text-left transition ${plan === k ? 'border-brand bg-brand/5 ring-1 ring-brand' : 'border-slate-200'}`}
+            >
+              <span className="block font-bold">{PLANS[k].short}</span>
+              <span className="block text-sm text-slate-500">{money(k === 'ultra' ? prices.ultra : prices.basico, 'CUP')}/mes</span>
+            </button>
+          ))}
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Meses">
             <select className="input" value={months} onChange={(e) => setMonths(Number(e.target.value))}>

@@ -3,7 +3,7 @@ import { Alert, Button, CopyButton, LinkButton, PageLoader, StatusBadge, WhatsAp
 import { errorMessage } from '../../lib/errors'
 import { daysLeft, fullDateFromIso, money } from '../../lib/format'
 import { shrinkImage, imageExt } from '../../lib/image'
-import { INCLUDED, MODULES, PLAN_LABEL } from '../../lib/plans'
+import { includedIn, MODULES, planName, PLANS, type PaidPlan } from '../../lib/plans'
 import { supabase } from '../../lib/supabase'
 import type { PaymentClaim, PlanKey } from '../../lib/types'
 import { waLink } from '../../lib/whatsapp'
@@ -29,7 +29,10 @@ interface PaymentRow {
 }
 
 export default function PlanPage({ blocked }: { blocked?: boolean }) {
-  const { business, status, progress } = usePanel()
+  const { business, status, progress, staff } = usePanel()
+  const team = staff.filter((s) => s.active).length
+  // Plan que paga: el que ya tiene; si no, Equipo si ya usa equipo y Solo si no
+  const [plan, setPlan] = useState<PaidPlan>(() => (status.plan === 'ultra' || (!status.plan && team > 0) ? 'ultra' : 'basico'))
   // Prueba: cuántos días le quedan y qué parte ya usó (para la barra)
   const trialLeft = daysLeft(status.trial_ends_at)
   const trialTotal = Math.max(1, Math.round((new Date(status.trial_ends_at).getTime() - new Date(business.created_at).getTime()) / 86400000))
@@ -59,10 +62,11 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
   if (error) return <Alert>{error}</Alert>
   if (!info) return <PageLoader />
 
-  const price = info.basico
+  const price = plan === 'ultra' ? info.ultra : info.basico
   const amount = price * months
   const message = [
     `Hola, acabo de pagar la mensualidad de Citora (${months} ${months === 1 ? 'mes' : 'meses'}).`,
+    `Plan: *${PLANS[plan].name}*`,
     `Negocio: *${business.name}*`,
     `Código: *${business.code}*`,
     `Importe: *${money(amount, 'CUP')}*`,
@@ -98,7 +102,7 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
     setSubmitting(true)
     setError(null)
     const { error } = await supabase.rpc('submit_payment_claim', {
-      p_months: months, p_amount: amount, p_note: note.trim() || null, p_proof_path: proofPath,
+      p_months: months, p_amount: amount, p_note: note.trim() || null, p_proof_path: proofPath, p_plan: plan,
     })
     setSubmitting(false)
     if (error) return setError(errorMessage(error))
@@ -118,8 +122,8 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
       <section className="card">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-lg font-bold">
-            {status.status === 'prueba' && <>Prueba gratis, con todo incluido</>}
-            {status.status === 'activo' && <>{PLAN_LABEL} · pagado hasta el {fullDateFromIso(status.paid_until!, business.timezone)}</>}
+            {status.status === 'prueba' && <>Prueba gratis, con todo incluido (plan Equipo)</>}
+            {status.status === 'activo' && <>{planName(status.plan)} · pagado hasta el {fullDateFromIso(status.paid_until!, business.timezone)}</>}
             {status.status === 'vencido' && <>Inhabilitada</>}
           </p>
           {status.status === 'prueba'
@@ -158,19 +162,51 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
         </section>
       )}
 
-      <section className="card">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-lg font-extrabold">{PLAN_LABEL}</h2>
-          <p><span className="text-2xl font-extrabold">{money(price, 'CUP')}</span><span className="text-sm text-slate-500"> /mes</span></p>
+      <section className="space-y-3">
+        <h2 className="px-1 font-bold">1. Elige tu plan</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {(['basico', 'ultra'] as const).map((k) => {
+            const on = plan === k
+            return (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setPlan(k)}
+                aria-pressed={on}
+                className={`card text-left transition ${on ? 'border-brand bg-brand/5 ring-2 ring-brand' : 'hover:border-slate-300'}`}
+              >
+                <span className="flex items-start justify-between gap-3">
+                  <span className="min-w-0">
+                    <span className="block text-lg font-extrabold">{PLANS[k].name}</span>
+                    <span className="block text-sm text-slate-500">{PLANS[k].desc}</span>
+                  </span>
+                  <span className={`mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${on ? 'border-brand bg-brand text-white' : 'border-slate-300'}`} aria-hidden>
+                    {on && <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-10" /></svg>}
+                  </span>
+                </span>
+                <span className="mt-3 block"><span className="text-2xl font-extrabold">{money(k === 'ultra' ? info.ultra : info.basico, 'CUP')}</span><span className="text-sm text-slate-500"> /mes</span></span>
+                <span className="mt-2 block text-sm text-slate-600">
+                  {k === 'ultra' ? <>✓ Todo lo de Solo<br />✓ Tu equipo: cada persona con sus servicios, su horario y su enlace</> : <>✓ {includedIn('basico').length} funciones: reservas, agenda, clientes, WhatsApp, cupones…<br /><span className="text-slate-400">✗ Sin equipo (una sola agenda)</span></>}
+                </span>
+              </button>
+            )
+          })}
         </div>
-        <p className="mt-1 text-sm text-slate-500">Todo incluido:</p>
-        <ul className="mt-1 grid gap-0.5 text-sm sm:grid-cols-2">
-          {INCLUDED.map((m) => <li key={m}>✓ {MODULES[m].name}</li>)}
-        </ul>
+        {plan === 'basico' && team > 0 && (
+          <Alert kind="warning">
+            Tienes {team === 1 ? '1 persona' : `${team} personas`} en tu equipo. Con Solo, tu equipo deja de verse en tu página y no recibe citas nuevas (todas van a tu agenda). No se borra nada: si vuelves a Equipo, aparece otra vez.
+          </Alert>
+        )}
+        <details className="px-1 text-sm text-slate-500">
+          <summary className="cursor-pointer font-semibold">Todo lo que incluye {PLANS[plan].name}</summary>
+          <ul className="mt-2 grid gap-0.5 sm:grid-cols-2">
+            {includedIn(plan).map((m) => <li key={m}>✓ {MODULES[m].name}</li>)}
+          </ul>
+        </details>
       </section>
 
       <section className="card space-y-3">
-        <h2 className="font-bold">1. ¿Cuántos meses?</h2>
+        <h2 className="font-bold">2. ¿Cuántos meses?</h2>
         <div className="flex gap-2">
           {[1, 2, 3, 6].map((m) => (
             <button key={m} onClick={() => setMonths(m)} className={`flex-1 rounded-xl py-2.5 font-semibold ${months === m ? 'bg-brand text-white' : 'bg-white ring-1 ring-slate-300'}`}>
@@ -182,7 +218,7 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
       </section>
 
       <section className="card space-y-3">
-        <h2 className="font-bold">2. Transfiere a esta tarjeta</h2>
+        <h2 className="font-bold">3. Transfiere a esta tarjeta</h2>
         {info.card_number ? (
           <div className="rounded-xl bg-slate-50 p-3">
             <p className="font-mono text-lg font-bold tracking-wider">{info.card_number}</p>
@@ -208,7 +244,7 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
       </section>
 
       <section className="card space-y-3">
-        <h2 className="font-bold">3. Declara tu pago</h2>
+        <h2 className="font-bold">4. Declara tu pago</h2>
         <p className="text-sm text-slate-500">Sube la captura de la transferencia. La revisamos y activamos tu mes en cuanto la confirmemos.</p>
         <Alert kind="info">Demoramos un máximo de 24 horas en confirmar tu pago.</Alert>
         {proofPreview ? (

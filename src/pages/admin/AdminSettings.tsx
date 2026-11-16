@@ -84,10 +84,13 @@ export default function AdminSettings() {
           </div>
         </SettingsGroup>
 
-        <SettingsGroup title="Precio y prueba" desc="Un solo plan con todo incluido. Lo ven los dueños al pagar y en la portada.">
-          <div className="card grid gap-4 sm:grid-cols-2">
-            <Field label="Precio al mes">
-              <SuffixInput value={s.price_basico} suffix="CUP" min={0} onChange={(v) => setS({ ...s, price_basico: v, price_plus: v, price_ultra: v })} />
+        <SettingsGroup title="Precios y prueba" desc="Dos planes: Solo (todo menos el equipo) y Equipo (con varios profesionales). Lo ven los dueños al pagar y en la portada. La prueba gratis es con Equipo.">
+          <div className="card grid gap-4 sm:grid-cols-3">
+            <Field label="Citora Solo, al mes">
+              <SuffixInput value={s.price_basico} suffix="CUP" min={0} onChange={(v) => setS({ ...s, price_basico: v, price_plus: v })} />
+            </Field>
+            <Field label="Citora Equipo, al mes">
+              <SuffixInput value={s.price_ultra} suffix="CUP" min={0} onChange={(v) => setS({ ...s, price_ultra: v })} />
             </Field>
             <Field label="Prueba gratis" hint="Para los negocios nuevos.">
               <SuffixInput value={s.trial_days} suffix="días" min={0} max={60} onChange={(v) => setS({ ...s, trial_days: v })} />

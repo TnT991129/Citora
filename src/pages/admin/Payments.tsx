@@ -10,6 +10,7 @@ import { waLink } from '../../lib/whatsapp'
 import { Icon } from '../panel/Panel'
 import { ADMIN_TZ, agoShort, shortDay, type AdminOwner, type OwnerWithBusiness } from './adminData'
 import { PageTitle, SectionTitle } from './adminUi'
+import { PLANS, planName } from '../../lib/plans'
 import { ActivateModal, PickBusinessModal, type Prices } from './OwnerModals'
 
 interface AdminClaim {
@@ -19,6 +20,8 @@ interface AdminClaim {
   amount: number | null
   note: string | null
   proof_path: string | null
+  /** El plan que eligió el dueño (falta en declaraciones de antes de la 1.4: Solo) */
+  plan?: 'basico' | 'ultra'
   status: PaymentClaimStatus
   admin_note: string | null
   created_at: string
@@ -129,8 +132,11 @@ export function Payments({ onChanged }: { onChanged: () => void }) {
                   )}
                   <div className="flex min-w-0 flex-col">
                     <p className="truncate font-bold">{c.businesses?.name || 'Negocio eliminado'}</p>
-                    <p className="truncate text-sm text-slate-500">{months(c.months)} · enviado {agoShort(c.created_at)}</p>
-                    <p className="mt-1 text-2xl font-extrabold tracking-tight">{c.amount != null ? money(c.amount, 'CUP') : money(prices.basico * c.months, 'CUP')}</p>
+                    <p className="truncate text-sm text-slate-500"><b className={c.plan === 'ultra' ? 'text-violet-700' : 'text-slate-700'}>{planName(c.plan || 'basico')}</b> · {months(c.months)} · enviado {agoShort(c.created_at)}</p>
+                    <p className="mt-1 text-2xl font-extrabold tracking-tight">{c.amount != null ? money(c.amount, 'CUP') : money((c.plan === 'ultra' ? prices.ultra : prices.basico) * c.months, 'CUP')}</p>
+                    {c.amount != null && c.amount < (c.plan === 'ultra' ? prices.ultra : prices.basico) * c.months && (
+                      <p className="text-xs font-semibold text-amber-700">Menos de lo que cuesta ({money((c.plan === 'ultra' ? prices.ultra : prices.basico) * c.months, 'CUP')}): revísalo</p>
+                    )}
                     {c.note && <p className="truncate text-sm text-slate-600" title={c.note}>"{c.note}"</p>}
                     <div className="mt-auto grid grid-cols-[1fr_1fr_40px] gap-2 pt-3">
                       <Button size="sm" onClick={() => approve(c)} loading={busy === c.id} className="!bg-emerald-600 !bg-none !shadow-emerald-600/25">
@@ -168,9 +174,9 @@ export function Payments({ onChanged }: { onChanged: () => void }) {
                   <span className="min-w-0 pr-3">
                     <span className="block truncate font-semibold">{p.name}</span>
                     {p.note && <span className="block truncate text-xs text-slate-400">{p.note}</span>}
-                    <span className="block text-xs text-slate-400 md:hidden">{months(p.months)}</span>
+                    <span className="block text-xs text-slate-400 md:hidden">{planName(p.plan)} · {months(p.months)}</span>
                   </span>
-                  <span className="hidden text-right text-slate-500 md:block">{months(p.months)}</span>
+                  <span className="hidden text-right text-slate-500 md:block">{PLANS[p.plan === 'ultra' ? 'ultra' : 'basico'].short} · {months(p.months)}</span>
                   <b className="text-right tabular-nums">{p.amount === null ? '—' : money(Number(p.amount), 'CUP')}</b>
                 </li>
               ))}

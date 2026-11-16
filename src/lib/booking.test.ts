@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { hasModule, includedIn, planName } from './plans'
 import { canReload } from './reload'
 import { groupServices, keepStaff, requiredIds, staffDoes, whoAttends } from './staff'
 
@@ -112,5 +113,18 @@ describe('quién atiende una cita', () => {
   it('si alguien del equipo hace todo, el dueño no atiende', () => {
     const todo = { id: 'bea', service_ids: [] as string[] }
     expect(whoAttends(['masaje'], services, [leo, todo])).toBe('equipo')
+  })
+})
+
+describe('planes Solo y Equipo', () => {
+  it('el equipo solo en Equipo, lo demás en los dos', () => {
+    expect(hasModule('ultra', 'empleados')).toBe(true)
+    expect(hasModule('basico', 'empleados')).toBe(false)
+    expect(hasModule('plus', 'empleados')).toBe(false)
+    expect(hasModule('basico', 'clientes')).toBe(true)
+    expect(hasModule(null, 'clientes')).toBe(false)
+    expect(includedIn('basico')).not.toContain('empleados')
+    expect(includedIn('ultra')).toContain('empleados')
+    expect([planName('ultra'), planName('basico'), planName('plus')]).toEqual(['Citora Equipo', 'Citora Solo', 'Citora Solo'])
   })
 })

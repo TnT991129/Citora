@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { MODULES, hasModule, type ModuleKey } from '../../lib/plans'
+import { MODULES, PLANS, hasModule, type ModuleKey } from '../../lib/plans'
 import { usePanel } from './context'
 
 /** true si el plan actual del dueño incluye el módulo */
@@ -10,7 +10,23 @@ export function useModule(module: ModuleKey): boolean {
 
 /** Aviso cuando el plan actual no incluye un módulo */
 export function Locked({ module }: { module: ModuleKey }) {
-  const { link } = usePanel()
+  const { link, status } = usePanel()
+  // Con plan Solo, el equipo está en el plan Equipo: se le explica en vez de un candado sin más
+  if (module === 'empleados' && status.effective_plan) {
+    return (
+      <div className="card mx-auto max-w-md text-center">
+        <p className="text-4xl" aria-hidden>👥</p>
+        <h1 className="mt-2 text-xl font-bold">Tu equipo está en el plan Equipo</h1>
+        <p className="mt-2 text-slate-600">
+          Con <b>{PLANS.ultra.name}</b> añades a las personas que trabajan contigo: cada una con sus servicios, su horario y su propio enlace, y tus clientes eligen con quién reservar.
+        </p>
+        <p className="mt-2 text-sm text-slate-500">Si ya tenías equipo, no se ha borrado nada: vuelve a aparecer al pasar a Equipo.</p>
+        <Link to={link('plan')} className="mt-4 inline-flex items-center justify-center rounded-xl bg-brand px-5 py-3 font-semibold text-white">
+          Pasarme a Equipo
+        </Link>
+      </div>
+    )
+  }
   return (
     <div className="card mx-auto max-w-md text-center">
       <p className="text-4xl">🔒</p>

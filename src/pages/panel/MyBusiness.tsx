@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { flash, WhatsAppIcon } from '../../components/ui'
 import { pricesUnreviewed } from '../../lib/onboarding'
+import { hasModule } from '../../lib/plans'
 import { supabase } from '../../lib/supabase'
 import { publicUrl } from '../../lib/url'
 import { shareLink } from '../../lib/whatsapp'
@@ -13,7 +14,7 @@ import { Chip, Row, RowList, SectionTitle } from './rows'
 const DAY_LETTER = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
 
 export default function MyBusiness() {
-  const { business, services, staff, link, onboarding, progress, markStep, tutorial } = usePanel()
+  const { business, status, services, staff, link, onboarding, progress, markStep, tutorial } = usePanel()
   const url = publicUrl(business.slug)
   const [openDays, setOpenDays] = useState<number[] | null>(null)
 
@@ -109,7 +110,13 @@ export default function MyBusiness() {
       <div>
         <SectionTitle>Cómo trabajas</SectionTitle>
         <RowList>
-          <Row icon="users" title="Equipo" sub={team ? `${team} ${team === 1 ? 'profesional' : 'profesionales'}` : 'Solo tú · añade a quien trabaje contigo'} to={link('equipo')} />
+          <Row
+            icon="users"
+            title="Equipo"
+            sub={!hasModule(status.effective_plan, 'empleados') ? 'Varias personas, cada una con sus servicios' : team ? `${team} ${team === 1 ? 'profesional' : 'profesionales'}` : 'Solo tú · añade a quien trabaje contigo'}
+            to={link('equipo')}
+            right={!hasModule(status.effective_plan, 'empleados') ? <Chip tone="brand">Plan Equipo</Chip> : undefined}
+          />
           <Row icon="scroll" title="Reglas de reserva" sub="Cancelaciones, antelación, depósito y lo que leen tus clientes" to={link('politicas')} />
         </RowList>
       </div>

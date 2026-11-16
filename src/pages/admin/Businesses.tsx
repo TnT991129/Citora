@@ -14,6 +14,7 @@ import {
   type Activity, type AdminOwner, type AdminRow, type OwnerWithBusiness,
 } from './adminData'
 import { BizAvatar, Drawer, FilterPills, PageTitle, StateCell, StateChip, StepsBar } from './adminUi'
+import { planName } from '../../lib/plans'
 import { ActivateModal, CONFIRM, ConfirmModal, DeleteModal, TimezoneModal, type ConfirmKind, type Prices } from './OwnerModals'
 
 export type BizFilter = 'todos' | 'prueba' | 'activo' | 'vencido' | 'atascados' | 'cortesia' | 'sin_negocio'
@@ -230,7 +231,7 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
           <StateChip owner={r} />
           <span className="truncate text-sm text-slate-500">
             {state === 'prueba' && r.trial_ends_at && <>Termina el {fullDateFromIso(r.trial_ends_at, ADMIN_TZ)}</>}
-            {state === 'activo' && r.paid_until && <>Pagado hasta el {fullDateFromIso(r.paid_until, ADMIN_TZ)} · {money(prices.basico, 'CUP')}/mes</>}
+            {state === 'activo' && r.paid_until && <>{planName(r.plan)} · pagado hasta el {fullDateFromIso(r.paid_until, ADMIN_TZ)} · {money(r.plan === 'ultra' ? prices.ultra : prices.basico, 'CUP')}/mes</>}
             {state === 'vencido' && <>Sus clientes no pueden reservar</>}
             {state === 'cortesia' && <>Todo incluido, no paga</>}
             {state === 'sin_negocio' && <>Se registró pero no terminó de crear su negocio</>}
@@ -322,7 +323,7 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
           }}
         />
       )}
-      {activating && biz && <ActivateModal business={biz} prices={prices} onClose={() => setActivating(false)} onDone={changed} />}
+      {activating && biz && <ActivateModal business={biz} plan={biz.plan === 'ultra' ? 'ultra' : 'basico'} prices={prices} onClose={() => setActivating(false)} onDone={changed} />}
       {zoning && biz && <TimezoneModal business={biz} onClose={() => setZoning(false)} onDone={changed} />}
       {deleting && (
         <DeleteModal

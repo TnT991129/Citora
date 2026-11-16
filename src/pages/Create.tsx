@@ -14,7 +14,7 @@ import { errorMessage } from '../lib/errors'
 import { cleanPhone, currencyFields, CURRENCY_MODES, duration, money, price, slugify, WEEKDAYS_SHORT } from '../lib/format'
 import { supabase } from '../lib/supabase'
 import { BUSINESS_TYPES, businessType } from '../lib/templates'
-import { DEFAULT_PRICE } from '../lib/plans'
+import { DEFAULT_PRICE, DEFAULT_TEAM_PRICE } from '../lib/plans'
 import type { Prices } from '../lib/types'
 import { panelPath, publicUrl, siteUrl } from '../lib/url'
 
@@ -48,7 +48,7 @@ export default function Create() {
   // Medición del embudo (ver lib/analytics.ts): quién llega y hasta qué paso del asistente
   // Días de prueba y precio: los que se configuran en el administrador
   // Hasta que lleguen del servidor no se dice cuántos días (antes decía "3" aunque fueran 15)
-  const [prices, setPrices] = useState<Prices>({ basico: DEFAULT_PRICE, plus: DEFAULT_PRICE, ultra: DEFAULT_PRICE, trial_days: undefined })
+  const [prices, setPrices] = useState<Prices>({ basico: DEFAULT_PRICE, plus: DEFAULT_PRICE, ultra: DEFAULT_TEAM_PRICE, trial_days: undefined })
   useEffect(() => {
     track('visita', { page: 'crear' })
     supabase.rpc('get_public_prices').then(({ data }) => data && setPrices(data as Prices))
@@ -581,7 +581,7 @@ export default function Create() {
             <p className="text-sm text-slate-700">
               <b>{businessType(draft.type).emoji} {draft.name}</b> · {draft.services.filter((s) => s.name.trim()).length} servicios · desde {money(Math.min(...draft.services.filter((s) => s.name.trim()).map((s) => s.price)), main)}
             </p>
-            <p className="mt-1 text-sm text-slate-600">{prices.trial_days ? `Tendrás ${prices.trial_days} días gratis con todo incluido.` : 'Empiezas con una prueba gratis con todo incluido.'} Después, una sola mensualidad de {money(prices.basico, 'CUP')}.</p>
+            <p className="mt-1 text-sm text-slate-600">{prices.trial_days ? `Tendrás ${prices.trial_days} días gratis con todo incluido.` : 'Empiezas con una prueba gratis con todo incluido.'} Después eliges: Solo ({money(prices.basico, 'CUP')}/mes) o Equipo, si trabajas con más personas ({money(prices.ultra, 'CUP')}/mes).</p>
           </div>
           <p className="text-sm text-slate-500">
             ¿Ya tienes cuenta? <Link to="/entrar" className="font-semibold text-brand">Entra</Link> y tu app se creará con estos datos.
