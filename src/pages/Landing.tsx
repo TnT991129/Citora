@@ -5,7 +5,7 @@ import { CitoraLogo } from '../components/ui'
 import { track } from '../lib/analytics'
 import { setBrandColor } from '../lib/brand'
 import { money } from '../lib/format'
-import { DEFAULT_PRICE, DEFAULT_TEAM_PRICE, includedIn, MODULES, PLANS } from '../lib/plans'
+import { DEFAULT_PRICE, DEFAULT_TEAM_PRICE, PLANS } from '../lib/plans'
 import { supabase } from '../lib/supabase'
 import { BUSINESS_TYPES } from '../lib/templates'
 import type { Prices } from '../lib/types'
@@ -34,6 +34,8 @@ const FAQ = [
   ['¿Necesito saber de tecnología?', 'No. Al crear tu app te damos servicios, precios y horarios de ejemplo para tu tipo de negocio, y en el panel tienes un recorrido guiado y ayudas en cada pantalla.'],
   ['¿Mis clientes tienen que instalar algo?', 'No. Reservan desde un enlace, en el navegador de su teléfono, sin cuenta ni contraseña. Si quieren, la añaden a su pantalla de inicio como una app.'],
   ['¿Y si mis clientes prefieren escribirme por WhatsApp?', 'Pueden seguir haciéndolo: tu web tiene un botón directo a tu WhatsApp. La diferencia es que la mayoría ya no te escribirá para preguntar si tienes hueco: lo verán ellos mismos.'],
+  ['¿Qué diferencia hay entre Solo y Equipo?', 'Los dos traen todo: reservas, recordatorios, clientes, cobros, cupones, galería y opiniones. Equipo añade a las personas que trabajan contigo: cada una con sus servicios, su horario y su propio enlace para ver su agenda, y tus clientes eligen con quién reservar.'],
+  ['¿Qué pasa cuando acaba la prueba gratis?', 'Nada se borra. Eliges el plan que te va mejor, pagas el mes y sigues igual. Si no pagas, tu web deja de aceptar reservas hasta que lo hagas, pero tus datos se quedan guardados.'],
   ['¿Cómo pago la mensualidad?', 'Por transferencia (Transfermóvil o EnZona). Subes la captura del comprobante desde tu panel y se activa enseguida.'],
   ['¿Puedo cancelar cuando quiera?', 'Sí. No hay permanencia ni letra pequeña: pagas mes a mes y lo dejas cuando quieras. Tus datos no se borran.'],
   ['¿Funciona con mala conexión?', 'Sí. Está hecha para gastar pocos datos y funciona bien con datos móviles normales.'],
@@ -41,7 +43,7 @@ const FAQ = [
 ]
 
 export default function Landing() {
-  const [prices, setPrices] = useState<Prices>({ basico: DEFAULT_PRICE, plus: DEFAULT_PRICE, ultra: DEFAULT_TEAM_PRICE, trial_days: 15 })
+  const [prices, setPrices] = useState<Prices>({ basico: DEFAULT_PRICE, plus: DEFAULT_PRICE, ultra: DEFAULT_TEAM_PRICE, trial_days: 5 })
   const [menuOpen, setMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [showSticky, setShowSticky] = useState(false)
@@ -68,7 +70,7 @@ export default function Landing() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  const trial = prices.trial_days ?? 15
+  const trial = prices.trial_days ?? 5
   const price = prices.basico
   const freeLine = `${trial} días gratis · Sin tarjeta · Lista en 5 minutos`
 
@@ -82,7 +84,7 @@ export default function Landing() {
     >
       <Header scrolled={scrolled} menuOpen={menuOpen} setMenuOpen={setMenuOpen} />
 
-      <Hero freeLine={freeLine} />
+      <Hero trial={trial} />
 
       <Marquee />
 
@@ -164,7 +166,7 @@ function Header({ scrolled, menuOpen, setMenuOpen }: { scrolled: boolean; menuOp
 }
 
 /* ---- 1. Portada oscura con el móvil que se reserva solo ---- */
-function Hero({ freeLine }: { freeLine: string }) {
+function Hero({ trial }: { trial: number }) {
   const [w, setW] = useState(0)
   useEffect(() => {
     const t = setInterval(() => setW((i) => (i + 1) % WHILE.length), 2600)
@@ -213,7 +215,13 @@ function Hero({ freeLine }: { freeLine: string }) {
               Ver cómo funciona
             </a>
           </div>
-          <p className="lp-fade-in mt-4 text-sm text-white/50" style={{ ['--i' as string]: 2 }}>{freeLine}</p>
+          <ul className="lp-fade-in mt-5 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-white/60 lg:justify-start" style={{ ['--i' as string]: 2 }}>
+            {[`${trial} días gratis`, 'Sin tarjeta', 'Lista en 5 minutos', 'Pagas en CUP'].map((t) => (
+              <li key={t} className="flex items-center gap-1.5">
+                <Ico name="check" className="h-4 w-4 text-emerald-400" /> {t}
+              </li>
+            ))}
+          </ul>
         </div>
 
         <div className="lp-par" style={{ ['--speed' as string]: -60 }}>
@@ -351,8 +359,8 @@ function HowItWorks() {
 
 /* ---- 6. Funciones en mosaico ---- */
 function Features() {
-  const small: [string, string, string][] = [
-    ['users', 'Tu equipo', 'Cada profesional con su agenda y sus servicios. El cliente elige con quién.'],
+  const small: [string, string, string, string?][] = [
+    ['users', 'Tu equipo', 'Cada profesional con su agenda, sus servicios y su propio enlace. El cliente elige con quién.', 'Plan Equipo'],
     ['card', 'Ficha de clientes', 'Cuántas veces vino, cuánto gastó y tus notas privadas sobre cada uno.'],
     ['ticket', 'Cupones y bonos', 'Promociones y paquetes de sesiones para que vuelvan más seguido.'],
     ['image', 'Galería de trabajos', 'Tus mejores fotos en tu web, para que te elijan antes de reservar.'],
@@ -388,10 +396,13 @@ function Features() {
               ))}
             </div>
           </FeatureCard>
-          {small.map(([icon, t, d], i) => (
+          {small.map(([icon, t, d, tag], i) => (
             <div key={t} data-reveal style={{ ['--i' as string]: i }} onPointerMove={spotlight} className="lp-spot rounded-[24px] border border-slate-200 bg-white p-6 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-900/5 md:col-span-3">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-100 text-rose-600"><Ico name={icon} /></span>
-              <h3 className="mt-4 font-extrabold">{t}</h3>
+              <h3 className="mt-4 flex flex-wrap items-center gap-2 font-extrabold">
+                {t}
+                {tag && <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[11px] font-bold text-white">{tag}</span>}
+              </h3>
               <p className="mt-1 text-sm text-slate-600">{d}</p>
             </div>
           ))}
@@ -468,15 +479,17 @@ function Calculator({ price, trial }: { price: number; trial: number }) {
 
 /* ---- 8. Precio ---- */
 function Pricing({ price, teamPrice, trial }: { price: number; teamPrice: number; trial: number }) {
-  const extras = ['App instalable en el móvil', 'Tu enlace, tus colores y tu logo']
-  const solo = [...includedIn('basico').map((m) => MODULES[m].name), ...extras]
   const plans = [
-    { key: 'basico', name: PLANS.basico.name, who: 'Si atiendes tú solo', price, items: solo, highlight: false },
+    {
+      key: 'basico', name: PLANS.basico.name, who: 'Si atiendes tú solo', price, highlight: false,
+      items: ['Reservas online las 24 horas', 'Tu agenda con aviso de cada cita', 'Recordatorios por WhatsApp', 'Ficha de clientes y opiniones', 'Cobros, gastos y estadísticas', 'Tu web con tu logo, colores y enlace'],
+    },
     {
       key: 'ultra', name: PLANS.ultra.name, who: 'Para salones con varias personas', price: teamPrice, highlight: true,
-      items: ['Todo lo de Solo', 'Tu equipo: cada persona con sus servicios y su horario', 'Un enlace para que cada una cambie sus precios', 'Tus clientes eligen con quién reservar'],
+      items: ['Todo lo de Solo', 'Tu equipo: cada persona con sus servicios y su horario', 'Tus clientes eligen con quién reservar', 'Cada persona con su enlace: su agenda y sus números', 'Repartes los servicios del salón entre tu equipo', 'Tú lo ves todo desde tu panel'],
     },
   ]
+  const both = ['Cupones y bonos', 'Galería de trabajos', 'Lista de espera', 'Servicios extra', 'Copia de tus datos en Excel', 'App instalable en el móvil']
   return (
     <section id="precio" className="lp-lazy scroll-mt-16 bg-slate-50 px-4 py-20 sm:py-28">
       <div className="mx-auto max-w-5xl">
@@ -503,6 +516,14 @@ function Pricing({ price, teamPrice, trial }: { price: number; teamPrice: number
               </div>
             </div>
           ))}
+        </div>
+        <div data-reveal className="mx-auto mt-6 max-w-4xl rounded-3xl bg-white p-5 text-center ring-1 ring-slate-200 sm:p-6">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Y en los dos planes también</p>
+          <ul className="mt-3 flex flex-wrap justify-center gap-2">
+            {both.map((t) => (
+              <li key={t} className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700">{t}</li>
+            ))}
+          </ul>
         </div>
         <p className="mt-4 text-center text-sm text-slate-500">Sin tarjeta · Sin permanencia · Al acabar la prueba eliges el plan que te va mejor</p>
         <div className="mt-10 grid gap-4 text-sm sm:grid-cols-3">
@@ -568,20 +589,38 @@ function FinalCta({ freeLine }: { freeLine: string }) {
 }
 
 function Footer() {
+  const link = 'text-slate-600 transition hover:text-slate-900'
   return (
-    <footer className="border-t border-slate-100 bg-white pb-28 pt-10 md:pb-10">
-      <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 px-4 text-sm text-slate-500 sm:flex-row sm:justify-between">
-        <CitoraLogo className="text-base text-slate-700" />
-        <nav className="flex flex-wrap justify-center gap-x-5 gap-y-1">
-          {NAV.map((n) => <a key={n.href} href={n.href} className="hover:text-slate-900">{n.label}</a>)}
+    <footer className="border-t border-slate-200 bg-white pb-28 pt-14 text-sm md:pb-12">
+      <div className="mx-auto grid max-w-6xl grid-cols-2 gap-x-6 gap-y-10 px-4 sm:grid-cols-3 lg:grid-cols-[1.6fr_1fr_1fr_1fr]">
+        <div className="col-span-2 sm:col-span-3 lg:col-span-1">
+          <CitoraLogo className="text-lg text-slate-900" />
+          <p className="mt-3 max-w-xs text-slate-500">La app de reservas para barberías, salones, uñas, spas y cualquier negocio que trabaje con citas en Cuba.</p>
+        </div>
+        <nav aria-label="Producto">
+          <p className="font-bold text-slate-900">Producto</p>
+          <ul className="mt-3 space-y-2">
+            {NAV.map((n) => <li key={n.href}><a href={n.href} className={link}>{n.label}</a></li>)}
+          </ul>
         </nav>
-        <p className="space-x-2 text-xs">
-          <span>© {new Date().getFullYear()} Citora</span>
-          <span>·</span>
-          <Link to="/terminos" className="underline hover:text-slate-700">Términos</Link>
-          <span>·</span>
-          <Link to="/privacidad" className="underline hover:text-slate-700">Privacidad</Link>
-        </p>
+        <nav aria-label="Tu cuenta">
+          <p className="font-bold text-slate-900">Tu cuenta</p>
+          <ul className="mt-3 space-y-2">
+            <li><Link to="/crear" className={link}>Crear mi app</Link></li>
+            <li><Link to="/entrar" className={link}>Entrar a mi panel</Link></li>
+          </ul>
+        </nav>
+        <nav aria-label="Legal">
+          <p className="font-bold text-slate-900">Legal</p>
+          <ul className="mt-3 space-y-2">
+            <li><Link to="/terminos" className={link}>Términos de uso</Link></li>
+            <li><Link to="/privacidad" className={link}>Privacidad</Link></li>
+          </ul>
+        </nav>
+      </div>
+      <div className="mx-auto mt-12 flex max-w-6xl flex-col items-center justify-between gap-2 border-t border-slate-100 px-4 pt-6 text-xs text-slate-500 sm:flex-row">
+        <p>© {new Date().getFullYear()} Citora. Todos los derechos reservados.</p>
+        <p>Hecha para negocios en Cuba</p>
       </div>
     </footer>
   )
