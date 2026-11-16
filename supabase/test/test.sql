@@ -1200,6 +1200,8 @@ update appointments set status = 'cancelada' where token = (select v from ctx wh
 update businesses set plan = 'ultra' where slug = 'spa-mar';
 set role anon;
 do $$ begin assert jsonb_array_length(get_public_business('spa-mar')->'staff') > 0, 'con Equipo vuelve a salir'; end $$;
+reset role;
+set role authenticated;
 
 -- ===== Primeros pasos (versión 1.4) =====
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
