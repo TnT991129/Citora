@@ -1172,6 +1172,31 @@ select submit_survey_answer((select v from ctx where k = 'encuesta2')::uuid, '{"
 set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 select admin_delete_survey((select v from ctx where k = 'encuesta2')::uuid);
 
+-- ===== Repartir los servicios del salón entre el equipo =====
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select owner_set_team_services(jsonb_build_object(
+  (select v from ctx where k='ana'), jsonb_build_array((select v from ctx where k='masaje')),
+  (select v from ctx where k='bea'), '[]'::jsonb));
+do $$ begin
+  assert (select own_services from staff where name = 'Bea') and (select own_services from staff where name = 'Ana'), 'las dos con servicios propios';
+  assert (select count(*) from staff_services where staff_id = (select v from ctx where k='ana')::uuid) = 1, 'Ana hace el masaje';
+  assert not exists (select 1 from staff_services where staff_id = (select v from ctx where k='bea')::uuid), 'Bea no hace nada';
+end $$;
+-- Un servicio o un profesional de otro negocio: no se guarda nada
+select expect_error($$select owner_set_team_services(jsonb_build_object('$$ || (select v from ctx where k='ana') || $$', jsonb_build_array('$$ || (select v from ctx where k='corte') || $$')))$$, 'SERVICIOS_INVALIDOS');
+select expect_error($$select owner_set_team_services(jsonb_build_object(gen_random_uuid()::text, '[]'::jsonb))$$, 'PROFESIONAL_INVALIDO');
+select expect_error($$select owner_set_team_services('[1]')$$, 'DATOS_INVALIDOS');
+do $$ begin assert (select count(*) from staff_services where staff_id = (select v from ctx where k='ana')::uuid) = 1, 'sigue igual tras el error'; end $$;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select expect_error($$select owner_set_team_services(jsonb_build_object('$$ || (select v from ctx where k='ana') || $$', '[]'::jsonb))$$, 'PROFESIONAL_INVALIDO');
+reset role;
+-- Como estaba: hacen todo
+delete from staff_services where staff_id in ((select v from ctx where k='ana')::uuid, (select v from ctx where k='bea')::uuid);
+update staff set own_services = false where name in ('Ana', 'Bea');
+set role authenticated;
+
 -- ===== Dos planes: Solo (sin equipo) y Equipo (versión 1.4) =====
 do $$ begin
   assert plan_has('ultra', 'empleados') and not plan_has('basico', 'empleados') and not plan_has('plus', 'empleados'), 'equipo solo en Equipo';

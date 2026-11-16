@@ -2687,6 +2687,38 @@ begin
 end;
 $$;
 
+-- El dueño reparte los servicios del salón entre su equipo, de una vez y sin quedarse a medias.
+--   p_map: {"<id del profesional>": ["<id de servicio>", ...], ...} con todo su equipo activo.
+-- Cada profesional pasa a hacer solo lo suyo (own_services); lo que no tiene nadie es del dueño.
+create or replace function public.owner_set_team_services(p_map jsonb)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_business uuid := my_business_id();
+  k text;
+  v_staff uuid;
+  v_ids uuid[];
+begin
+  if v_business is null then raise exception 'SIN_NEGOCIO'; end if;
+  if not my_plan_has('empleados') then raise exception 'NO_DISPONIBLE'; end if;
+  if p_map is null or jsonb_typeof(p_map) <> 'object' then raise exception 'DATOS_INVALIDOS'; end if;
+  for k in select jsonb_object_keys(p_map) loop
+    begin
+      v_staff := k::uuid;
+      select coalesce(array_agg(distinct x::uuid), '{}') into v_ids from jsonb_array_elements_text(p_map -> k) x;
+    exception when others then
+      raise exception 'DATOS_INVALIDOS';
+    end;
+    if not exists (select 1 from staff where id = v_staff and business_id = v_business) then raise exception 'PROFESIONAL_INVALIDO'; end if;
+    if exists (select 1 from unnest(v_ids) x where not exists (select 1 from services s where s.id = x and s.business_id = v_business)) then
+      raise exception 'SERVICIOS_INVALIDOS';
+    end if;
+    delete from staff_services where staff_id = v_staff;
+    insert into staff_services (staff_id, service_id) select v_staff, x from unnest(v_ids) x;
+    update staff set own_services = true where id = v_staff;
+  end loop;
+end;
+$$;
+
 -- Datos para pagar (tarjeta y WhatsApp del administrador)
 create or replace function public.get_payment_info()
 returns jsonb language plpgsql stable security definer set search_path = public as $$
@@ -3613,6 +3645,7 @@ grant execute on function public.create_business(text, text, text, text, text, t
 grant execute on function public.get_my_business_status() to authenticated;
 grant execute on function public.get_my_progress() to authenticated;
 grant execute on function public.owner_staff_link(uuid, text) to authenticated;
+grant execute on function public.owner_set_team_services(jsonb) to authenticated;
 grant execute on function public.staff_portal(text) to anon, authenticated;
 grant execute on function public.staff_portal_save_service(text, uuid, text, numeric, int, text, boolean, boolean) to anon, authenticated;
 grant execute on function public.staff_portal_save_schedule(text, jsonb) to anon, authenticated;
@@ -3706,6 +3739,7 @@ revoke execute on function public._owner_does(uuid[]) from anon, authenticated;
 revoke execute on function public._staff_hide_services() from anon;
 -- Supabase da permiso a los visitantes en las funciones nuevas: esta es solo para el dueño
 revoke execute on function public.owner_staff_link(uuid, text) from anon;
+revoke execute on function public.owner_set_team_services(jsonb) from anon;
 revoke execute on function public.staff_schedule_days_normalize() from anon;
 
 -- Las tablas: sin acceso directo para visitantes anónimos
