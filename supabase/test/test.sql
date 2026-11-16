@@ -1197,6 +1197,7 @@ reset role;
 delete from staff_services where staff_id in ((select v from ctx where k='ana')::uuid, (select v from ctx where k='bea')::uuid);
 update staff set own_services = false where name in ('Ana', 'Bea');
 set role authenticated;
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 
 -- ===== Dos planes: Solo (sin equipo) y Equipo (versión 1.4) =====
 do $$ begin
