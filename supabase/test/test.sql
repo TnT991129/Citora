@@ -1189,8 +1189,9 @@ select expect_error($$select owner_set_team_services(jsonb_build_object('$$ || (
 select expect_error($$select owner_set_team_services(jsonb_build_object(gen_random_uuid()::text, '[]'::jsonb))$$, 'PROFESIONAL_INVALIDO');
 select expect_error($$select owner_set_team_services('[1]')$$, 'DATOS_INVALIDOS');
 do $$ begin assert (select count(*) from staff_services where staff_id = (select v from ctx where k='ana')::uuid) = 1, 'sigue igual tras el error'; end $$;
+-- Otro dueño (Leo, que a estas alturas tiene el negocio inhabilitado) no puede tocar al equipo de Spa Mar
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
-select expect_error($$select owner_set_team_services(jsonb_build_object('$$ || (select v from ctx where k='ana') || $$', '[]'::jsonb))$$, 'PROFESIONAL_INVALIDO');
+select expect_error($$select owner_set_team_services(jsonb_build_object('$$ || (select v from ctx where k='ana') || $$', '[]'::jsonb))$$, 'NO_DISPONIBLE');
 reset role;
 -- Como estaba: hacen todo
 delete from staff_services where staff_id in ((select v from ctx where k='ana')::uuid, (select v from ctx where k='bea')::uuid);
