@@ -11,6 +11,7 @@ import { shareLink } from '../../lib/whatsapp'
 import { usePanel } from './context'
 import { Locked, useModule } from './Locked'
 import { DistributeServices } from './TeamServices'
+import { businessType } from '../../lib/templates'
 
 const MAX = 20
 const ORDER = [1, 2, 3, 4, 5, 6, 0]
@@ -438,8 +439,10 @@ function OwnerCard() {
     flash('Guardado')
     await reloadBusiness()
   }
+  const bt = businessType(business.business_type)
+  const typeName = bt.key !== 'otro' ? bt.name : null
   return (
-    <section className="card space-y-3">
+    <section className={`card space-y-3 ${business.owner_specialty ? '' : 'ring-2 ring-brand/25'}`}>
       <div className="flex items-center gap-3">
         <span className="shrink-0"><BusinessAvatar name={business.name} logo={business.logo_url} size={40} /></span>
         <div className="min-w-0">
@@ -455,6 +458,11 @@ function OwnerCard() {
           <input className="input" value={specialty} maxLength={40} placeholder="Ej. Peluquería" onChange={(e) => setSpecialty(e.target.value)} onBlur={save} />
         </Field>
       </div>
+      {!business.owner_specialty && (
+        <p className="text-xs text-slate-500">
+          Mientras no la pongas, tus servicios salen en tu página como «{typeName || name.trim() || 'Servicios'}», arriba del todo, y los de tu equipo debajo con su especialidad.
+        </p>
+      )}
       {error && <Alert>{error}</Alert>}
     </section>
   )

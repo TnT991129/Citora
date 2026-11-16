@@ -16,7 +16,7 @@ import { track } from '../../lib/analytics'
 import { hasModule } from '../../lib/plans'
 import { Announcement, BusinessHero, Centered, Closed, PoweredBy, Stars, usePublicBusiness } from './shared'
 import { serverNow } from '../../lib/clockSkew'
-import { groupServices } from '../../lib/staff'
+import { groupServices, ownerInfo } from '../../lib/staff'
 import { GroupJump, GroupTitle } from './ServicePicker'
 
 const WEEK = [1, 2, 3, 4, 5, 6, 0]
@@ -45,7 +45,7 @@ export default function BusinessHome() {
   const rate = cupRate(business)
   const team = hasModule(business.plan, 'empleados') ? business.staff || [] : []
   // Con equipo, los servicios de cada profesional salen bajo su especialidad
-  const groups = groupServices(main, team, { name: business.owner_name, specialty: business.owner_specialty, photo_url: business.logo_url })
+  const groups = groupServices(main, team, ownerInfo(business))
   const look = business.appearance || {}
   const showPrices = shows(look, 'show_prices')
   const showDurations = shows(look, 'show_durations')

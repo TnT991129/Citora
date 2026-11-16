@@ -1,3 +1,4 @@
+import { businessType } from './templates'
 import type { PublicStaff } from './types'
 
 /**
@@ -35,6 +36,8 @@ export interface OwnerInfo {
   name?: string | null
   specialty?: string | null
   photo_url?: string | null
+  /** El tipo de negocio ("Barbería"): título de sus servicios si no ha puesto su especialidad */
+  typeName?: string | null
 }
 
 /**
@@ -61,7 +64,8 @@ export function groupServices<S extends { id: string }>(
     const specialty = owner.specialty?.trim() || ''
     groups.push({
       key: 'dueno',
-      title: specialty || name || 'Más servicios',
+      // Los servicios de la casa: su especialidad o, si no la puso, el tipo de negocio ("Barbería")
+      title: specialty || owner.typeName?.trim() || name || 'Servicios',
       staff: name ? { id: 'dueno', name, photo_url: owner.photo_url || null, specialty: specialty || null } : null,
       services: byKey.get('dueno')!,
     })
@@ -103,3 +107,10 @@ export function whoAttends(ids: string[], services: { id: string; is_extra?: boo
 
 /** El aviso cuando se mezclan servicios de personas distintas en una sola cita */
 export const MIXED_PEOPLE = 'Estos servicios los hacen personas distintas del equipo y nadie hace todos. Reserva primero uno y después haz otra reserva para el otro.'
+
+/** Los datos del dueño para agrupar los servicios, sacados de su negocio */
+export function ownerInfo(b: { owner_name?: string | null; owner_specialty?: string | null; logo_url?: string | null; business_type?: string | null }): OwnerInfo {
+  const bt = businessType(b.business_type)
+  const type = bt.key !== 'otro' ? bt.name : null
+  return { name: b.owner_name, specialty: b.owner_specialty, photo_url: b.logo_url, typeName: type }
+}

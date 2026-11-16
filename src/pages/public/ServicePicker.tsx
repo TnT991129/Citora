@@ -115,12 +115,17 @@ export function GroupTitle({ group }: { group: ServiceGroup<unknown> }) {
         )
       ) : (
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand" aria-hidden>
-          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM22 21v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8" /></svg>
+          {/* Los de la casa: una tienda; los que hacen varias personas: un grupo */}
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d={group.key === 'varios'
+              ? 'M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM22 21v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8'
+              : 'M4 4h16l1 5a3 3 0 01-6 0 3 3 0 01-6 0 3 3 0 01-6 0zM5 12v9h14v-9M10 21v-5h4v5'} />
+          </svg>
         </span>
       )}
       <div className="min-w-0">
         <h3 className="truncate font-extrabold leading-tight">{group.title}</h3>
-        {st && st.specialty?.trim() && <p className="truncate text-sm text-slate-500">con {st.name.split(' ')[0]}</p>}
+        {st && group.title !== st.name && <p className="truncate text-sm text-slate-500">con {st.name.split(' ')[0]}</p>}
       </div>
     </div>
   )

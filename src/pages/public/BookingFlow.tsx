@@ -5,7 +5,7 @@ import { Alert, Button, Field, PageLoader } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { cupRate, duration, money, price, time12, weekdayOf, zonedToIso, dayTitle } from '../../lib/format'
 import { hasModule } from '../../lib/plans'
-import { keepStaff, MIXED_PEOPLE, requiredIds, staffDoes, whoAttends } from '../../lib/staff'
+import { keepStaff, MIXED_PEOPLE, ownerInfo, requiredIds, staffDoes, whoAttends } from '../../lib/staff'
 import { track } from '../../lib/analytics'
 import { load, rememberBooking, save } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
@@ -169,7 +169,7 @@ export default function BookingFlow() {
 
         {cur === 'servicio' && (
           <div className="mt-4 space-y-4">
-            <ServicePicker services={services} selected={selected} onChange={changeServices} choice={choice} onChoice={setChoice} currency={currency} rate={rate} team={team} owner={{ name: business.owner_name, specialty: business.owner_specialty, photo_url: business.logo_url }} />
+            <ServicePicker services={services} selected={selected} onChange={changeServices} choice={choice} onChoice={setChoice} currency={currency} rate={rate} team={team} owner={ownerInfo(business)} />
             {hasModule(business.plan, 'descuentos') && chosen.length > 0 && (
               <CouponBox slug={business.slug} serviceIds={selected} options={optionsFor(selected, choice)} applied={coupon} onApplied={setCoupon} />
             )}

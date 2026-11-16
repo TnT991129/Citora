@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { hasModule, includedIn, planName } from './plans'
 import { canReload } from './reload'
-import { groupServices, keepStaff, requiredIds, staffDoes, whoAttends } from './staff'
+import { groupServices, keepStaff, ownerInfo, requiredIds, staffDoes, whoAttends } from './staff'
 
 const barbero = { id: 'leo', service_ids: ['corte', 'barba'] }
 const manicura = { id: 'ana', service_ids: ['unas'] }
@@ -74,10 +74,11 @@ describe('servicios agrupados por especialidad', () => {
     expect(g[0].staff?.name).toBe('Osmel')
   })
 
-  it('el dueño sin especialidad: su nombre, y si tampoco, "Más servicios"', () => {
+  it('el dueño sin especialidad: el tipo de negocio; si no, su nombre; si no, "Servicios"', () => {
+    expect(groupServices([svc('masaje'), svc('corte')], [leo], { name: 'Osmel', typeName: 'Barbería' })[0].title).toBe('Barbería')
     expect(groupServices([svc('masaje'), svc('corte')], [leo], { name: 'Osmel' })[0].title).toBe('Osmel')
     const g = groupServices([svc('masaje'), svc('corte')], [leo])
-    expect([g[0].title, g[0].staff]).toEqual(['Más servicios', null])
+    expect([g[0].title, g[0].staff]).toEqual(['Servicios', null])
   })
 
   it('un servicio que hacen dos va a "Con varias personas del equipo"', () => {
@@ -126,5 +127,13 @@ describe('planes Solo y Equipo', () => {
     expect(includedIn('basico')).not.toContain('empleados')
     expect(includedIn('ultra')).toContain('empleados')
     expect([planName('ultra'), planName('basico'), planName('plus')]).toEqual(['Citora Equipo', 'Citora Solo', 'Citora Solo'])
+  })
+})
+
+describe('título de los servicios del dueño', () => {
+  it('el tipo de negocio, salvo "otro" o uno desconocido', () => {
+    expect(ownerInfo({ business_type: 'barberia' }).typeName).toBe('Barbería')
+    expect(ownerInfo({ business_type: 'otro' }).typeName).toBeNull()
+    expect(ownerInfo({ business_type: 'inventado' }).typeName).toBeNull()
   })
 })

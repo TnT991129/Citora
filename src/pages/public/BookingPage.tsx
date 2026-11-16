@@ -9,7 +9,7 @@ import { errorMessage } from '../../lib/errors'
 import { cupRate, dateKey, duration, longDate, money, price, timeOf, todayKey, weekdayOf, dayTitle } from '../../lib/format'
 import { buildAppointmentIcs, downloadIcs } from '../../lib/ics'
 import { hasModule } from '../../lib/plans'
-import { keepStaff, MIXED_PEOPLE, requiredIds, staffDoes, whoAttends } from '../../lib/staff'
+import { keepStaff, MIXED_PEOPLE, ownerInfo, requiredIds, staffDoes, whoAttends } from '../../lib/staff'
 import { isPushSubscribed, pushSupported, subscribeCustomerPush } from '../../lib/push'
 import { rememberBooking } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
@@ -329,7 +329,7 @@ function EditBooking({ booking, onClose, onDone }: {
               currency={booking.business.currency}
               rate={cupRate(biz)}
               team={team}
-              owner={{ name: biz.owner_name, specialty: biz.owner_specialty, photo_url: biz.logo_url }}
+              owner={ownerInfo(biz)}
             />
           </div>
           {team.length > 0 && who !== 'dueno' && (
