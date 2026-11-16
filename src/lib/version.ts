@@ -42,6 +42,14 @@ export const RELEASE_NOTES: ReleaseSection[] = [
     ],
   },
   {
+    icon: 'card',
+    title: 'Dos planes: Solo y Equipo',
+    points: [
+      'Citora Solo, para quien atiende solo, con todo incluido menos el equipo.',
+      'Citora Equipo, para salones con varias personas. Los elegirás al pagar en Más → Mensualidad.',
+    ],
+  },
+  {
     icon: 'users',
     title: 'Recupera clientes',
     points: ['En Clientes, el filtro "Hace tiempo que no vienen" y el botón "Escribirle", con un mensaje de "te echamos de menos" ya escrito.'],
