@@ -105,7 +105,7 @@ export default function Customers() {
         </select>
       </div>
 
-      <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4" role="tablist" aria-label="Filtrar clientes">
+      <div className="no-scrollbar scroll-fade-x -mx-4 flex gap-2 overflow-x-auto px-4" role="tablist" aria-label="Filtrar clientes">
         {(Object.keys(FILTERS) as Filter[]).map((k) => (
           <button
             key={k}

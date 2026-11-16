@@ -153,7 +153,7 @@ export default function StaffPortal() {
       </header>
 
       <nav className="sticky top-[57px] z-10 border-b border-slate-200 bg-white/90 backdrop-blur-lg">
-        <div className="no-scrollbar mx-auto flex max-w-xl gap-1 overflow-x-auto px-3 py-2">
+        <div className="no-scrollbar scroll-fade-x mx-auto flex max-w-xl gap-1 overflow-x-auto px-3 py-2">
           {([['agenda', 'Agenda'], ['numeros', 'Números'], ['servicios', 'Servicios'], ['horario', 'Horario']] as const).map(([k, l]) => (
             <button
               key={k}

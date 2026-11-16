@@ -135,7 +135,7 @@ export function GroupTitle({ group }: { group: ServiceGroup<unknown> }) {
 export function GroupJump({ groups }: { groups: ServiceGroup<unknown>[] }) {
   if (groups.length < 3) return null
   return (
-    <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+    <div className="no-scrollbar scroll-fade-x -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
       {groups.map((g) => (
         <button
           key={g.key}

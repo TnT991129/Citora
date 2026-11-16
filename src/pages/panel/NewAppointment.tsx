@@ -210,7 +210,7 @@ function CustomerFields({ name, phone, onName, onPhone }: { name: string; phone:
 function DayStrip({ today, value, onChange }: { today: string; value: string; onChange: (d: string) => void }) {
   const days = Array.from({ length: 14 }, (_, i) => addDays(today, i))
   return (
-    <div className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 pb-1">
+    <div className="no-scrollbar scroll-fade-x -mx-5 flex gap-2 overflow-x-auto px-5 pb-1">
       {days.map((d, i) => {
         const [wd, num, mon] = shortDate(d).split(' ')
         const on = d === value

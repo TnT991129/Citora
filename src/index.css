@@ -9,13 +9,56 @@
   --btn-radius: 0.75rem;
 }
 
-html { -webkit-tap-highlight-color: transparent; }
-body { min-height: 100dvh; }
+html {
+  -webkit-tap-highlight-color: transparent;
+  /* Casillas, interruptores nativos y rangos con el color del negocio */
+  accent-color: rgb(var(--brand-rgb));
+  /* Barras de desplazamiento a juego (pulgar con contraste de al menos 3:1 sobre la pista) */
+  scrollbar-color: #64748b transparent;
+}
+html.dark { scrollbar-color: #64748b #0b1120; }
+/* font-size-adjust: mientras carga la letra del negocio, la de reserva se ajusta a su tamaño y el
+   texto no "salta" al cambiar */
+body { min-height: 100dvh; font-size-adjust: from-font; }
+
+/* Texto seleccionado con el color del negocio */
+::selection { background-color: rgb(var(--brand-rgb) / 0.2); }
+
+/* Títulos con líneas equilibradas y párrafos sin una palabra suelta en la última línea
+   (si el navegador no lo soporta, se ignora y todo sigue igual) */
+h1, h2, h3 { text-wrap: balance; }
+p, li, blockquote { text-wrap: pretty; }
+
+/* Filas que se deslizan de lado (filtros, pestañas, días): se desvanecen en el borde por el que
+   hay más contenido, para que se note que se pueden deslizar. Sin soporte, se ven como siempre. */
+@property --fade-start { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --fade-end { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@supports (animation-timeline: scroll()) {
+  .scroll-fade-x {
+    --fade-size: 2.5rem;
+    mask:
+      linear-gradient(black, black) no-clip subtract,
+      linear-gradient(to right, black, transparent) 0 0 / var(--fade-start) 100% no-repeat no-clip,
+      linear-gradient(to right, transparent, black) 100% 0 / var(--fade-end) 100% no-repeat no-clip;
+    animation: scroll-fade-start linear both, scroll-fade-end linear both;
+    animation-timeline: scroll(self inline);
+    animation-range: 0 var(--fade-size), calc(100% - var(--fade-size)) 100%;
+    scroll-padding-inline: var(--fade-size);
+  }
+}
+@keyframes scroll-fade-start { to { --fade-start: var(--fade-size); } }
+@keyframes scroll-fade-end { from { --fade-end: var(--fade-size); } }
 
 @layer components {
   .input {
     @apply w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-base text-slate-900 shadow-sm shadow-slate-900/[0.03] placeholder:text-slate-400 outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/15 disabled:bg-slate-100;
   }
+  /* Un campo mal rellenado (correo, teléfono…) se marca en rojo solo después de usarlo, no al abrir el formulario */
+  .input:not([type="range"]):user-invalid { @apply border-red-400 focus:border-red-500 focus:ring-red-500/15; }
+  /* Autorrelleno del navegador: un borde con el color del negocio, sin mover nada de sitio */
+  .input:is(:autofill, :-webkit-autofill) { box-shadow: inset 0 0 0 2px rgb(var(--brand-rgb) / 0.35); }
+  /* Las notas largas crecen con el texto (y se pueden estirar a lo alto, nunca a lo ancho) */
+  textarea.input { resize: vertical; field-sizing: content; min-height: 4.5rem; max-height: 16rem; }
   .label { @apply mb-1.5 block text-sm font-semibold text-slate-700; }
   /* Sombra en dos capas: un borde nítido y una sombra amplia y suave (se ve más "profesional" que una sola) */
   .card { @apply rounded-2xl border border-slate-200 bg-white p-4 sm:p-5; box-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 10px 28px -14px rgb(15 23 42 / 0.12); }
@@ -108,6 +151,8 @@ html.dark { color-scheme: dark; }
    estaba elegida (moneda, tipo de negocio, forma de dar las citas...) */
 .dark .card { box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), 0 1px 2px rgb(0 0 0 / 0.3); }
 .dark .input { box-shadow: none; }
+.dark .input:not([type="range"]):user-invalid { border-color: #f87171; }
+.dark .input:is(:autofill, :-webkit-autofill) { box-shadow: inset 0 0 0 2px rgb(var(--brand-rgb) / 0.5); }
 
 /* Colores de Citora (portada, administrador) */
 .dark .bg-gradient-to-b.from-citora-50 { background-image: linear-gradient(to bottom, rgb(82 67 229 / 0.18), #0b1120 55%, #0b1120); }

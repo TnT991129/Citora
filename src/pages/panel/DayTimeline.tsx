@@ -197,7 +197,7 @@ function FreeBlock({ start, end, times, top, onPick }: { start: number; end: num
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100"><Icon name="plus" className="h-3.5 w-3.5" /></span>
         Libre
       </button>
-      <span className={`flex min-w-0 gap-1.5 ${tall ? 'flex-wrap' : 'no-scrollbar flex-1 overflow-x-auto'}`}>
+      <span className={`flex min-w-0 gap-1.5 ${tall ? 'flex-wrap' : 'no-scrollbar scroll-fade-x flex-1 overflow-x-auto'}`}>
         {times.map((t) => (
           <button key={t} onClick={() => onPick(t)} className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-600 ring-1 ring-slate-200 transition hover:ring-brand">
             {time12(t)}
