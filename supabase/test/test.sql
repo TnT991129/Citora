@@ -218,8 +218,12 @@ select expect_error($$select submit_payment_claim(1, 1500, null, '00000000-0000-
 select expect_error($$select submit_payment_claim(1, 1500, null, '$$ || my_business_id() || $$/../otro/pago-1.jpg')$$, 'FALTA_COMPROBANTE');
 -- Tampoco se puede escribir directo en la tabla (ej. una declaración ya "aprobada")
 select expect_error($$insert into payment_claims (business_id, months, proof_path, status) values (my_business_id(), 1, my_business_id() || '/pago-1.jpg', 'aprobado')$$, 'row-level security');
-select submit_payment_claim(1, 1500, 'Transferencia Transfermóvil', my_business_id() || '/pago-1.jpg') as claim1 \gset
+select expect_error($$select submit_payment_claim(1, 1500, null, my_business_id() || '/pago-x.jpg', 'oro')$$, 'PLAN_INVALIDO');
+select submit_payment_claim(1, 3000, 'Transferencia Transfermóvil', my_business_id() || '/pago-1.jpg', 'ultra') as claim1 \gset
 insert into ctx values ('claim1', :'claim1');
+reset role;
+do $$ begin assert (select plan from payment_claims where id = (select v from ctx where k='claim1')::uuid) = 'ultra', 'la declaración guarda el plan elegido'; end $$;
+set role authenticated;
 do $$ begin
   assert (select count(*) from payment_claims where business_id = my_business_id()) = 1;
   assert (select status from payment_claims where business_id = my_business_id()) = 'pendiente';
@@ -293,7 +297,7 @@ end $$;
 set role authenticated;
 set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 -- Un pago real posterior le quita la cortesía (ya no sería gratis)
-select admin_activate_plan((select id from businesses where slug='spa-mar'), 'basico', 1, 500, 'Pago real después de la cortesía');
+select admin_activate_plan((select id from businesses where slug='spa-mar'), 'ultra', 1, 3000, 'Pago real después de la cortesía (plan Equipo)');
 do $$ begin assert (select comped from businesses where slug='spa-mar') = false, 'pagar de verdad quita la cortesía'; end $$;
 select expect_error($$select admin_grant_free('00000000-0000-0000-0000-000000000000')$$, 'NEGOCIO_NO_EXISTE');
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
@@ -309,7 +313,7 @@ reset role;
 set role anon;
 do $$ begin
   assert (get_public_business('barberia-leo')->>'accepting')::boolean;
-  -- Aprobar la declaración de pago lo pasó al plan único ('ultra')
+  -- Aprobar la declaración de pago lo pasó al plan que eligió (Equipo = 'ultra')
   assert get_public_business('barberia-leo')->>'plan' = 'ultra';
   assert (get_public_prices()->>'plus')::int = 2100;
 end $$;
@@ -1167,6 +1171,35 @@ do $$ begin assert get_my_survey()->>'id' = (select v from ctx where k = 'encues
 select submit_survey_answer((select v from ctx where k = 'encuesta2')::uuid, '{"p1":true}');
 set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 select admin_delete_survey((select v from ctx where k = 'encuesta2')::uuid);
+
+-- ===== Dos planes: Solo (sin equipo) y Equipo (versión 1.4) =====
+do $$ begin
+  assert plan_has('ultra', 'empleados') and not plan_has('basico', 'empleados') and not plan_has('plus', 'empleados'), 'equipo solo en Equipo';
+  assert plan_has('basico', 'clientes') and not plan_has(null, 'clientes'), 'lo demás, en los dos';
+  assert (select price_ultra from platform_settings) = 3000 or (select plans_v2 from platform_settings), 'Equipo empieza en 3.000';
+end $$;
+-- Spa Mar (con Ana y Bea) pasa a Solo: su equipo no se ve, las citas van a su agenda y el enlace no sirve
+reset role;
+update businesses set plan = 'basico' where slug = 'spa-mar';
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+insert into ctx select 'tok_solo', owner_staff_link((select v from ctx where k='ana')::uuid, 'nuevo');
+select expect_error($$insert into staff (business_id, name) values (my_business_id(), 'Nueva')$$, 'row-level security');
+reset role;
+set role anon;
+do $$ begin
+  assert jsonb_array_length(get_public_business('spa-mar')->'staff') = 0, 'sin plan Equipo no sale el equipo';
+end $$;
+select expect_error($$select staff_portal('$$ || (select v from ctx where k='tok_solo') || $$')$$, 'SIN_PLAN_EQUIPO');
+insert into ctx select 'r_solo', create_booking('spa-mar', array[(select v from ctx where k='masaje')::uuid], (select v from ctx where k='day2')::date, '11:00', 'Cliente Solo', '5350000081');
+reset role;
+do $$ begin
+  assert (select staff_id from appointments where token = (select v from ctx where k='r_solo')) is null, 'con Solo, la cita va a la agenda del negocio';
+end $$;
+update appointments set status = 'cancelada' where token = (select v from ctx where k='r_solo');
+update businesses set plan = 'ultra' where slug = 'spa-mar';
+set role anon;
+do $$ begin assert jsonb_array_length(get_public_business('spa-mar')->'staff') > 0, 'con Equipo vuelve a salir'; end $$;
 
 -- ===== Primeros pasos (versión 1.4) =====
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';

@@ -26,9 +26,9 @@ create table if not exists public.platform_settings (
   card_number text not null default '',
   card_holder text not null default '',
   admin_whatsapp text not null default '',
-  price_basico int not null default 1500,  -- precio mensual (hay un solo plan)
-  price_plus int not null default 1500,    -- sin uso: se mantiene igual al precio mensual
-  price_ultra int not null default 1500,   -- sin uso: se mantiene igual al precio mensual
+  price_basico int not null default 1500,  -- plan Solo (sin equipo)
+  price_plus int not null default 1500,    -- sin uso: se mantiene igual al de Solo
+  price_ultra int not null default 1500,   -- plan Equipo (varios profesionales)
   trial_days int not null default 3 check (trial_days between 0 and 60),
   updated_at timestamptz not null default now()
 );
@@ -58,11 +58,13 @@ alter table public.platform_settings add column if not exists default_timezone t
 alter table public.platform_settings alter column default_timezone set default 'Etc/GMT+4';
 update public.platform_settings set default_timezone = 'Etc/GMT+4' where default_timezone = 'America/Havana';
 
--- Un solo plan de 1.500 CUP/mes. Al pasar de tres planes a uno se unifica el precio una vez
--- (después el panel de administrador guarda siempre los tres iguales).
+-- Dos planes (versión 1.4): Citora Solo ('basico', sin equipo) y Citora Equipo ('ultra', con varios
+-- profesionales). La prueba gratis es con Equipo. Al pasar a dos planes, Equipo empieza en 3.000 CUP
+-- (una sola vez: después lo cambia el administrador). 'plus' es de pagos antiguos: cuenta como Solo.
+alter table public.platform_settings add column if not exists plans_v2 boolean not null default false;
 update public.platform_settings
-   set price_basico = 1500, price_plus = 1500, price_ultra = 1500
- where id = 1 and (price_plus <> price_basico or price_ultra <> price_basico);
+   set price_ultra = 3000, price_plus = price_basico, plans_v2 = true
+ where id = 1 and not plans_v2;
 
 -- Negocios (cada dueño tiene un negocio en la Fase 1)
 create table if not exists public.businesses (
@@ -505,6 +507,9 @@ alter table public.businesses add column if not exists owner_specialty text chec
 -- Servicios que se ocultaron solos porque la profesional que los hacía dejó el equipo (se desactivó):
 -- si vuelve, se muestran otra vez (ver _staff_hide_services)
 alter table public.services add column if not exists hidden_with_staff uuid;
+-- El plan que eligió al declarar el pago (Solo o Equipo). Las declaraciones antiguas, Solo.
+alter table public.payment_claims add column if not exists plan text not null default 'basico'
+  check (plan in ('basico', 'ultra'));
 
 -- Horario propio de un profesional (si no tiene ninguna fila aquí, usa el horario del negocio:
 -- ver _staff_slot_valid). Misma forma que schedule_days, pero por profesional.
@@ -691,7 +696,8 @@ $$;
 -- (p_module se mantiene por si en el futuro vuelve a haber varios planes.)
 create or replace function public.plan_has(p_plan text, p_module text)
 returns boolean language sql immutable as $$
-  select p_plan is not null;
+  -- Con un plan activo se tiene todo; el equipo (varios profesionales), solo con Equipo ('ultra')
+  select p_plan is not null and (p_module <> 'empleados' or p_plan = 'ultra');
 $$;
 
 -- Una cita "hecha": marcada como completada, o ya pasada sin que el dueño la marcara
@@ -1748,7 +1754,10 @@ declare
   v_tz text;
   s record;
 begin
-  if not exists (select 1 from staff x where x.business_id = p_business and x.active) then
+  -- Sin equipo, o sin el plan Equipo (sus profesionales no se ven ni reciben citas): la agenda del negocio
+  if not exists (select 1 from staff x where x.business_id = p_business and x.active)
+     or not (select plan_has(business_effective_plan(b.plan, b.trial_ends_at, b.paid_until), 'empleados')
+             from businesses b where b.id = p_business) then
     ok := _lane_free(p_business, null, p_start, p_end, p_exclude);
     staff_id := null;
     return next;
@@ -2405,6 +2414,10 @@ begin
   if p_token is null or char_length(p_token) < 32 then raise exception 'ENLACE_CADUCADO'; end if;
   select * into st from staff where edit_token = p_token and active;
   if not found then raise exception 'ENLACE_CADUCADO'; end if;
+  if not (select plan_has(business_effective_plan(b.plan, b.trial_ends_at, b.paid_until), 'empleados')
+          from businesses b where b.id = st.business_id) then
+    raise exception 'SIN_PLAN_EQUIPO';
+  end if;
   return st;
 end;
 $$;
@@ -3084,7 +3097,8 @@ $$;
 
 -- El dueño declara que pagó (ver payment_claims): sube su captura y los datos desde su panel.
 drop function if exists public.submit_payment_claim(int, numeric, text, text);
-create or replace function public.submit_payment_claim(p_months int, p_amount numeric default null, p_note text default null, p_proof_path text default null)
+create or replace function public.submit_payment_claim(p_months int, p_amount numeric default null, p_note text default null,
+                                                        p_proof_path text default null, p_plan text default 'basico')
 returns uuid language plpgsql volatile security definer set search_path = public as $$
 declare
   v_business uuid := my_business_id();
@@ -3094,27 +3108,29 @@ declare
 begin
   if v_business is null then raise exception 'SIN_NEGOCIO'; end if;
   if p_months is null or p_months not between 1 and 24 then raise exception 'MESES_INVALIDOS'; end if;
+  if coalesce(p_plan, 'basico') not in ('basico', 'ultra') then raise exception 'PLAN_INVALIDO'; end if;
   if nullif(btrim(coalesce(p_proof_path, '')), '') is null then raise exception 'FALTA_COMPROBANTE'; end if;
   -- La captura tiene que ser una subida por este mismo negocio (su carpeta en "payment-proofs"),
   -- no la de otro negocio ni un enlace de fuera
   if p_proof_path not like v_business::text || '/%' or p_proof_path like '%..%' then
     raise exception 'FALTA_COMPROBANTE';
   end if;
-  insert into payment_claims (business_id, months, amount, note, proof_path)
-  values (v_business, p_months, p_amount, nullif(btrim(coalesce(p_note, '')), ''), p_proof_path)
+  insert into payment_claims (business_id, months, amount, note, proof_path, plan)
+  values (v_business, p_months, p_amount, nullif(btrim(coalesce(p_note, '')), ''), p_proof_path, coalesce(p_plan, 'basico'))
   returning id into v_id;
 
   select name, code into v_name, v_code from businesses where id = v_business;
   perform _notify_admin_push('Pago declarado',
     v_name || ' (' || v_code || ') declaró el pago de ' || p_months ||
-    case when p_months = 1 then ' mes' else ' meses' end || '. Revísalo en Admin → Pagos.');
+    case when p_months = 1 then ' mes' else ' meses' end ||
+    case when p_plan = 'ultra' then ' del plan Equipo' else ' del plan Solo' end || '. Revísalo en Admin → Cobros.');
 
   return v_id;
 end;
 $$;
 
--- El administrador aprueba una declaración de pago: activa el mes (igual que admin_activate_plan,
--- con el plan único 'ultra') y marca la declaración como resuelta.
+-- El administrador aprueba una declaración de pago: activa los meses del plan que eligió el dueño
+-- (igual que admin_activate_plan) y marca la declaración como resuelta.
 create or replace function public.admin_approve_payment_claim(p_claim_id uuid, p_amount numeric default null, p_note text default null)
 returns timestamptz language plpgsql volatile security definer set search_path = public as $$
 declare
@@ -3125,7 +3141,7 @@ begin
   select * into c from payment_claims where id = p_claim_id for update;
   if not found then raise exception 'NO_DISPONIBLE'; end if;
   if c.status <> 'pendiente' then raise exception 'NO_DISPONIBLE'; end if;
-  v_until := admin_activate_plan(c.business_id, 'ultra', c.months, coalesce(p_amount, c.amount), coalesce(nullif(btrim(coalesce(p_note, '')), ''), c.note));
+  v_until := admin_activate_plan(c.business_id, c.plan, c.months, coalesce(p_amount, c.amount), coalesce(nullif(btrim(coalesce(p_note, '')), ''), c.note));
   update payment_claims set status = 'aprobado', resolved_at = now(), resolved_by = auth.uid() where id = c.id;
   return v_until;
 end;
@@ -3602,7 +3618,7 @@ grant execute on function public.staff_portal_save_service(text, uuid, text, num
 grant execute on function public.staff_portal_save_schedule(text, jsonb) to anon, authenticated;
 grant execute on function public.staff_portal_save_profile(text, text) to anon, authenticated;
 grant execute on function public.get_payment_info() to authenticated;
-grant execute on function public.submit_payment_claim(int, numeric, text, text) to authenticated;
+grant execute on function public.submit_payment_claim(int, numeric, text, text, text) to authenticated;
 grant execute on function public.save_owner_push_subscription(text, text, text) to authenticated;
 grant execute on function public.owner_create_appointment(uuid[], date, text, text, text, text, uuid, jsonb) to authenticated;
 grant execute on function public.owner_reschedule_appointment(uuid, date, text) to authenticated;
