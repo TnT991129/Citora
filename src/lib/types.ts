@@ -40,6 +40,8 @@ export interface Business {
   slot_capacity: number
   owner_name?: string | null
   owner_specialty?: string | null
+  /** Cortesía de Citora: no paga mensualidad (el plan no vence) */
+  comped?: boolean
   /** Primeros pasos y herramientas activas (ver lib/onboarding.ts). Falta si la base es anterior a la 1.4. */
   onboarding?: Onboarding
   plan: PlanKey | null

@@ -112,6 +112,36 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
     loadClaims()
   }
 
+  // Cortesía: no paga mensualidad; no se le enseñan planes, tarjeta ni pagos
+  if (business.comped && !blocked) {
+    return (
+      <div className="space-y-5">
+        <h1 className="text-2xl font-extrabold">Mensualidad</h1>
+        <section className="card text-center">
+          <p className="text-4xl" aria-hidden>🎁</p>
+          <h2 className="mt-2 text-xl font-extrabold">Tienes {planName(status.plan)} gratis</h2>
+          <p className="mt-2 text-slate-600">
+            Es una cortesía de Citora: <b>no tienes que pagar mensualidad</b>. Tu app funciona con todo incluido{status.plan === 'ultra' ? ', equipo incluido,' : ''} y sin fecha de vencimiento.
+          </p>
+        </section>
+        {progress && progress.bookings > 0 && (
+          <div className="grid grid-cols-3 gap-2.5">
+            {[
+              [String(progress.bookings), progress.bookings === 1 ? 'reserva' : 'reservas'],
+              [String(progress.web_total), 'por tu enlace'],
+              [money(progress.revenue, business.currency).replace(/\s*(CUP|USD)$/, ''), `${business.currency} en citas hechas`],
+            ].map(([v, l]) => (
+              <div key={l} className="card p-3.5 text-center">
+                <p className="truncate text-2xl font-extrabold tracking-tight">{v}</p>
+                <p className="text-xs font-medium text-slate-500">{l}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-5">
       <div>

@@ -51,7 +51,9 @@ export default function More() {
     flash(`${label} activado. Ya está en tus herramientas.`)
   }
 
-  const planSub = status.status === 'prueba'
+  const planSub = business.comped
+    ? 'Cortesía · sin mensualidad'
+    : status.status === 'prueba'
     ? `Prueba gratis · ${daysLeft(status.trial_ends_at) <= 0 ? 'último día' : `quedan ${daysLeft(status.trial_ends_at)} días`}`
     : status.paid_until ? `Pagado hasta dentro de ${Math.max(daysLeft(status.paid_until), 0)} días` : 'Hasta cuándo está pagado y cómo pagar'
 
