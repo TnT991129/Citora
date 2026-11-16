@@ -746,6 +746,33 @@ set role authenticated;
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 select expect_error($$update appointments set staff_id = gen_random_uuid() where token = '$$ || (select v from ctx where k='s1') || $$'$$, 'PROFESIONAL_INVALIDO');
 
+-- Su panel: apunta una cita con sus cejas, la ve en su agenda, la confirma y ve sus números
+set role anon;
+select expect_error($$select staff_portal_create_appointment('$$ || (select v from ctx where k='tok_cami') || $$', array['$$ || (select v from ctx where k='masaje') || $$'::uuid], current_date + 3, '15:00', 'Clienta Uno', '5350000091')$$, 'SERVICIOS_INVALIDOS');
+insert into ctx select 'cita_cami', staff_portal_create_appointment((select v from ctx where k='tok_cami'), array[(select v from ctx where k='cejas')::uuid], current_date + 3, '15:00', 'Clienta Cejas', '5350000092')::text;
+select expect_error($$select staff_portal_create_appointment('$$ || (select v from ctx where k='tok_cami') || $$', array['$$ || (select v from ctx where k='cejas') || $$'::uuid], current_date + 3, '15:10', 'Otra', '5350000093')$$, 'TURNO_OCUPADO');
+do $$ declare ag jsonb := staff_portal_agenda((select v from ctx where k='tok_cami'), current_date, current_date + 7); begin
+  assert jsonb_array_length(ag) = 1, 'su agenda: ' || ag::text;
+  assert ag->0->>'customer_name' = 'Clienta Cejas' and ag->0->'services'->>0 = 'Cejas' and ag->0->>'status' = 'confirmada';
+end $$;
+select expect_error($$select staff_portal_agenda('$$ || (select v from ctx where k='tok_cami') || $$', current_date, current_date + 100)$$, 'RANGO_INVALIDO');
+select staff_portal_set_status((select v from ctx where k='tok_cami'), (select v from ctx where k='cita_cami')::uuid, 'no_asistio');
+select expect_error($$select staff_portal_set_status('$$ || (select v from ctx where k='tok_cami') || $$', '$$ || (select v from ctx where k='cita_cami') || $$', 'pendiente')$$, 'DATOS_INVALIDOS');
+-- Las citas de otra persona, no
+reset role;
+insert into ctx select 'cita_otra', id::text from appointments where staff_id is distinct from (select v from ctx where k='cami')::uuid and business_id = (select business_id from staff where name = 'Cami') limit 1;
+set role anon;
+select expect_error($$select staff_portal_set_status('$$ || (select v from ctx where k='tok_cami') || $$', '$$ || (select v from ctx where k='cita_otra') || $$', 'cancelada')$$, 'CITA_NO_EXISTE');
+do $$ declare s jsonb := staff_portal_stats((select v from ctx where k='tok_cami'), 30); begin
+  assert s ? 'appointments' and s ? 'revenue' and s ? 'customers' and s ? 'top_services' and s ? 'upcoming', 'sus números: ' || s::text;
+  assert (s->>'upcoming')::int = 0, 'la de las cejas ya no está pendiente: ' || s::text;
+end $$;
+reset role;
+do $$ begin assert (select status from appointments where id = (select v from ctx where k='cita_cami')::uuid) = 'no_asistio'; end $$;
+delete from appointments where id = (select v from ctx where k='cita_cami')::uuid;
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+
 -- Si Cami deja el equipo, sus servicios se ocultan (si no, saldrían como del dueño); si vuelve, se ven
 update staff set active = false where id = (select v from ctx where k='cami')::uuid;
 reset role;

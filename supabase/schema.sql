@@ -2437,7 +2437,7 @@ begin
   return jsonb_build_object(
     'staff', jsonb_build_object('id', st.id, 'name', st.name, 'photo_url', st.photo_url, 'specialty', st.specialty),
     'business', jsonb_build_object('name', b.name, 'slug', b.slug, 'logo_url', b.logo_url, 'color_primary', b.color_primary,
-                                   'currency', b.currency, 'usd_prices', b.usd_prices),
+                                   'currency', b.currency, 'usd_prices', b.usd_prices, 'timezone', b.timezone),
     -- Hace todos los servicios del negocio: entonces no tiene servicios propios que cambiar
     'all_services', not st.own_services and not exists (select 1 from staff_services where staff_id = st.id),
     'services', coalesce((
@@ -2502,6 +2502,90 @@ begin
          is_extra = coalesce(p_is_extra, is_extra)
    where id = p_id and business_id = st.business_id;
   return p_id;
+end;
+$$;
+
+-- Su agenda: sus citas entre dos días (como mucho 62), en la hora del negocio
+create or replace function public.staff_portal_agenda(p_token text, p_from date, p_to date)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  st staff := _staff_by_token(p_token);
+  v_tz text;
+begin
+  if p_from is null or p_to is null or p_to < p_from or p_to - p_from > 62 then raise exception 'RANGO_INVALIDO'; end if;
+  select timezone into v_tz from businesses where id = st.business_id;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+             'id', a.id, 'starts_at', a.starts_at, 'ends_at', a.ends_at, 'status', a.status,
+             'customer_name', a.customer_name, 'customer_phone', a.customer_phone, 'customer_note', a.customer_note,
+             'total', a.total, 'source', a.source,
+             'services', coalesce((select jsonb_agg(s.name order by s.name) from appointment_services s where s.appointment_id = a.id), '[]'::jsonb))
+           order by a.starts_at)
+    from appointments a
+    where a.staff_id = st.id
+      and a.starts_at >= (p_from::timestamp at time zone v_tz)
+      and a.starts_at < ((p_to + 1)::timestamp at time zone v_tz)), '[]'::jsonb);
+end;
+$$;
+
+-- Cambia el estado de una de SUS citas (confirmar, vino, no vino, cancelar o volver a confirmada)
+create or replace function public.staff_portal_set_status(p_token text, p_id uuid, p_status text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  st staff := _staff_by_token(p_token);
+  a appointments;
+begin
+  if p_status not in ('confirmada', 'completada', 'no_asistio', 'cancelada') then raise exception 'DATOS_INVALIDOS'; end if;
+  select * into a from appointments where id = p_id and staff_id = st.id;
+  if not found then raise exception 'CITA_NO_EXISTE'; end if;
+  if a.status = 'cancelada' then raise exception 'CITA_NO_MODIFICABLE'; end if;
+  update appointments set status = p_status where id = a.id;
+end;
+$$;
+
+-- Apunta una cita a mano con ella (lo que le piden por WhatsApp o en persona): solo con sus servicios
+create or replace function public.staff_portal_create_appointment(
+  p_token text, p_service_ids uuid[], p_date date, p_time text, p_name text, p_phone text, p_note text default null)
+returns uuid language plpgsql volatile security definer set search_path = public as $$
+declare
+  st staff := _staff_by_token(p_token);
+  b businesses;
+begin
+  if p_service_ids is null or cardinality(p_service_ids) = 0 or cardinality(p_service_ids) > 10 then raise exception 'SERVICIOS_INVALIDOS'; end if;
+  if not _staff_can_do(st.id, p_service_ids)
+     or exists (select 1 from unnest(p_service_ids) x where not exists (select 1 from services s where s.id = x and s.business_id = st.business_id)) then
+    raise exception 'SERVICIOS_INVALIDOS';
+  end if;
+  select * into b from businesses where id = st.business_id;
+  return _manual_appointment(b, p_service_ids, p_date, p_time, p_name, p_phone, p_note, st.id, null);
+end;
+$$;
+
+-- Sus números de los últimos p_days días (7, 30 o 90)
+create or replace function public.staff_portal_stats(p_token text, p_days int default 30)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  st staff := _staff_by_token(p_token);
+  v_days int := least(greatest(coalesce(p_days, 30), 1), 366);
+  v_from timestamptz := now() - make_interval(days => v_days);
+begin
+  return (
+    select jsonb_build_object(
+      'days', v_days,
+      'appointments', count(*) filter (where a.status <> 'cancelada'),
+      'done', count(*) filter (where _appt_done(a.status, a.ends_at)),
+      'no_show', count(*) filter (where a.status = 'no_asistio'),
+      'cancelled', count(*) filter (where a.status = 'cancelada'),
+      'revenue', coalesce(sum(a.total) filter (where _appt_done(a.status, a.ends_at)), 0),
+      'customers', count(distinct a.customer_phone) filter (where a.status <> 'cancelada'),
+      'upcoming', (select count(*) from appointments u where u.staff_id = st.id and u.status in ('pendiente', 'confirmada') and u.starts_at > now()),
+      'top_services', coalesce((
+        select jsonb_agg(jsonb_build_object('name', t.name, 'count', t.n) order by t.n desc)
+        from (select s.name, count(*) n from appointments x join appointment_services s on s.appointment_id = x.id
+              where x.staff_id = st.id and x.starts_at >= v_from and x.starts_at <= now() and x.status <> 'cancelada'
+              group by s.name order by count(*) desc limit 5) t), '[]'::jsonb))
+    from appointments a
+    where a.staff_id = st.id and a.starts_at >= v_from and a.starts_at <= now());
 end;
 $$;
 
@@ -2750,20 +2834,19 @@ $$;
 -- Cita creada por el dueño desde su agenda (puede ser a cualquier hora)
 drop function if exists public.owner_create_appointment(uuid[], date, text, text, text, text);
 drop function if exists public.owner_create_appointment(uuid[], date, text, text, text, text, uuid);
-create or replace function public.owner_create_appointment(
-  p_service_ids uuid[], p_date date, p_time text, p_name text, p_phone text, p_note text default null,
-  p_staff uuid default null, p_options jsonb default null)
+-- Una cita apuntada a mano (por el dueño o por una profesional con su enlace): a cualquier hora,
+-- sin más regla que no pisar otra cita de esa persona (o de la agenda del negocio)
+create or replace function public._manual_appointment(
+  b businesses, p_service_ids uuid[], p_date date, p_time text, p_name text, p_phone text,
+  p_note text, p_staff uuid, p_options jsonb)
 returns uuid language plpgsql volatile security definer set search_path = public as $$
 declare
-  b businesses;
   v_dur int;
   v_total numeric;
   v_start timestamptz;
   v_lane smallint;
   v_id uuid;
 begin
-  select * into b from businesses where owner_id = auth.uid();
-  if not found then raise exception 'SIN_NEGOCIO'; end if;
   if business_effective_plan(b.plan, b.trial_ends_at, b.paid_until) is null then
     raise exception 'NEGOCIO_INACTIVO';
   end if;
@@ -2795,6 +2878,19 @@ begin
   select v_id, c.service_id, c.option_id, c.name, c.price, c.duration_min
     from _chosen_services(b.id, p_service_ids, p_options, false) c;
   return v_id;
+end;
+$$;
+
+create or replace function public.owner_create_appointment(
+  p_service_ids uuid[], p_date date, p_time text, p_name text, p_phone text, p_note text default null,
+  p_staff uuid default null, p_options jsonb default null)
+returns uuid language plpgsql volatile security definer set search_path = public as $$
+declare
+  b businesses;
+begin
+  select * into b from businesses where owner_id = auth.uid();
+  if not found then raise exception 'SIN_NEGOCIO'; end if;
+  return _manual_appointment(b, p_service_ids, p_date, p_time, p_name, p_phone, p_note, p_staff, p_options);
 end;
 $$;
 
@@ -3650,6 +3746,10 @@ grant execute on function public.staff_portal(text) to anon, authenticated;
 grant execute on function public.staff_portal_save_service(text, uuid, text, numeric, int, text, boolean, boolean) to anon, authenticated;
 grant execute on function public.staff_portal_save_schedule(text, jsonb) to anon, authenticated;
 grant execute on function public.staff_portal_save_profile(text, text) to anon, authenticated;
+grant execute on function public.staff_portal_agenda(text, date, date) to anon, authenticated;
+grant execute on function public.staff_portal_set_status(text, uuid, text) to anon, authenticated;
+grant execute on function public.staff_portal_create_appointment(text, uuid[], date, text, text, text, text) to anon, authenticated;
+grant execute on function public.staff_portal_stats(text, int) to anon, authenticated;
 grant execute on function public.get_payment_info() to authenticated;
 grant execute on function public.submit_payment_claim(int, numeric, text, text, text) to authenticated;
 grant execute on function public.save_owner_push_subscription(text, text, text) to authenticated;
@@ -3734,6 +3834,7 @@ revoke execute on function public.staff_services_guard() from anon;
 revoke execute on function public.services_guard() from anon;
 revoke execute on function public._chosen_services(uuid, uuid[], jsonb, boolean) from anon, authenticated;
 revoke execute on function public._staff_by_token(text) from anon, authenticated;
+revoke execute on function public._manual_appointment(businesses, uuid[], date, text, text, text, text, uuid, jsonb) from anon, authenticated;
 revoke execute on function public._required_services(uuid[]) from anon, authenticated;
 revoke execute on function public._owner_does(uuid[]) from anon, authenticated;
 revoke execute on function public._staff_hide_services() from anon;
