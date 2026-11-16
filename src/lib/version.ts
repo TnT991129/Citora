@@ -39,6 +39,7 @@ export const RELEASE_NOTES: ReleaseSection[] = [
     points: [
       'Al añadir a alguien en Mi negocio → Equipo, se abre "Su enlace": mándaselo por WhatsApp y desde su móvil crea sus servicios, sus precios y su horario, sin crear cuenta. Lo anulas cuando quieras.',
       '¿Ya tenías equipo? En Mi negocio → Equipo → "Repartir servicios" dices quién hace cada servicio: las uñas para tu manicura, las pestañas para tu lashista…',
+      'Con su enlace, cada profesional tiene su propio panel: su agenda (confirmar, marcar si vino, apuntar citas), sus números y sus servicios. Solo ve sus citas, nunca las del resto ni las cuentas del salón.',
       'Ponle a cada uno su especialidad (Uñas, Pestañas, Peluquería…): en tu página, los servicios ya no salen mezclados, sino agrupados por especialidad y con quién los hace.',
     ],
   },

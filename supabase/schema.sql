@@ -2448,6 +2448,13 @@ begin
                'shared', (select count(*) from staff_services x where x.service_id = s.id) > 1)
              order by s.is_extra, s.position, s.created_at)
       from services s join staff_services ss on ss.service_id = s.id and ss.staff_id = st.id), '[]'::jsonb),
+    -- Con qué servicios puede apuntar una cita: los suyos, o todos los del negocio si los hace todos
+    'bookable', coalesce((
+      select jsonb_agg(jsonb_build_object('id', s.id, 'name', s.name, 'is_extra', s.is_extra) order by s.is_extra, s.position, s.created_at)
+      from services s
+      where s.business_id = st.business_id and s.active
+        and (exists (select 1 from staff_services ss where ss.staff_id = st.id and ss.service_id = s.id)
+             or (not st.own_services and not exists (select 1 from staff_services ss where ss.staff_id = st.id)))), '[]'::jsonb),
     'schedule', coalesce((
       select jsonb_agg(jsonb_build_object('weekday', d.weekday, 'is_open', d.is_open, 'slots', _slots_json(d.slots)) order by d.weekday)
       from staff_schedule_days d where d.staff_id = st.id), '[]'::jsonb),

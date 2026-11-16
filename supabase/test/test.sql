@@ -634,6 +634,7 @@ do $$ declare p jsonb := staff_portal((select v from ctx where k='tok_ana')); be
   assert p->'staff'->>'name' = 'Ana', 'su nombre: ' || p::text;
   assert (p->>'all_services')::boolean, 'sin servicios elegidos hace todos';
   assert p->'business'->>'name' = 'Spa Mar' and not (p->'business' ? 'owner_id') and not (p->'staff' ? 'edit_token'), 'sin datos privados';
+  assert jsonb_array_length(p->'bookable') >= 1, 'haciendo todo, puede apuntar cualquier servicio: ' || p::text;
 end $$;
 -- Haciendo todos los servicios, no tiene ninguno propio que cambiar
 select expect_error($$select staff_portal_save_service('$$ || (select v from ctx where k='tok_ana') || $$', null, 'Uñas', 100, 30)$$, 'SIN_SERVICIOS_PROPIOS');

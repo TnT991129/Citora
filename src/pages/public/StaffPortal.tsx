@@ -1,6 +1,7 @@
-// Enlace privado de un profesional del equipo (/:slug/equipo/:token): sin cuenta, cambia SUS
-// servicios (nombre, precio, duración, si se ven) y SU horario. Los servicios que comparte con
-// otras personas del equipo solo los ve: los cambia el dueño. Todo pasa por staff_portal_* (schema.sql).
+// Enlace privado de un profesional del equipo (/:slug/equipo/:token): sin cuenta, es su pequeño
+// panel. Agenda (sus citas: confirmar, si vino, cancelar, apuntar a mano), sus números, SUS servicios
+// (nombre, precio, duración, si se ven) y SU horario. Los servicios que comparte con otras personas
+// del equipo solo los ve: los cambia el dueño. Todo pasa por staff_portal_* (schema.sql).
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { TimeChips } from '../../components/TimeChips'
@@ -9,6 +10,7 @@ import { setBrandColor } from '../../lib/brand'
 import { errorMessage } from '../../lib/errors'
 import { duration, money, WEEKDAYS } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
+import { StaffAgenda, StaffStats } from './StaffPortalAgenda'
 
 interface PortalService {
   id: string
@@ -24,8 +26,9 @@ interface PortalService {
 interface PortalDay { weekday: number; is_open: boolean; slots: string[] }
 interface Portal {
   staff: { id: string; name: string; photo_url: string | null; specialty?: string | null }
-  business: { name: string; slug: string; logo_url: string | null; color_primary: string; currency: string; usd_prices: boolean }
+  business: { name: string; slug: string; logo_url: string | null; color_primary: string; currency: string; usd_prices: boolean; timezone: string }
   all_services: boolean
+  bookable?: { id: string; name: string; is_extra: boolean }[]
   services: PortalService[]
   schedule: PortalDay[]
   business_schedule: PortalDay[]
@@ -47,6 +50,7 @@ export default function StaffPortal() {
   const [custom, setCustom] = useState(false)
   const [scheduleDirty, setScheduleDirty] = useState(false)
   const [specialty, setSpecialty] = useState('')
+  const [tab, setTab] = useState<'agenda' | 'numeros' | 'servicios' | 'horario'>('agenda')
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.rpc('staff_portal', { p_token: token })
@@ -148,14 +152,45 @@ export default function StaffPortal() {
         </div>
       </header>
 
+      <nav className="sticky top-[57px] z-10 border-b border-slate-200 bg-white/90 backdrop-blur-lg">
+        <div className="no-scrollbar mx-auto flex max-w-xl gap-1 overflow-x-auto px-3 py-2">
+          {([['agenda', 'Agenda'], ['numeros', 'Números'], ['servicios', 'Servicios'], ['horario', 'Horario']] as const).map(([k, l]) => (
+            <button
+              key={k}
+              onClick={() => setTab(k)}
+              aria-current={tab === k ? 'page' : undefined}
+              className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-bold transition ${tab === k ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+      </nav>
+
       <main className="ui-page mx-auto max-w-xl space-y-6 px-4 py-6">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">Hola, {first} 👋</h1>
           <p className="mt-1 text-slate-600">
-            Aquí cambias tus servicios y tu horario. Lo que guardes lo ven al momento los clientes de {b.name}. Este enlace es solo para ti: no lo compartas.
+            {tab === 'agenda' && 'Tus citas de la semana. Apunta aquí también las que te piden por WhatsApp.'}
+            {tab === 'numeros' && 'Cómo te va: tus citas, tus clientes y lo que más te piden.'}
+            {tab === 'servicios' && `Lo que guardes lo ven al momento los clientes de ${b.name}.`}
+            {tab === 'horario' && 'Tus clientes solo pueden reservar contigo en estas horas.'}
+            {' '}Este enlace es solo para ti: no lo compartas.
           </p>
         </div>
 
+        {tab === 'agenda' && (
+          <StaffAgenda
+            token={token}
+            tz={b.timezone}
+            currency={currency}
+            businessName={b.name}
+            services={(data.bookable || []).filter((s) => !s.is_extra).map((s) => ({ id: s.id, name: s.name, active: true, shared: false }))}
+          />
+        )}
+        {tab === 'numeros' && <StaffStats token={token} currency={currency} />}
+
+        {tab === 'servicios' && (<>
         <section className="card">
           <Field label="Tu especialidad" hint={`En la página de ${b.name}, tus servicios salen agrupados con este título.`}>
             <input className="input" value={specialty} maxLength={40} placeholder="Ej. Uñas, Pestañas, Peluquería" onChange={(e) => setSpecialty(e.target.value)} onBlur={saveSpecialty} />
@@ -205,6 +240,9 @@ export default function StaffPortal() {
           )}
         </section>
 
+        </>)}
+
+        {tab === 'horario' && (
         <section>
           <h2 className="mb-2 px-1 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Tu horario</h2>
           <div className="card space-y-3">
@@ -231,9 +269,10 @@ export default function StaffPortal() {
             {error && <Alert>{error}</Alert>}
           </div>
         </section>
+        )}
       </main>
 
-      {scheduleDirty && (
+      {scheduleDirty && tab === 'horario' && (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur safe-bottom">
           <div className="mx-auto max-w-xl">
             <Button block size="lg" onClick={saveSchedule} loading={busy}>Guardar horario</Button>
