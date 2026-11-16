@@ -75,13 +75,16 @@ export default function BookingFlow() {
   const openDays = new Set((business.schedule || []).filter((d) => d.is_open).map((d) => d.weekday))
   const closed = new Set(business.closed_days || [])
   const isOpen = (key: string) => openDays.has(weekdayOf(key)) && !closed.has(key)
-  // Con equipo, el cliente elige con quién antes del día y la hora (no si son servicios del dueño)
   const withTeam = team.length > 0 && who !== 'dueno'
-  const steps: StepKey[] = withTeam ? ['servicio', 'equipo', 'fecha', 'datos', 'confirmar'] : ['servicio', 'fecha', 'datos', 'confirmar']
+  // Si lo que eligió solo lo hace una persona, la cita es con ella: no hace falta preguntar
+  const onlyOne = withTeam && chosenIds.length > 0 && eligibleTeam.length === 1 ? eligibleTeam[0] : null
+  // "¿Con quién?" solo cuando pueden atenderle dos personas o más
+  const askWho = withTeam && !onlyOne
+  const steps: StepKey[] = askWho ? ['servicio', 'equipo', 'fecha', 'datos', 'confirmar'] : ['servicio', 'fecha', 'datos', 'confirmar']
   const cur = steps[Math.min(step, steps.length - 1)]
   const last = steps.length - 1
   // Con servicios del dueño la cita es con él: no se manda ningún profesional
-  const person = withTeam ? team.find((s) => s.id === staffId) || null : null
+  const person = onlyOne || (withTeam ? team.find((s) => s.id === staffId) || null : null)
 
   const go = (n: number) => {
     setError(null)
@@ -204,7 +207,7 @@ export default function BookingFlow() {
                   <span className="block text-slate-500">Tu cita con</span>
                   <span className="block truncate font-bold">{withTeam ? person?.name || 'Cualquiera disponible' : ownerName}</span>
                 </p>
-                {withTeam && <button onClick={() => go(steps.indexOf('equipo'))} className="text-sm font-semibold text-brand">Cambiar</button>}
+                {askWho && <button onClick={() => go(steps.indexOf('equipo'))} className="text-sm font-semibold text-brand">Cambiar</button>}
               </div>
             )}
             <div className="card">

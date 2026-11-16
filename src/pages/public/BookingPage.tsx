@@ -285,7 +285,7 @@ function EditBooking({ booking, onClose, onDone }: {
       p_time: time,
       p_name: name.trim(),
       p_note: note.trim() || null,
-      p_staff: who === 'dueno' ? null : staffId,
+      p_staff: who === 'dueno' ? null : eligibleTeam.length === 1 ? eligibleTeam[0].id : staffId,
       p_options: optionsFor(selected, choice),
     })
     setBusy(false)
@@ -332,7 +332,7 @@ function EditBooking({ booking, onClose, onDone }: {
               owner={ownerInfo(biz)}
             />
           </div>
-          {team.length > 0 && who !== 'dueno' && (
+          {team.length > 0 && who !== 'dueno' && eligibleTeam.length >= 2 && (
             <div>
               <h3 className="mb-2 font-bold">¿Con quién?</h3>
               <div className="flex flex-wrap gap-2">
@@ -366,7 +366,7 @@ function EditBooking({ booking, onClose, onDone }: {
             />
             {date && (
               <div className="mt-3">
-                <SlotPicker slug={biz.slug} date={date} duration={minutes || 60} value={time} onChange={setTime} staff={who === 'dueno' ? null : staffId} serviceIds={selected} excludeToken={booking.token} />
+                <SlotPicker slug={biz.slug} date={date} duration={minutes || 60} value={time} onChange={setTime} staff={who === 'dueno' ? null : eligibleTeam.length === 1 ? eligibleTeam[0].id : staffId} serviceIds={selected} excludeToken={booking.token} />
               </div>
             )}
           </div>
