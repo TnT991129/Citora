@@ -30,7 +30,7 @@ export const CONFIRM: Record<ConfirmKind, (name: string) => { title: string; tex
   }),
   deactivate: (name) => ({
     title: '¿Inhabilitar este negocio?',
-    text: `Los clientes de ${name} no podrán reservar desde ahora y el dueño solo verá la pantalla de pago. No se borra nada: vuelve a funcionar en cuanto registres un pago.`,
+    text: `Los clientes de ${name} no podrán reservar desde ahora y el dueño solo verá la pantalla de pago. No se borra nada: vuelve a funcionar en cuanto registres un pago. Ojo: si nunca ha pagado, se borra solo a los 5 días.`,
     confirmLabel: 'Sí, inhabilitar',
     danger: true,
   }),

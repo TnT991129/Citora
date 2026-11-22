@@ -262,6 +262,20 @@ alter table public.payment_claims drop constraint if exists payment_claims_proof
 alter table public.payment_claims add constraint payment_claims_proof_required
   check (proof_path is not null and btrim(proof_path) <> '');
 
+-- Pruebas gratis que terminaron sin pagar y se borraron solas (ver _purge_expired_trials). Solo
+-- queda esta ficha mínima, para que las estadísticas (negocios nuevos por mes, prueba → pago) sigan
+-- contando a los que se apuntaron y no pagaron. Sin políticas: solo la leen las funciones.
+create table if not exists public.purged_trials (
+  id uuid primary key,
+  name text not null,
+  code text,
+  business_type text,
+  created_at timestamptz not null,
+  trial_ends_at timestamptz not null,
+  purged_at timestamptz not null default now()
+);
+alter table public.purged_trials enable row level security;
+
 -- Opiniones de los clientes (una por cita). El dueño puede ocultarlas o responder.
 create table if not exists public.reviews (
   id uuid primary key default gen_random_uuid(),
@@ -957,7 +971,7 @@ begin
       case when v_days >= 2 then 'Te quedan ' || v_days || ' días de prueba gratis'
            else initcap(v_when) || ' termina tu prueba gratis' end,
       'Tu prueba gratis termina ' || v_day || '. Suscríbete en Más → Mensualidad para que tus clientes '
-        || 'sigan reservando en ' || p_name || '.'];
+        || 'sigan reservando en ' || p_name || '. Si no, tu app se borra 5 días después.'];
   end if;
   return array[
     case when v_days >= 2 then 'Tu mensualidad vence en ' || v_days || ' días'
@@ -1532,6 +1546,11 @@ begin
     perform cron.unschedule('citora-limpiar-visitas');
   end if;
   perform cron.schedule('citora-limpiar-visitas', '15 8 * * *', $cron$select public._purge_analytics();$cron$);
+  if exists (select 1 from cron.job where jobname = 'citora-borrar-pruebas-vencidas') then
+    perform cron.unschedule('citora-borrar-pruebas-vencidas');
+  end if;
+  -- Una vez al día (8:45 UTC ≈ 4:45 en Cuba): borra las pruebas que terminaron hace más de 5 días sin pagar
+  perform cron.schedule('citora-borrar-pruebas-vencidas', '45 8 * * *', $cron$select public._purge_expired_trials();$cron$);
 exception when others then
   null;
 end;
@@ -3293,6 +3312,113 @@ begin
 end;
 $$;
 
+-- Vuelve a calcular hasta cuándo tiene pagado un negocio después de cambiar o borrar uno de sus
+-- pagos: repasa sus pagos en orden, igual que admin_activate_plan (si aún tenía meses, los nuevos se
+-- suman al final; si no, empiezan el día del pago), y le pone el plan del último pago.
+-- p_old_until: hasta cuándo tenía pagado antes del cambio. Si se le inhabilitó antes de esa fecha
+-- (admin_deactivate_business), no se le devuelven los días al recalcular.
+create or replace function public._replay_payments(p_business uuid, p_old_until timestamptz)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  b businesses;
+  r record;
+  v_until timestamptz;
+  v_plan text;
+  v_cur timestamptz;
+begin
+  if p_business is null then return; end if;
+  select * into b from businesses where id = p_business for update;
+  if not found then return; end if;
+  for r in select id, plan, months, created_at from payments where business_id = p_business order by created_at, id loop
+    v_until := greatest(r.created_at, coalesce(v_until, r.created_at)) + make_interval(months => r.months);
+    v_plan := r.plan;
+    update payments set paid_until = v_until where id = r.id;
+  end loop;
+  -- Con la cortesía activa, lo que cambia es la fecha a la que vuelve si se le quita
+  v_cur := case when b.comped then b.comped_prev_paid_until else b.paid_until end;
+  if v_until is not null and v_cur is not null and p_old_until is not null and v_cur < p_old_until then
+    v_until := least(v_until, v_cur);
+  end if;
+  if b.comped then
+    update businesses set comped_prev_paid_until = v_until, comped_prev_plan = coalesce(v_plan, comped_prev_plan) where id = b.id;
+  else
+    update businesses set paid_until = v_until, plan = coalesce(v_plan, plan) where id = b.id;
+  end if;
+end;
+$$;
+
+-- El administrador corrige un pago ya registrado: plan, meses, importe o nota. Si cambian los meses,
+-- el negocio gana o pierde esa diferencia (ver _replay_payments). Las estadísticas de cobros salen
+-- de la tabla payments, así que cambian solas.
+create or replace function public.admin_update_payment(p_payment uuid, p_plan text, p_months int,
+                                                       p_amount numeric default null, p_note text default null)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  p payments;
+  v_old timestamptz;
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  if p_plan not in ('basico', 'plus', 'ultra') then raise exception 'PLAN_INVALIDO'; end if;
+  if p_months is null or p_months not between 1 and 24 then raise exception 'MESES_INVALIDOS'; end if;
+  if p_amount is not null and (p_amount < 0 or p_amount > 99999999) then raise exception 'IMPORTE_INVALIDO'; end if;
+  select * into p from payments where id = p_payment for update;
+  if not found then raise exception 'PAGO_NO_EXISTE'; end if;
+  select max(paid_until) into v_old from payments where business_id = p.business_id;
+  update payments
+     set plan = p_plan, months = p_months, amount = p_amount, note = nullif(btrim(coalesce(p_note, '')), '')
+   where id = p.id;
+  perform _replay_payments(p.business_id, v_old);
+end;
+$$;
+
+-- El administrador borra un pago (ej. uno registrado por error). El negocio pierde los meses que le
+-- dio ese pago; si ya no le quedan, vuelve a su prueba si sigue vigente o queda inhabilitado.
+create or replace function public.admin_delete_payment(p_payment uuid)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  p payments;
+  v_old timestamptz;
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  select * into p from payments where id = p_payment for update;
+  if not found then raise exception 'PAGO_NO_EXISTE'; end if;
+  select max(paid_until) into v_old from payments where business_id = p.business_id;
+  delete from payments where id = p.id;
+  perform _replay_payments(p.business_id, v_old);
+end;
+$$;
+
+-- Borra para siempre los negocios cuya prueba gratis terminó hace más de 5 días sin que pagaran
+-- nunca: su app, servicios, citas, clientes, fotos... y la cuenta del dueño (su correo queda libre
+-- para volver a empezar). No toca a quien pagó alguna vez, a los de cortesía ni a quien tiene un
+-- comprobante de pago sin revisar. Se llama una vez al día (ver tareas programadas, sección 3).
+-- Devuelve cuántos borró.
+create or replace function public._purge_expired_trials()
+returns int language plpgsql volatile security definer set search_path = public as $$
+declare
+  r record;
+  n int := 0;
+begin
+  for r in
+    select b.* from businesses b
+    where not b.comped and b.paid_until is null and b.comped_prev_paid_until is null
+      and b.trial_ends_at < now() - interval '5 days'
+      and not exists (select 1 from payments p where p.business_id = b.id)
+      and not exists (select 1 from payment_claims c where c.business_id = b.id and c.status = 'pendiente')
+      and not exists (select 1 from platform_admins a where a.user_id = b.owner_id)
+    for update of b skip locked
+  loop
+    insert into purged_trials (id, name, code, business_type, created_at, trial_ends_at)
+    values (r.id, r.name, r.code, r.business_type, r.created_at, r.trial_ends_at)
+    on conflict (id) do nothing;
+    delete from businesses where id = r.id;
+    delete from auth.users where id = r.owner_id;
+    n := n + 1;
+  end loop;
+  return n;
+end;
+$$;
+
 -- Borra para siempre a un dueño inhabilitado (o que nunca creó su negocio): su negocio, servicios,
 -- citas, clientes, opiniones, etc. Con p_delete_account también su cuenta (su correo queda libre).
 -- No se puede con un negocio en prueba o pagando: primero hay que inhabilitarlo.
@@ -3316,13 +3442,14 @@ begin
 end;
 $$;
 
--- Inhabilita un negocio ya (por ejemplo, si se activó por error)
+-- Inhabilita un negocio ya (por ejemplo, si se activó por error). Si nunca pagó, su fecha de pago
+-- sigue vacía: así se sabe que es una prueba sin pagar (ver _purge_expired_trials).
 create or replace function public.admin_deactivate_business(p_business uuid)
 returns void language plpgsql volatile security definer set search_path = public as $$
 begin
   if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
   update businesses
-     set paid_until = least(coalesce(paid_until, now()), now()),
+     set paid_until = case when paid_until is null then null else least(paid_until, now()) end,
          trial_ends_at = least(trial_ends_at, now())
    where id = p_business;
 end;
@@ -3410,8 +3537,11 @@ begin
     'months', (
       select jsonb_agg(jsonb_build_object(
         'month', to_char(m, 'YYYY-MM'),
+        -- También cuentan las pruebas que se borraron solas (purged_trials): se apuntaron igual
         'signups', (select count(*) from businesses b
-                    where b.created_at >= m at time zone v_tz and b.created_at < (m + interval '1 month') at time zone v_tz),
+                    where b.created_at >= m at time zone v_tz and b.created_at < (m + interval '1 month') at time zone v_tz)
+                 + (select count(*) from purged_trials t
+                    where t.created_at >= m at time zone v_tz and t.created_at < (m + interval '1 month') at time zone v_tz),
         'revenue', (select coalesce(sum(p.amount), 0) from payments p left join businesses b2 on b2.id = p.business_id
                     where p.created_at >= m at time zone v_tz and p.created_at < (m + interval '1 month') at time zone v_tz
                       and not coalesce(b2.comped, false)),
@@ -3429,7 +3559,9 @@ begin
         'appointments', (select count(*) from appointments),
         'appointments_30d', (select count(*) from appointments where created_at > now() - interval '30 days'),
         'active_30d', (select count(distinct business_id) from appointments where created_at > now() - interval '30 days'),
-        'ended_trials', (select count(*) from businesses where trial_ends_at < now()),
+        'ended_trials', (select count(*) from businesses where trial_ends_at < now()) + (select count(*) from purged_trials),
+        'purged', (select count(*) from purged_trials),
+        'purged_30d', (select count(*) from purged_trials where purged_at > now() - interval '30 days'),
         'converted', (select count(*) from businesses b
                       where b.trial_ends_at < now() and not b.comped
                         and exists (select 1 from payments p where p.business_id = b.id)))),
@@ -3461,13 +3593,13 @@ begin
       where (business_status(b.plan, b.trial_ends_at, b.paid_until) = 'activo' and b.paid_until < now() + interval '7 days')
          or (business_status(b.plan, b.trial_ends_at, b.paid_until) = 'prueba' and b.trial_ends_at < now() + interval '3 days')),
     'recent_payments', (select coalesce(jsonb_agg(jsonb_build_object(
-        'name', t.name, 'code', t.code, 'plan', t.plan, 'months', t.months, 'amount', t.amount,
-        'note', t.note, 'created_at', t.created_at) order by t.created_at desc), '[]'::jsonb)
-      from (select coalesce(b.name, p.business_name || ' (eliminado)') as name, coalesce(b.code, p.business_code) as code,
-                   p.plan, p.months, p.amount, p.note, p.created_at
+        'id', t.id, 'name', t.name, 'code', t.code, 'plan', t.plan, 'months', t.months, 'amount', t.amount,
+        'note', t.note, 'paid_until', t.paid_until, 'deleted', t.deleted, 'created_at', t.created_at) order by t.created_at desc), '[]'::jsonb)
+      from (select p.id, coalesce(b.name, p.business_name || ' (eliminado)') as name, coalesce(b.code, p.business_code) as code,
+                   p.plan, p.months, p.amount, p.note, p.paid_until, b.id is null as deleted, p.created_at
             from payments p left join businesses b on b.id = p.business_id
             where not coalesce(b.comped, false)
-            order by p.created_at desc limit 15) t)
+            order by p.created_at desc limit 300) t)
   );
 end;
 $$;
@@ -3782,6 +3914,8 @@ grant execute on function public.admin_list_surveys() to authenticated;
 grant execute on function public.admin_set_survey_active(uuid, boolean) to authenticated;
 grant execute on function public.admin_delete_survey(uuid) to authenticated;
 grant execute on function public.admin_stats() to authenticated;
+grant execute on function public.admin_update_payment(uuid, text, int, numeric, text) to authenticated;
+grant execute on function public.admin_delete_payment(uuid) to authenticated;
 grant execute on function public.admin_traffic(int) to authenticated;
 grant execute on function public.admin_business_activity() to authenticated;
 grant execute on function public.track_event(uuid, uuid, text, text, text, int, text, text) to anon, authenticated;
@@ -3835,6 +3969,10 @@ revoke execute on function public._notify_moderation(uuid, text) from anon, auth
 revoke execute on function public._notify_admin_push(text, text) from anon, authenticated;
 revoke execute on function public._approve_unmoderated_photos() from anon, authenticated;
 revoke execute on function public._purge_analytics() from anon, authenticated;
+revoke execute on function public._purge_expired_trials() from anon, authenticated;
+revoke execute on function public._replay_payments(uuid, timestamptz) from anon, authenticated;
+revoke execute on function public.admin_update_payment(uuid, text, int, numeric, text) from anon;
+revoke execute on function public.admin_delete_payment(uuid) from anon;
 revoke execute on function public._clean_survey_questions(jsonb) from anon, authenticated;
 revoke execute on function public._appointments_notify() from anon;
 revoke execute on function public.staff_services_guard() from anon;

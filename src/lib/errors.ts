@@ -24,6 +24,8 @@ const MESSAGES: Record<string, string> = {
   PLAN_INVALIDO: 'Plan no válido.',
   MESES_INVALIDOS: 'Número de meses no válido.',
   DIAS_INVALIDOS: 'Número de días no válido.',
+  IMPORTE_INVALIDO: 'Importe no válido.',
+  PAGO_NO_EXISTE: 'Ese pago ya no existe. Actualiza la página.',
   NO_DISPONIBLE: 'Tu plan actual no incluye esta función.',
   OPINION_NO_PERMITIDA: 'Podrás dejar tu opinión cuando hayas ido a tu cita.',
   OPINION_FUERA_DE_PLAZO: 'Ya pasó el plazo para opinar sobre esta cita.',

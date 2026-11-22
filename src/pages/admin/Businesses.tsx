@@ -10,10 +10,10 @@ import { publicUrl } from '../../lib/url'
 import { waLink } from '../../lib/whatsapp'
 import { Icon } from '../panel/Panel'
 import {
-  ADMIN_TZ, agoShort, contactMessage, hasBusiness, helpMessage, mergeRows, rowState, STEPS, stepsCount, stepsDone, stuckReason,
-  type Activity, type AdminOwner, type AdminRow, type OwnerWithBusiness,
+  ADMIN_TZ, agoShort, contactMessage, expiredMessage, hasBusiness, helpMessage, mergeRows, purgeAt, rowState, STEPS, stepsCount, stepsDone,
+  stuckReason, trialLeft, trialUsed, type Activity, type AdminOwner, type AdminRow, type OwnerWithBusiness,
 } from './adminData'
-import { BizAvatar, Drawer, FilterPills, PageTitle, StateCell, StateChip, StepsBar } from './adminUi'
+import { BizAvatar, Drawer, FilterPills, PageTitle, StateCell, StateChip, StateDetail, StepsBar } from './adminUi'
 import { planName } from '../../lib/plans'
 import { ActivateModal, CONFIRM, ConfirmModal, DeleteModal, TimezoneModal, type ConfirmKind, type Prices } from './OwnerModals'
 
@@ -117,7 +117,7 @@ export function Businesses({ initialFilter = 'todos' }: { initialFilter?: BizFil
                       </span>
                       <span className="mt-1 flex min-w-0 items-center gap-2">
                         <StateChip owner={r} />
-                        <StepsBar done={r.act ? stepsCount(r.act) : null} />
+                        <StateDetail owner={r} className="min-w-0" />
                       </span>
                     </span>
                     <span className="text-right">
@@ -238,6 +238,27 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
           </span>
         </div>
 
+        {/* Prueba: cuánto le queda, con barra */}
+        {state === 'prueba' && r.trial_ends_at && (
+          <div className="mt-4 rounded-2xl bg-sky-50 p-4">
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="text-lg font-extrabold text-sky-900">{trialLeft(r.trial_ends_at)} de prueba</p>
+              <p className="shrink-0 text-xs font-semibold text-sky-700">{trialUsed(r)} % usado</p>
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-sky-100">
+              <div className="h-full rounded-full bg-sky-500" style={{ width: `${trialUsed(r)}%` }} />
+            </div>
+          </div>
+        )}
+        {/* Prueba acabada sin pagar: se borra sola */}
+        {purgeAt(r) && (
+          <div className="mt-4">
+            <Alert kind="warning">
+              Terminó la prueba sin pagar. <b>Se borra para siempre el {fullDateFromIso(purgeAt(r)!, ADMIN_TZ)}</b> si no paga antes (o si no le das más días de prueba).
+            </Alert>
+          </div>
+        )}
+
         {stuck && <div className="mt-4"><Alert kind="warning">{stuck}.</Alert></div>}
 
         {a && (
@@ -250,7 +271,7 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
 
         <div className="mt-5 space-y-2.5">
           {r.whatsapp && (
-            <LinkButton href={waLink(r.whatsapp, stuck ? helpMessage(name) : contactMessage(name))} variant="whatsapp" block newTab>
+            <LinkButton href={waLink(r.whatsapp, purgeAt(r) ? expiredMessage(name, true) : stuck ? helpMessage(name) : contactMessage(name))} variant="whatsapp" block newTab>
               <WhatsAppIcon className="h-4 w-4" /> {stuck ? 'Ofrecerle ayuda por WhatsApp' : 'Escribir por WhatsApp'}
             </LinkButton>
           )}

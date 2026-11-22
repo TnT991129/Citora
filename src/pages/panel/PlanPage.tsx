@@ -38,6 +38,10 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
   const trialTotal = Math.max(1, Math.round((new Date(status.trial_ends_at).getTime() - new Date(business.created_at).getTime()) / 86400000))
   const trialUsed = Math.min(100, Math.max(4, Math.round(((trialTotal - Math.max(trialLeft, 0)) / trialTotal) * 100)))
   const sinceDays = Math.max(1, Math.ceil((Date.now() - new Date(business.created_at).getTime()) / 86400000))
+  // Prueba acabada sin pagar nunca: a los 5 días se borra sola (ver _purge_expired_trials en schema.sql)
+  const purgeDay = status.status === 'vencido' && !status.paid_until && !business.comped
+    ? fullDateFromIso(new Date(new Date(status.trial_ends_at).getTime() + 5 * 86400000).toISOString(), business.timezone)
+    : null
   const [info, setInfo] = useState<PaymentInfo | null>(null)
   const [history, setHistory] = useState<PaymentRow[]>([])
   const [claims, setClaims] = useState<PaymentClaim[]>([])
@@ -146,7 +150,12 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-extrabold">{blocked ? 'Activa tu app' : 'Mensualidad'}</h1>
-        {blocked && <p className="mt-1 text-slate-600">Tu prueba o tu mensualidad terminó. Paga la mensualidad para que tus clientes vuelvan a reservar. No se ha borrado nada.</p>}
+        {blocked && (
+          <p className="mt-1 text-slate-600">
+            Tu prueba o tu mensualidad terminó. Paga la mensualidad para que tus clientes vuelvan a reservar.{' '}
+            {purgeDay ? <b>Si no pagas, tu app se borra para siempre el {purgeDay}.</b> : 'No se ha borrado nada.'}
+          </p>
+        )}
       </div>
 
       <section className="card">
@@ -166,7 +175,7 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
               <div className="h-full rounded-full bg-brand transition-all duration-700" style={{ width: `${trialUsed}%` }} />
             </div>
             <p className="mt-2 text-sm text-slate-500">
-              Termina el {fullDateFromIso(status.trial_ends_at, business.timezone)}. Si no pagas, tu página deja de aceptar reservas, pero no se borra nada.
+              Termina el {fullDateFromIso(status.trial_ends_at, business.timezone)}. Si no pagas, tu página deja de aceptar reservas, y a los 5 días tu app se borra.
             </p>
           </>
         )}

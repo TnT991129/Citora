@@ -1,6 +1,7 @@
 // Datos y reglas del panel de administrador: qué es cada negocio, en qué estado está, qué pasos ha
 // dado desde que creó su app y si está atascado. Las cifras vienen de admin_list_owners y
 // admin_business_activity (ver schema.sql).
+import { serverNow } from '../../lib/clockSkew'
 import { daysLeft, fullDateFromIso, MONTHS } from '../../lib/format'
 import type { BusinessStatus, PlanKey } from '../../lib/types'
 
@@ -133,22 +134,71 @@ export function shortDay(iso: string): string {
 /** Cuándo dejó de funcionar un negocio vencido */
 export const expiredAt = (r: AdminOwner) => r.paid_until || r.trial_ends_at
 
-export function stateInfo(r: AdminOwner): { label: string; cls: string; detail: string } {
+// ---------------------------------------------------------------------
+// Prueba gratis: cuánto le queda y, si acabó sin pagar, cuándo se borra sola
+// ---------------------------------------------------------------------
+
+/** Días tras el fin de la prueba sin pagar en los que se borra el negocio (ver _purge_expired_trials en schema.sql) */
+export const PURGE_AFTER_DAYS = 5
+
+/** "Quedan 3 días", "Quedan 5 h", "Acaba en menos de 1 h" */
+export function trialLeft(endsAt: string): string {
+  const ms = new Date(endsAt).getTime() - serverNow()
+  if (ms <= 0) return 'Terminada'
+  const h = Math.floor(ms / 3600000)
+  if (h < 1) return 'Acaba en menos de 1 h'
+  if (h < 24) return `Quedan ${h} h`
+  const d = daysLeft(endsAt)
+  return `Quedan ${d} ${d === 1 ? 'día' : 'días'}`
+}
+
+/** Qué parte de la prueba ha usado ya (0 a 100), para la barra */
+export function trialUsed(r: AdminOwner): number {
+  const start = new Date(r.created_at || r.signed_up_at).getTime()
+  const end = r.trial_ends_at ? new Date(r.trial_ends_at).getTime() : start
+  if (end <= start) return 100
+  return Math.min(100, Math.max(0, Math.round(((serverNow() - start) / (end - start)) * 100)))
+}
+
+/** Si es una prueba que acabó sin pagar nunca, cuándo se borra; si no, null */
+export function purgeAt(r: AdminOwner): string | null {
+  if (r.comped || r.status !== 'vencido' || r.paid_until || !r.trial_ends_at) return null
+  return new Date(new Date(r.trial_ends_at).getTime() + PURGE_AFTER_DAYS * 86400000).toISOString()
+}
+
+/** "Se borra en 3 días", "Se borra hoy" */
+export function purgeText(at: string): string {
+  const d = daysLeft(at)
+  return d <= 0 ? 'Se borra hoy' : d === 1 ? 'Se borra mañana' : `Se borra en ${d} días`
+}
+
+/**
+ * Estado: etiqueta, color y detalle. urgent: hay que mirarlo ya (la prueba acaba en 2 días o
+ * menos, o el negocio se va a borrar).
+ */
+export function stateInfo(r: AdminOwner): { label: string; cls: string; detail: string; urgent: boolean } {
   const s = rowState(r)
   const [label, cls] = STATE_STYLE[s]
   let detail = ''
+  let urgent = false
   if (s === 'cortesia') detail = 'Gratis siempre'
   else if (s === 'sin_negocio') detail = 'No terminó de crearlo'
   else if (s === 'prueba' && r.trial_ends_at) {
-    const d = daysLeft(r.trial_ends_at)
-    detail = d <= 0 ? 'Termina hoy' : `Quedan ${d} ${d === 1 ? 'día' : 'días'}`
+    detail = trialLeft(r.trial_ends_at)
+    urgent = daysLeft(r.trial_ends_at) <= 2
   } else if (s === 'activo' && r.paid_until) detail = `Hasta el ${shortDay(r.paid_until)}`
   else if (s === 'vencido') {
-    const at = expiredAt(r)
-    const d = at ? daysSince(at) : 0
-    detail = !at ? 'Sin pagar' : d === 0 ? 'Desde hoy' : `Hace ${d} ${d === 1 ? 'día' : 'días'}`
+    const purge = purgeAt(r)
+    if (purge) {
+      detail = purgeText(purge)
+      urgent = true
+    } else {
+      const at = expiredAt(r)
+      const d = at ? daysSince(at) : 0
+      detail = !at ? 'Sin pagar' : d === 0 ? 'Desde hoy' : `Hace ${d} ${d === 1 ? 'día' : 'días'}`
+    }
   }
-  return { label, cls, detail }
+  return { label, cls, detail, urgent }
 }
 
 /** "hace 20 min", "hace 3 h", "ayer", "hace 5 días" */
@@ -182,7 +232,9 @@ export const helpMessage = (name: string) =>
 
 export const expiredMessage = (name: string, wasTrial: boolean) =>
   `Hola, te escribo de Citora. La app de ${name} dejó de recibir reservas porque terminó ${wasTrial ? 'tu prueba gratis' : 'tu mensualidad'}. ` +
-  'No se ha borrado nada: en cuanto pagues en tu panel > Mensualidad vuelve a funcionar. ¿Te ayudo?'
+  (wasTrial
+    ? `Si pagas en tu panel > Mensualidad en los ${PURGE_AFTER_DAYS} días siguientes, vuelve a funcionar con todo lo que tenías; si no, se borra. ¿Te ayudo?`
+    : 'No se ha borrado nada: en cuanto pagues en tu panel > Mensualidad vuelve a funcionar. ¿Te ayudo?')
 
 export const contactMessage = (name: string) => `Hola, te escribo de Citora sobre ${name}.`
 

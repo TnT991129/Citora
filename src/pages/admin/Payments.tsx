@@ -1,5 +1,5 @@
 // Pestaña "Cobros": comprobantes que los dueños mandaron desde su panel (por revisar y ya revisados),
-// los pagos registrados y el botón de registrar un pago a mano.
+// los pagos registrados (cada uno se puede corregir o borrar) y el botón de registrar un pago a mano.
 import { useCallback, useEffect, useState } from 'react'
 import { Alert, Button, Field, Modal, PageLoader, WhatsAppIcon, flash } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
@@ -28,7 +28,19 @@ interface AdminClaim {
   businesses: { name: string; code: string; whatsapp: string } | null
 }
 
-interface RecentPayment { name: string; code: string; plan: PlanKey; months: number; amount: number | null; note: string | null; created_at: string }
+export interface RecentPayment {
+  id: string
+  name: string
+  code: string
+  plan: PlanKey
+  months: number
+  amount: number | null
+  note: string | null
+  paid_until: string
+  /** El negocio ya no existe: corregir el pago solo cambia el historial y las cifras */
+  deleted: boolean
+  created_at: string
+}
 
 const months = (n: number) => `${n} ${n === 1 ? 'mes' : 'meses'}`
 
@@ -43,6 +55,7 @@ export function Payments({ onChanged }: { onChanged: () => void }) {
   const [rejecting, setRejecting] = useState<AdminClaim | null>(null)
   const [picking, setPicking] = useState(false)
   const [manual, setManual] = useState<OwnerWithBusiness | null>(null)
+  const [editing, setEditing] = useState<RecentPayment | null>(null)
 
   const load = useCallback(async () => {
     const [c, s, o, p] = await Promise.all([
@@ -159,7 +172,7 @@ export function Payments({ onChanged }: { onChanged: () => void }) {
       </section>
 
       <section>
-        <SectionTitle title="Pagos registrados" />
+        <SectionTitle title="Pagos registrados" right={payments.length > 0 ? <span className="text-xs text-slate-400">Toca uno para corregirlo o borrarlo</span> : undefined} />
         <div className="card overflow-hidden p-0 sm:p-0">
           <div className="grid grid-cols-[64px_minmax(0,1fr)_auto] border-b border-slate-100 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-400 md:grid-cols-[80px_minmax(0,1fr)_96px_128px]">
             <span>Fecha</span><span>Negocio</span><span className="hidden text-right md:block">Meses</span><span className="text-right">Importe</span>
@@ -168,16 +181,22 @@ export function Payments({ onChanged }: { onChanged: () => void }) {
             <p className="px-4 py-6 text-center text-sm text-slate-500">Todavía no hay pagos.</p>
           ) : (
             <ul className="divide-y divide-slate-100 text-sm">
-              {payments.map((p, i) => (
-                <li key={i} className="grid grid-cols-[64px_minmax(0,1fr)_auto] items-center px-4 py-3 md:grid-cols-[80px_minmax(0,1fr)_96px_128px]">
-                  <span className="text-slate-400">{shortDay(p.created_at)}</span>
-                  <span className="min-w-0 pr-3">
-                    <span className="block truncate font-semibold">{p.name}</span>
-                    {p.note && <span className="block truncate text-xs text-slate-400">{p.note}</span>}
-                    <span className="block text-xs text-slate-400 md:hidden">{planName(p.plan)} · {months(p.months)}</span>
-                  </span>
-                  <span className="hidden text-right text-slate-500 md:block">{PLANS[p.plan === 'ultra' ? 'ultra' : 'basico'].short} · {months(p.months)}</span>
-                  <b className="text-right tabular-nums">{p.amount === null ? '—' : money(Number(p.amount), 'CUP')}</b>
+              {payments.map((p) => (
+                <li key={p.id}>
+                  <button
+                    onClick={() => setEditing(p)}
+                    className="grid w-full grid-cols-[64px_minmax(0,1fr)_auto] items-center px-4 py-3 text-left transition hover:bg-slate-50 md:grid-cols-[80px_minmax(0,1fr)_96px_128px]"
+                    aria-label={`Corregir el pago de ${p.name}`}
+                  >
+                    <span className="text-slate-400">{shortDay(p.created_at)}</span>
+                    <span className="min-w-0 pr-3">
+                      <span className="block truncate font-semibold">{p.name}</span>
+                      {p.note && <span className="block truncate text-xs text-slate-400">{p.note}</span>}
+                      <span className="block text-xs text-slate-400 md:hidden">{planName(p.plan)} · {months(p.months)}</span>
+                    </span>
+                    <span className="hidden text-right text-slate-500 md:block">{PLANS[p.plan === 'ultra' ? 'ultra' : 'basico'].short} · {months(p.months)}</span>
+                    <b className="text-right tabular-nums">{p.amount === null ? '—' : money(Number(p.amount), 'CUP')}</b>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -212,7 +231,132 @@ export function Payments({ onChanged }: { onChanged: () => void }) {
       {rejecting && <RejectModal claim={rejecting} busy={busy === rejecting.id} onClose={() => setRejecting(null)} onConfirm={(note) => reject(rejecting, note)} />}
       {picking && <PickBusinessModal owners={owners} onClose={() => setPicking(false)} onPick={(o) => { setPicking(false); setManual(o) }} />}
       {manual && <ActivateModal business={manual} prices={prices} onClose={() => setManual(null)} onDone={() => { setManual(null); reload() }} />}
+      {editing && <EditPaymentModal payment={editing} onClose={() => setEditing(null)} onDone={() => { setEditing(null); reload() }} />}
     </div>
+  )
+}
+
+/**
+ * Corregir o borrar un pago registrado. Si cambian los meses (o se borra), el negocio gana o pierde
+ * esos meses (ver admin_update_payment y admin_delete_payment). Las cifras de Inicio y Números
+ * salen de los pagos, así que cambian solas.
+ */
+function EditPaymentModal({ payment, onClose, onDone }: { payment: RecentPayment; onClose: () => void; onDone: () => void }) {
+  const [plan, setPlan] = useState<'basico' | 'ultra'>(payment.plan === 'ultra' ? 'ultra' : 'basico')
+  const [count, setCount] = useState(payment.months)
+  const [amount, setAmount] = useState(payment.amount === null ? '' : String(Number(payment.amount)))
+  const [note, setNote] = useState(payment.note || '')
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const parsed = amount.trim() === '' ? null : Number(amount)
+  const amountOk = parsed === null || (Number.isFinite(parsed) && parsed >= 0)
+  const diff = count - payment.months
+
+  const save = async () => {
+    setBusy(true)
+    setError(null)
+    const { error } = await supabase.rpc('admin_update_payment', { p_payment: payment.id, p_plan: plan, p_months: count, p_amount: parsed, p_note: note })
+    setBusy(false)
+    if (error) return setError(errorMessage(error))
+    flash('Pago corregido')
+    onDone()
+  }
+
+  const remove = async () => {
+    setBusy(true)
+    setError(null)
+    const { error } = await supabase.rpc('admin_delete_payment', { p_payment: payment.id })
+    setBusy(false)
+    if (error) return setError(errorMessage(error))
+    flash('Pago borrado')
+    onDone()
+  }
+
+  if (confirmDelete) {
+    return (
+      <Modal
+        open
+        onClose={onClose}
+        title="¿Borrar este pago?"
+        footer={
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setConfirmDelete(false)} disabled={busy}>Volver</Button>
+            <Button block variant="danger" onClick={remove} loading={busy}>Sí, borrar el pago</Button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-slate-600">
+            Se borra el pago de <b>{payment.name}</b> del {fullDateFromIso(payment.created_at, ADMIN_TZ)}
+            {payment.amount !== null && <> ({money(Number(payment.amount), 'CUP')})</>} y deja de contar en tus cifras. No se puede deshacer.
+          </p>
+          {!payment.deleted && (
+            <p className="text-slate-600">
+              El negocio <b>pierde {months(payment.months)}</b>. Si ya no le queda nada pagado, vuelve a su prueba si aún la tiene o deja de recibir reservas.
+            </p>
+          )}
+          {error && <Alert>{error}</Alert>}
+        </div>
+      </Modal>
+    )
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Pago · ${payment.name}`}
+      footer={
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setConfirmDelete(true)} disabled={busy} className="!text-red-600">Borrar</Button>
+          <Button block onClick={save} loading={busy} disabled={!amountOk}>Guardar cambios</Button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-slate-600">
+          Registrado el {fullDateFromIso(payment.created_at, ADMIN_TZ)}{payment.code && <> · código <b className="font-mono">{payment.code}</b></>}.
+          {!payment.deleted && <> Le dio servicio hasta el {fullDateFromIso(payment.paid_until, ADMIN_TZ)}.</>}
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {(['basico', 'ultra'] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setPlan(k)}
+              aria-pressed={plan === k}
+              className={`rounded-xl border p-3 text-left font-bold transition ${plan === k ? 'border-brand bg-brand/5 ring-1 ring-brand' : 'border-slate-200'}`}
+            >
+              {PLANS[k].short}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Meses">
+            <select className="input" value={count} onChange={(e) => setCount(Number(e.target.value))}>
+              {Array.from({ length: 24 }, (_, i) => i + 1).map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </Field>
+          <Field label="Importe recibido (CUP)">
+            <input className="input" type="number" inputMode="decimal" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </Field>
+        </div>
+        <Field label="Nota (opcional)">
+          <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. Transfermóvil 14:32" />
+        </Field>
+        {!amountOk && <Alert>Escribe un importe válido (0 o más), o déjalo vacío.</Alert>}
+        {payment.deleted
+          ? <p className="text-xs text-slate-500">Este negocio ya no existe: solo cambian el historial y tus cifras.</p>
+          : diff !== 0 && (
+            <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              {diff > 0 ? <>El negocio <b>gana {months(diff)}</b> de servicio.</> : <>El negocio <b>pierde {months(-diff)}</b> de servicio.</>}
+            </p>
+          )}
+        {error && <Alert>{error}</Alert>}
+      </div>
+    </Modal>
   )
 }
 

@@ -49,9 +49,16 @@ export function StateCell({ owner }: { owner: AdminOwner }) {
   return (
     <span className="block min-w-0">
       <StateChip owner={owner} />
-      <span className="mt-1 block truncate text-xs text-slate-500">{stateInfo(owner).detail}</span>
+      <StateDetail owner={owner} className="mt-1 block" />
     </span>
   )
+}
+
+/** El detalle del estado ("Quedan 3 días", "Se borra en 2 días"), en ámbar si corre prisa */
+export function StateDetail({ owner, className = '' }: { owner: AdminOwner; className?: string }) {
+  const s = stateInfo(owner)
+  if (!s.detail) return null
+  return <span className={`truncate text-xs ${s.urgent ? 'font-semibold text-amber-700' : 'text-slate-500'} ${className}`}>{s.detail}</span>
 }
 
 /** Primeros pasos en barritas: ■■■□□□ 3/6 */

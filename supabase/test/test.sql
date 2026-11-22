@@ -1119,7 +1119,7 @@ do $$ declare
 begin
   t := _expiry_push_text('prueba', '2026-11-13 20:00+00', 'Etc/GMT+4', 'Spa Mar', hoy);
   assert t[1] = 'Te quedan 3 días de prueba gratis', t[1];
-  assert t[2] = 'Tu prueba gratis termina el 13/11. Suscríbete en Más → Mensualidad para que tus clientes sigan reservando en Spa Mar.', t[2];
+  assert t[2] = 'Tu prueba gratis termina el 13/11. Suscríbete en Más → Mensualidad para que tus clientes sigan reservando en Spa Mar. Si no, tu app se borra 5 días después.', t[2];
   t := _expiry_push_text('prueba', '2026-11-11 20:00+00', 'Etc/GMT+4', 'Spa Mar', hoy);
   assert t[1] = 'Mañana termina tu prueba gratis' and t[2] like 'Tu prueba gratis termina mañana a las 16:00.%', t::text;
   -- A las 2:00 UTC del día 11 en Cuba todavía es el día 10 (las 22:00)
@@ -1282,6 +1282,113 @@ select track_event(gen_random_uuid(), gen_random_uuid(), 'paso_saltado', 'crear'
 reset role;
 do $$ begin assert exists (select 1 from analytics_events where name = 'paso_saltado' and step = 3), 'paso saltado medido'; end $$;
 set role authenticated;
+
+-- ===== Corregir y borrar pagos =====
+reset role;
+insert into auth.users (id, email) values
+  ('33333333-3333-3333-3333-333333333333', 'pepe@test.com'),
+  ('44444444-4444-4444-4444-444444444444', 'ana@test.com'),
+  ('55555555-5555-5555-5555-555555555555', 'luz@test.com');
+set role authenticated;
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select create_business('Uñas Pepe', 'unas-pepe', 'unas', '55553333', '', '#db2777', '[{"name":"Manicura","price":800,"duration_min":45}]', '[]');
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+select create_business('Salón Ana', 'salon-ana', 'peluqueria', '55554444', '', '#db2777', '[{"name":"Corte","price":800,"duration_min":45}]', '[]');
+set request.jwt.claim.sub = '55555555-5555-5555-5555-555555555555';
+select create_business('Spa Luz', 'spa-luz', 'spa', '55555555', '', '#db2777', '[{"name":"Masaje","price":800,"duration_min":45}]', '[]');
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+select admin_activate_plan((select id from businesses where slug='unas-pepe'), 'basico', 1, 1500, 'Primer pago');
+reset role;
+insert into ctx select 'pago_pepe', id::text from payments where business_id = (select id from businesses where slug='unas-pepe');
+insert into ctx select 'hasta_pepe', paid_until::text from businesses where slug='unas-pepe';
+set role authenticated;
+-- Un dueño no puede tocar los pagos
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+select expect_error($$select admin_update_payment('$$ || (select v from ctx where k='pago_pepe') || $$', 'basico', 3, 0)$$, 'NO_AUTORIZADO');
+select expect_error($$select admin_delete_payment('$$ || (select v from ctx where k='pago_pepe') || $$')$$, 'NO_AUTORIZADO');
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+select expect_error($$select admin_update_payment('$$ || (select v from ctx where k='pago_pepe') || $$', 'basico', 0, 1500)$$, 'MESES_INVALIDOS');
+select expect_error($$select admin_update_payment('$$ || (select v from ctx where k='pago_pepe') || $$', 'basico', 1, -5)$$, 'IMPORTE_INVALIDO');
+select expect_error($$select admin_delete_payment(gen_random_uuid())$$, 'PAGO_NO_EXISTE');
+-- De 1 a 2 meses del plan Equipo y otro importe: un mes más, el plan cambia y el historial también
+select admin_update_payment((select v from ctx where k='pago_pepe')::uuid, 'ultra', 2, 6000, 'Corregido');
+do $$ begin
+  assert exists (select 1 from jsonb_array_elements(admin_stats()->'recent_payments') x
+                 where x->>'id' = (select v from ctx where k='pago_pepe') and (x->>'amount')::numeric = 6000 and x->>'note' = 'Corregido'), 'historial corregido';
+end $$;
+reset role;
+do $$ begin
+  assert (select paid_until from businesses where slug='unas-pepe') = (select v from ctx where k='hasta_pepe')::timestamptz + interval '1 month', 'un mes más';
+  assert (select plan from businesses where slug='unas-pepe') = 'ultra', 'plan del pago corregido';
+  assert (select paid_until from payments where id = (select v from ctx where k='pago_pepe')::uuid) = (select paid_until from businesses where slug='unas-pepe'), 'el pago cuadra';
+end $$;
+-- Un segundo pago (hecho más tarde) y se borra el primero: el segundo se recalcula desde su propia fecha
+set role authenticated;
+select admin_activate_plan((select id from businesses where slug='unas-pepe'), 'basico', 1, 1500);
+reset role;
+update payments set created_at = created_at + interval '1 minute'
+ where business_id = (select id from businesses where slug='unas-pepe') and id <> (select v from ctx where k='pago_pepe')::uuid;
+set role authenticated;
+select admin_delete_payment((select v from ctx where k='pago_pepe')::uuid);
+reset role;
+do $$ declare p payments; begin
+  select * into p from payments where business_id = (select id from businesses where slug='unas-pepe');
+  assert p.paid_until = p.created_at + interval '1 month', 'recalculado: ' || p.paid_until;
+  assert (select paid_until from businesses where slug='unas-pepe') = p.paid_until, 'el negocio pierde los 2 meses borrados';
+  assert (select plan from businesses where slug='unas-pepe') = 'basico', 'plan del pago que queda';
+end $$;
+-- Se borra el último pago: vuelve a su prueba (sigue vigente)
+insert into ctx select 'pago_pepe2', id::text from payments where business_id = (select id from businesses where slug='unas-pepe');
+set role authenticated;
+select admin_delete_payment((select v from ctx where k='pago_pepe2')::uuid);
+reset role;
+do $$ begin
+  assert (select paid_until from businesses where slug='unas-pepe') is null, 'sin pagos, sin fecha de pago';
+  assert (get_public_business('unas-pepe')->>'accepting')::boolean, 'vuelve a su prueba';
+end $$;
+-- Si se le inhabilitó, corregir un pago no le devuelve los días
+set role authenticated;
+select admin_activate_plan((select id from businesses where slug='spa-luz'), 'basico', 1, 1500);
+select admin_deactivate_business((select id from businesses where slug='spa-luz'));
+reset role;
+insert into ctx select 'pago_luz', id::text from payments where business_id = (select id from businesses where slug='spa-luz');
+set role authenticated;
+select admin_update_payment((select v from ctx where k='pago_luz')::uuid, 'basico', 3, 4500);
+-- Inhabilitar una prueba sin pagos deja vacía la fecha de pago
+select admin_deactivate_business((select id from businesses where slug='salon-ana'));
+reset role;
+do $$ begin
+  assert (select paid_until from businesses where slug='spa-luz') <= now(), 'sigue inhabilitado';
+  assert (select paid_until from businesses where slug='salon-ana') is null, 'prueba inhabilitada sin fecha de pago';
+end $$;
+
+-- ===== Borrado automático de pruebas vencidas hace más de 5 días =====
+update businesses set trial_ends_at = now() - interval '6 days' where slug in ('unas-pepe', 'salon-ana', 'spa-luz');
+-- Uñas Pepe tiene un comprobante sin revisar: se espera a que se revise
+insert into payment_claims (business_id, months, proof_path) select id, 1, id::text || '/c.jpg' from businesses where slug='unas-pepe';
+do $$ declare n int; begin
+  n := _purge_expired_trials();
+  assert n = 1, 'solo se borra Salón Ana, se borraron ' || n;
+  assert not exists (select 1 from businesses where slug = 'salon-ana'), 'Salón Ana borrado';
+  assert not exists (select 1 from auth.users where id = '44444444-4444-4444-4444-444444444444'), 'su cuenta también';
+  assert exists (select 1 from purged_trials where name = 'Salón Ana'), 'queda la ficha para las estadísticas';
+  assert exists (select 1 from businesses where slug = 'unas-pepe'), 'con comprobante pendiente no se borra';
+  assert exists (select 1 from businesses where slug = 'spa-luz'), 'quien pagó alguna vez no se borra';
+  assert exists (select 1 from businesses where slug = 'spa-mar'), 'los que pagan no se tocan';
+end $$;
+-- Revisado el comprobante (rechazado): a 4 días todavía no se borra, a 6 sí
+update payment_claims set status = 'rechazado' where business_id = (select id from businesses where slug='unas-pepe');
+update businesses set trial_ends_at = now() - interval '4 days' where slug = 'unas-pepe';
+do $$ begin assert _purge_expired_trials() = 0, 'a 4 días todavía no'; end $$;
+update businesses set trial_ends_at = now() - interval '6 days' where slug = 'unas-pepe';
+do $$ begin assert _purge_expired_trials() = 1, 'ahora sí'; end $$;
+set role authenticated;
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+do $$ declare s jsonb := admin_stats(); begin
+  assert (s->'totals'->>'purged')::int = 2, 'pruebas borradas: ' || (s->'totals')::text;
+  assert (s->'months'->-1->>'signups')::int >= 2, 'las borradas siguen contando como negocios nuevos';
+end $$;
+select expect_error($$select _purge_expired_trials()$$, 'permission denied');
 
 -- ===== Borrar dueños =====
 reset role;

@@ -35,9 +35,9 @@ const FAQ = [
   ['¿Mis clientes tienen que instalar algo?', 'No. Reservan desde un enlace, en el navegador de su teléfono, sin cuenta ni contraseña. Si quieren, la añaden a su pantalla de inicio como una app.'],
   ['¿Y si mis clientes prefieren escribirme por WhatsApp?', 'Pueden seguir haciéndolo: tu web tiene un botón directo a tu WhatsApp. La diferencia es que la mayoría ya no te escribirá para preguntar si tienes hueco: lo verán ellos mismos.'],
   ['¿Qué diferencia hay entre Solo y Equipo?', 'Los dos traen todo: reservas, recordatorios, clientes, cobros, cupones, galería y opiniones. Equipo añade a las personas que trabajan contigo: cada una con sus servicios, su horario y su propio enlace para ver su agenda, y tus clientes eligen con quién reservar.'],
-  ['¿Qué pasa cuando acaba la prueba gratis?', 'Nada se borra. Eliges el plan que te va mejor, pagas el mes y sigues igual. Si no pagas, tu web deja de aceptar reservas hasta que lo hagas, pero tus datos se quedan guardados.'],
+  ['¿Qué pasa cuando acaba la prueba gratis?', 'Eliges el plan que te va mejor, pagas el mes y sigues igual, con todo lo que ya tenías. Si no pagas, tu web deja de aceptar reservas, y a los 5 días tu app se borra.'],
   ['¿Cómo pago la mensualidad?', 'Por transferencia (Transfermóvil o EnZona). Subes la captura del comprobante desde tu panel y se activa enseguida.'],
-  ['¿Puedo cancelar cuando quiera?', 'Sí. No hay permanencia ni letra pequeña: pagas mes a mes y lo dejas cuando quieras. Tus datos no se borran.'],
+  ['¿Puedo cancelar cuando quiera?', 'Sí. No hay permanencia ni letra pequeña: pagas mes a mes y lo dejas cuando quieras. Si ya pagaste alguna vez, tus datos se quedan guardados por si vuelves.'],
   ['¿Funciona con mala conexión?', 'Sí. Está hecha para gastar pocos datos y funciona bien con datos móviles normales.'],
   ['¿Mis datos están seguros?', 'Sí. Cada negocio solo ve su propia información, protegida a nivel de base de datos, y nunca se comparte con otros negocios.'],
 ]
