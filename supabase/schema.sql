@@ -44,6 +44,10 @@ alter table public.platform_settings add column if not exists push_shared_secret
 -- piden un número de teléfono además de la tarjeta, para confirmar que el destino es correcto.
 alter table public.platform_settings add column if not exists card_phone text not null default '';
 
+-- Enlace al grupo de WhatsApp de los dueños (lo ven en su panel, en "Más"). Vacío: no se muestra.
+alter table public.platform_settings add column if not exists community_url text not null default ''
+  check (community_url = '' or community_url ~ '^https://');
+
 -- Moderación de fotos (ver moderate-photo). Mientras esté vacía, las fotos se aprueban solas sin
 -- revisión (igual que con push_function_url vacío: la app sigue funcionando, solo sin ese aviso).
 alter table public.platform_settings add column if not exists moderate_function_url text;
@@ -2840,6 +2844,7 @@ begin
   if auth.uid() is null then raise exception 'SIN_SESION'; end if;
   return (select jsonb_build_object(
     'card_number', card_number, 'card_holder', card_holder, 'card_phone', card_phone, 'admin_whatsapp', admin_whatsapp,
+    'community_url', community_url,
     'basico', price_basico, 'plus', price_plus, 'ultra', price_ultra)
     from platform_settings where id = 1);
 end;

@@ -41,9 +41,14 @@ export default function More() {
   const off = TOOLS.filter((t) => !tools.includes(t.id))
   const push = usePushOnThisDevice()
   const [support, setSupport] = useState<string | null>(null)
+  const [community, setCommunity] = useState<string | null>(null)
 
   useEffect(() => {
-    supabase.rpc('get_payment_info').then(({ data }) => setSupport((data as { admin_whatsapp?: string } | null)?.admin_whatsapp || null))
+    supabase.rpc('get_payment_info').then(({ data }) => {
+      const info = data as { admin_whatsapp?: string; community_url?: string } | null
+      setSupport(info?.admin_whatsapp || null)
+      setCommunity(info?.community_url || null)
+    })
   }, [])
 
   const activate = (id: string, label: string) => {
@@ -114,6 +119,15 @@ export default function More() {
               sub="Te ayudamos por WhatsApp"
               tint="bg-[#25D366]/15 text-[#128C7E]"
               href={waLink(support, `Hola, soy de ${business.name} (código ${business.code}) y necesito ayuda con Citora.`)}
+            />
+          )}
+          {community && (
+            <Row
+              icon="whatsapp"
+              title="Grupo de Citora en WhatsApp"
+              sub="Novedades, consejos y dudas con otros negocios"
+              tint="bg-[#25D366]/15 text-[#128C7E]"
+              href={community}
             />
           )}
           <Row icon="globe" title="Ver mi página de reservas" sub="Así la ven tus clientes" href={publicUrl(business.slug)} />

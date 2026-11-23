@@ -168,6 +168,7 @@ select expect_error('select admin_list_owners()', 'NO_AUTORIZADO');
 select expect_error($$select admin_activate_plan('$$ || (select v from ctx where k='biz1') || $$', 'ultra', 12)$$, 'NO_AUTORIZADO');
 do $$ begin assert (select count(*) from platform_settings) = 0, 'el dueño no lee los ajustes directamente'; end $$;
 do $$ begin assert get_payment_info()->>'card_number' = '9200 1111 2222 3333'; end $$;
+do $$ begin assert get_payment_info()->>'community_url' = '', 'sin grupo: enlace vacío'; end $$;
 
 -- ===== Fin de la prueba: la app se inhabilita =====
 reset role;

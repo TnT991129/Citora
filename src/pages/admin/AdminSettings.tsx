@@ -16,6 +16,7 @@ interface Settings {
   card_holder: string
   card_phone: string
   admin_whatsapp: string
+  community_url: string
   price_basico: number
   price_plus: number
   price_ultra: number
@@ -48,7 +49,10 @@ export default function AdminSettings() {
   if (error && !s) return <Alert>{error}</Alert>
   if (!s) return <PageLoader />
 
+  const communityError = s.community_url && !/^https:\/\//.test(s.community_url) ? 'Pega el enlace completo, empezando por https://' : null
+
   const save = async () => {
+    if (communityError) return setError(communityError)
     setBusy(true)
     setError(null)
     const { error } = await supabase.from('platform_settings').update({ ...s, updated_at: new Date().toISOString() }).eq('id', 1)
@@ -99,9 +103,16 @@ export default function AdminSettings() {
         </SettingsGroup>
 
         <SettingsGroup title="Contacto" desc="Aquí te mandan las capturas de los pagos y te escriben los dueños.">
-          <div className="card">
+          <div className="card space-y-4">
             <Field label="Tu WhatsApp" hint="Con código de país, solo números.">
               <input className="input" inputMode="tel" value={s.admin_whatsapp} onChange={(e) => setS({ ...s, admin_whatsapp: e.target.value.replace(/[^\d]/g, '') })} placeholder="5355555555" />
+            </Field>
+            <Field
+              label="Enlace del grupo de WhatsApp (opcional)"
+              hint="Lo ven los dueños en su panel, en Más → Ayuda. En WhatsApp: info del grupo → Invitar con enlace → Copiar. Vacío: no sale."
+              error={communityError}
+            >
+              <input className="input" inputMode="url" value={s.community_url || ''} onChange={(e) => setS({ ...s, community_url: e.target.value.trim() })} placeholder="https://chat.whatsapp.com/..." />
             </Field>
           </div>
         </SettingsGroup>
