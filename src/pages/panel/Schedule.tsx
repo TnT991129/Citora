@@ -8,12 +8,15 @@ import { normalizeSlot, time12, todayKey, WEEKDAYS, dayTitle } from '../../lib/f
 import { supabase } from '../../lib/supabase'
 import type { ClosedDay, ClosedSlot, ScheduleDay } from '../../lib/types'
 import { usePanel } from './context'
+import { useModule } from './Locked'
 
 const ORDER = [1, 2, 3, 4, 5, 6, 0]
 
 export default function Schedule() {
   const { business, reloadBusiness, staff, link } = usePanel()
   const hasTeam = staff.some((s) => s.active)
+  // Varios clientes a la misma hora es del plan Equipo (y de la prueba gratis), como en _free_lane
+  const canMany = useModule('empleados')
   const [days, setDays] = useState<ScheduleDay[] | null>(null)
   const [closed, setClosed] = useState<ClosedDay[]>([])
   const [newClosed, setNewClosed] = useState('')
@@ -183,14 +186,29 @@ export default function Schedule() {
           Opciones avanzadas
         </summary>
         <section id="clientes-por-turno" className="card mt-3 scroll-mt-20 space-y-3">
-          <div>
-            <h2 className="text-lg font-bold">Clientes por turno</h2>
-            <p className="text-sm text-slate-500">
-              Cuántos clientes pueden reservar a la misma hora. Por ejemplo, si tienes 2 manicuras trabajando a la vez, pon 2.
-            </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold">Clientes por turno</h2>
+              <p className="text-sm text-slate-500">
+                Cuántos clientes pueden reservar a la misma hora. Por ejemplo, si tienes 2 manicuras trabajando a la vez, pon 2.
+              </p>
+            </div>
+            {!canMany && <span className="chip shrink-0 bg-brand/10 font-semibold text-brand">Plan Equipo</span>}
           </div>
-          <CapacityStepper value={capacity} onChange={(n) => { setDirty(true); setCapacity(n) }} />
-          {hasTeam && (
+          {canMany ? (
+            <CapacityStepper value={capacity} onChange={(n) => { setDirty(true); setCapacity(n) }} />
+          ) : (
+            <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+              <p>
+                Con tu plan atiendes a <b>1 cliente a la vez</b>. Para recibir a varios a la misma hora, pásate a <b>Equipo</b>: además, cada persona tiene su agenda y tus clientes eligen con quién reservar.
+              </p>
+              {(business.slot_capacity || 1) > 1 && (
+                <p className="mt-1 text-slate-500">Tenías {business.slot_capacity} a la vez: vuelve a funcionar al pasar a Equipo.</p>
+              )}
+              <Link to={link('plan')} className="mt-2 inline-block font-semibold text-brand">Pasarme a Equipo →</Link>
+            </div>
+          )}
+          {canMany && hasTeam && (
             <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
               Tienes profesionales en Equipo: cada uno atiende a un cliente a la vez. Este número se aplica a las citas sin profesional asignado.
             </p>

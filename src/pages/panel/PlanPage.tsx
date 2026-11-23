@@ -231,6 +231,11 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
             )
           })}
         </div>
+        {plan === 'basico' && (business.slot_capacity || 1) > 1 && (
+          <Alert kind="warning">
+            Ahora atiendes a {business.slot_capacity} clientes a la vez. Con Solo, solo se puede reservar 1 cliente por turno. Si vuelves a Equipo, recuperas los {business.slot_capacity}.
+          </Alert>
+        )}
         {plan === 'basico' && team > 0 && (
           <Alert kind="warning">
             Tienes {team === 1 ? '1 persona' : `${team} personas`} en tu equipo. Con Solo, tu equipo deja de verse en tu página y no recibe citas nuevas (todas van a tu agenda). No se borra nada: si vuelves a Equipo, aparece otra vez.

@@ -1390,6 +1390,34 @@ do $$ declare s jsonb := admin_stats(); begin
 end $$;
 select expect_error($$select _purge_expired_trials()$$, 'permission denied');
 
+-- ===== Clientes por turno: solo con el plan Equipo (o en la prueba) =====
+reset role;
+insert into ctx select 'mar_antes', jsonb_build_object('plan', plan, 'paid', paid_until, 'trial', trial_ends_at, 'cap', slot_capacity, 'comped', comped)::text
+  from businesses where slug = 'spa-mar';
+update businesses set slot_capacity = 2, plan = 'ultra', paid_until = now() + interval '10 days', comped = false where slug = 'spa-mar';
+insert into appointments (business_id, token, starts_at, ends_at, customer_name, customer_phone, status, source)
+select id, 'silla1', date_trunc('hour', now()) + interval '300 days', date_trunc('hour', now()) + interval '300 days 1 hour',
+       'Silla Uno', '5355550101', 'confirmada', 'manual' from businesses where slug = 'spa-mar';
+do $$ declare b uuid := (select id from businesses where slug = 'spa-mar'); t timestamptz := date_trunc('hour', now()) + interval '300 days'; begin
+  assert _free_lane(b, null, t, t + interval '1 hour') = 1, 'Equipo: queda la segunda silla';
+end $$;
+update businesses set plan = 'basico' where slug = 'spa-mar';
+do $$ declare b uuid := (select id from businesses where slug = 'spa-mar'); t timestamptz := date_trunc('hour', now()) + interval '300 days'; begin
+  assert _free_lane(b, null, t, t + interval '1 hour') is null, 'Solo: una sola silla aunque tenga 2 guardadas';
+  assert _free_lane(b, null, t + interval '1 hour', t + interval '2 hours') = 0, 'Solo: la hora siguiente sí está libre';
+  assert (select slot_capacity from businesses where id = b) = 2, 'el número guardado se conserva';
+end $$;
+-- En la prueba gratis (con Equipo) sí puede
+update businesses set paid_until = null, trial_ends_at = now() + interval '2 days' where slug = 'spa-mar';
+do $$ declare b uuid := (select id from businesses where slug = 'spa-mar'); t timestamptz := date_trunc('hour', now()) + interval '300 days'; begin
+  assert _free_lane(b, null, t, t + interval '1 hour') = 1, 'en la prueba: dos a la vez';
+end $$;
+delete from appointments where token = 'silla1';
+update businesses b set plan = x.v->>'plan', paid_until = (x.v->>'paid')::timestamptz, trial_ends_at = (x.v->>'trial')::timestamptz,
+       slot_capacity = (x.v->>'cap')::int, comped = (x.v->>'comped')::boolean
+  from (select v::jsonb as v from ctx where k = 'mar_antes') x where b.slug = 'spa-mar';
+set role authenticated;
+
 -- ===== Borrar dueños =====
 reset role;
 set role authenticated;
