@@ -41,7 +41,9 @@ export function currencyFields(m: CurrencyMode): { currency: string; usd_prices:
 }
 
 /** Tasa con la que se muestra el cambio en CUP; null si el negocio no lo muestra */
-export function cupRate(b: { usd_prices?: boolean; usd_rate?: number | string | null }): number | null {
+export function cupRate(b: { usd_prices?: boolean; usd_rate?: number | string | null; market?: string }): number | null {
+  // Fuera de Cuba nunca se enseñan pesos cubanos
+  if (b.market === 'int') return null
   const r = Number(b.usd_rate)
   return b.usd_prices && r > 0 ? r : null
 }

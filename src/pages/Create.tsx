@@ -26,7 +26,7 @@ const STEPS = [tx('Tipo'), tx('Negocio'), tx('Moneda'), tx('Servicios'), tx('Hor
 const TIME_LEFT = [tx('Unos 3 minutos'), tx('Unos 3 minutos'), tx('Unos 2 minutos'), tx('Menos de 2 minutos'), tx('Un minuto'), tx('Último paso')]
 /** Los pasos que se pueden saltar (se cambian después en el panel) y el texto del botón */
 const SKIP: Partial<Record<number, { key: SkipKey; label: string }>> = {
-  2: { key: 'moneda', label: tx('Saltar, uso CUP') },
+  2: { key: 'moneda', label: IS_INT ? tx('Saltar, uso USD') : tx('Saltar, uso CUP') },
   3: { key: 'servicios', label: tx('Saltar, los reviso después') },
   4: { key: 'horario', label: tx('Saltar, de lunes a sábado de 9:00 a 18:00') },
 }

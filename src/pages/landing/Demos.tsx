@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { prefersReducedMotion, useInView } from './motion'
 import { t as tx } from '../../lib/i18n'
+import { IS_INT } from '../../lib/market'
 
 const ICONS: Record<string, string> = {
   check: 'M5 12l5 5 9-10',
@@ -60,9 +61,9 @@ function MiniHeader({ name = 'Nails Studio', sub = tx('Reserva tu cita'), color 
 }
 
 const DEMO_SERVICES = [
-  [tx('Manicura'), tx('1.500 CUP'), tx('1 h')],
-  [tx('Pedicura'), tx('1.800 CUP'), tx('1 h')],
-  [tx('Uñas acrílicas'), tx('3.500 CUP'), tx('2 h')],
+  [tx('Manicura'), IS_INT ? '35 USD' : tx('1.500 CUP'), tx('1 h')],
+  [tx('Pedicura'), IS_INT ? '45 USD' : tx('1.800 CUP'), tx('1 h')],
+  [tx('Uñas acrílicas'), IS_INT ? '60 USD' : tx('3.500 CUP'), tx('2 h')],
 ]
 const DEMO_TIMES = [tx('9:00 a.m.'), tx('10:30 a.m.'), tx('1:00 p.m.'), tx('3:00 p.m.'), tx('4:30 p.m.'), tx('6:00 p.m.')]
 // Cuánto dura cada momento de la demostración (ms): lista, servicio elegido, hora, confirmando, reservada
@@ -128,7 +129,7 @@ export function HeroPhone() {
               </>
             )}
             <div className={`absolute inset-x-4 bottom-5 rounded-2xl py-3.5 text-center text-sm font-bold text-white shadow-lg shadow-pink-500/30 transition ${step === 3 ? 'lp-press bg-pink-600' : 'bg-pink-500'}`}>
-              {step === 3 ? tx('Confirmando…') : step < 2 ? tx('Continuar · 1.500 CUP') : tx('Confirmar reserva')}
+              {step === 3 ? tx('Confirmando…') : step < 2 ? (IS_INT ? tx('Continuar · 35 USD') : tx('Continuar · 1.500 CUP')) : tx('Confirmar reserva')}
             </div>
           </div>
         ) : (
@@ -163,7 +164,7 @@ export function HeroPhone() {
         <div className="lp-float absolute -right-3 top-12 hidden sm:-right-24 sm:block" style={{ ['--d' as string]: '-2s', ['--r' as string]: '3deg' }}>
           <div className="rounded-2xl bg-white/95 px-4 py-3 text-slate-900 shadow-2xl ring-1 ring-black/5">
             <p className="text-[11px] font-semibold text-slate-500">{tx('Ingresos de hoy')}</p>
-            <p className="flex items-center gap-1 text-lg font-extrabold">{tx('12.400 CUP')}{' '}<Ico name="up" className="h-4 w-4 text-emerald-500" /></p>
+            <p className="flex items-center gap-1 text-lg font-extrabold">{IS_INT ? '410 USD' : tx('12.400 CUP')}{' '}<Ico name="up" className="h-4 w-4 text-emerald-500" /></p>
           </div>
         </div>
         <div className="lp-float absolute -right-2 bottom-24 sm:-right-20" style={{ ['--d' as string]: '-4s', ['--r' as string]: '-3deg' }}>
@@ -248,7 +249,7 @@ export function ScreenAgenda() {
     <div className="h-full bg-slate-50 px-4 pt-10">
       <div className="flex items-baseline justify-between">
         <p className="text-lg font-extrabold">{tx('Hoy')}</p>
-        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">{tx('5 citas · 3.900 CUP')}</span>
+        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">{IS_INT ? tx('5 citas · 130 USD') : tx('5 citas · 3.900 CUP')}</span>
       </div>
       <div className="mt-3 space-y-2">
         {AGENDA.map(([h, n, s, st]) => (

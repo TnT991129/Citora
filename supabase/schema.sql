@@ -1110,11 +1110,15 @@ begin
     raise exception 'ENLACE_INVALIDO';
   end if;
   new.appearance := _clean_appearance(new.appearance);
-  -- CUP y USD en Cuba; los negocios de la versión internacional, además, su moneda local
-  -- (igual que INT_CURRENCIES en src/lib/format.ts)
-  if new.currency not in ('CUP', 'USD')
-     and not (new.market = 'int' and new.currency in ('EUR', 'MXN', 'COP', 'ARS', 'CLP', 'PEN', 'UYU', 'DOP', 'BRL', 'CAD', 'GBP')) then
-    new.currency := case when new.market = 'int' then 'USD' else 'CUP' end;
+  -- CUP y USD en Cuba. Los negocios de la versión internacional no usan pesos cubanos: USD o su
+  -- moneda local (igual que INT_CURRENCIES en src/lib/format.ts), y nunca "USD y CUP"
+  if new.market = 'int' then
+    new.usd_prices := false;
+    if new.currency not in ('USD', 'EUR', 'MXN', 'COP', 'ARS', 'CLP', 'PEN', 'UYU', 'DOP', 'BRL', 'CAD', 'GBP') then
+      new.currency := 'USD';
+    end if;
+  elsif new.currency not in ('CUP', 'USD') then
+    new.currency := 'CUP';
   end if;
   if new.usd_prices then
     new.currency := 'USD';

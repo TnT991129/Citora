@@ -1796,4 +1796,9 @@ export const EN: Record<string, string> = {
   "Ocultada": "Hidden",
   "Pagas en USD": "Pay in USD",
   "Pagas en CUP": "Pay in CUP",
+
+  // ----- Sin CUP en la versión internacional -----
+  "Saltar, uso USD": "Skip, I'll use USD",
+  "Continuar · 35 USD": "Continue · 35 USD",
+  "5 citas · 130 USD": "5 bookings · 130 USD",
 }

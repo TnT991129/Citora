@@ -46,7 +46,7 @@ export const CONFIRM: Record<ConfirmKind, (name: string) => { title: string; tex
   }),
   to_int: (name) => ({
     title: '¿Pasar a la versión internacional?',
-    text: `${name} se abrirá desde ahora en citora-app.com/int/, con los precios de fuera de Cuba. Sus enlaces de siempre siguen valiendo: llevan solos a la versión nueva. No se borra nada y puedes deshacerlo.`,
+    text: `${name} se abrirá desde ahora en citora-app.com/int/, con los precios de fuera de Cuba. Sus enlaces de siempre siguen valiendo: llevan solos a la versión nueva. Si cobraba en CUP, sus precios pasan a verse en USD con el mismo número: revísalos con el dueño. No se borra nada.`,
     confirmLabel: 'Sí, pasar a internacional',
   }),
   to_cu: (name) => ({

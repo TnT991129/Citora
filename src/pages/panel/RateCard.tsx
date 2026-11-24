@@ -15,7 +15,8 @@ export function RateCard() {
 
   useEffect(() => setValue(business.usd_rate ? String(business.usd_rate) : ''), [business.usd_rate])
 
-  if (!business.usd_prices) return null
+  // La tasa del dólar en CUP es solo de Cuba
+  if (!business.usd_prices || business.market === 'int') return null
 
   const rate = Number(value)
   const changed = rate > 0 && rate !== Number(business.usd_rate)

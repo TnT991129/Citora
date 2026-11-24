@@ -1488,6 +1488,13 @@ update businesses set currency = 'EUR' where slug = 'nails-miami';
 do $$ begin assert (select currency from businesses where slug = 'nails-miami') = 'EUR', 'euros fuera de Cuba'; end $$;
 update businesses set currency = 'XYZ' where slug = 'nails-miami';
 do $$ begin assert (select currency from businesses where slug = 'nails-miami') = 'USD', 'moneda inventada: USD'; end $$;
+-- Fuera de Cuba, nada de pesos cubanos ni de "USD y CUP"
+update businesses set currency = 'CUP' where slug = 'nails-miami';
+update businesses set usd_prices = true, usd_rate = 300 where slug = 'nails-miami';
+do $$ begin
+  assert (select currency from businesses where slug = 'nails-miami') = 'USD', 'fuera de Cuba, CUP no';
+  assert not (select usd_prices from businesses where slug = 'nails-miami'), 'fuera de Cuba, sin cambio a CUP';
+end $$;
 -- Una zona inventada no vale: la de los ajustes
 set request.jwt.claim.sub = '77777777-7777-7777-7777-777777777777';
 do $$ begin assert get_payment_info()->>'currency' = 'CUP', 'sin negocio todavía: lo de Cuba'; end $$;
