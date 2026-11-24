@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { isPushSubscribed, pushSupported } from '../lib/push'
 import { useInstall } from '../lib/pwa'
 import { InstallButton } from './InstallButton'
+import { t } from '../lib/i18n'
 
 /**
  * Aviso para instalar la app en la pantalla de inicio (y, si pushLink se pasa, para activar
@@ -22,9 +23,9 @@ export function InstallReminder({ appName, pushLink }: { appName: string; pushLi
 
   return (
     <div className="card space-y-2 ring-2 ring-brand/20">
-      <p className="font-bold">📱 Ten {appName} siempre a mano</p>
+      <p className="font-bold">📱 {t('Ten {name} siempre a mano', { name: appName })}</p>
       {needsInstall && (
-        <p className="text-sm text-slate-600">Instálala en la pantalla de inicio de tu teléfono para abrirla como cualquier otra app, sin buscarla en el navegador.</p>
+        <p className="text-sm text-slate-600">{t('Instálala en la pantalla de inicio de tu teléfono para abrirla como cualquier otra app, sin buscarla en el navegador.')}</p>
       )}
       {needsPush && (
         <p className="text-sm text-slate-600">
@@ -34,7 +35,7 @@ export function InstallReminder({ appName, pushLink }: { appName: string; pushLi
         </p>
       )}
       <div className="flex flex-wrap gap-2">
-        {needsInstall && <InstallButton appName={appName} label="Instalar ahora" variant="primary" />}
+        {needsInstall && <InstallButton appName={appName} label={t('Instalar ahora')} variant="primary" />}
         {needsPush && (
           <Link to={pushLink!} className="inline-flex items-center rounded-btn bg-white px-4 py-2.5 text-sm font-semibold text-brand ring-1 ring-brand/30">
             Ir a Ajustes

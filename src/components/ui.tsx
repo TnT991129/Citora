@@ -1,5 +1,6 @@
 import { useEffect, useId, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { t } from '../lib/i18n'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'whatsapp'
 
@@ -58,12 +59,12 @@ export function Spinner({ small }: { small?: boolean }) {
   return (
     <span
       className={`inline-block animate-spin rounded-full border-2 border-current border-t-transparent ${small ? 'h-4 w-4' : 'h-6 w-6'}`}
-      aria-label="Cargando"
+      aria-label={t('Cargando')}
     />
   )
 }
 
-export function PageLoader({ text = 'Cargando…' }: { text?: string }) {
+export function PageLoader({ text = t('Cargando…') }: { text?: string }) {
   return (
     <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-slate-500">
       <span className="text-brand"><Spinner /></span>
@@ -140,7 +141,7 @@ export function Modal({ open, onClose, title, children, footer }: {
         <div className="flex justify-center pt-2.5 sm:hidden" aria-hidden><span className="h-1.5 w-10 rounded-full bg-slate-200" /></div>
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5 sm:py-4">
           <h2 className="text-lg font-extrabold tracking-tight">{title}</h2>
-          <button onClick={onClose} className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100" aria-label="Cerrar">
+          <button onClick={onClose} className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100" aria-label={t('Cerrar')}>
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
           </button>
         </div>
@@ -232,7 +233,8 @@ export function StatusBadge({ status }: { status: string }) {
     activo: ['Activo', 'bg-emerald-100 text-emerald-800'],
     vencido: ['Vencido', 'bg-red-100 text-red-700'],
   }
-  const [label, cls] = map[status] || [status, 'bg-slate-100 text-slate-700']
+  const [es, cls] = map[status] || [status, 'bg-slate-100 text-slate-700']
+  const label = t(es)
   return (
     <span className={`chip ${cls}`}>
       <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" aria-hidden />

@@ -1,4 +1,5 @@
-// Traduce los códigos de error de la base de datos a mensajes claros
+// Traduce los códigos de error de la base de datos a mensajes claros (en el idioma de la visita: ver i18n.ts)
+import { t } from './i18n'
 const MESSAGES: Record<string, string> = {
   NEGOCIO_NO_EXISTE: 'Este negocio no existe.',
   NEGOCIO_INACTIVO: 'Este negocio no está recibiendo reservas en este momento.',
@@ -67,18 +68,18 @@ export function errorMessage(err: unknown): string {
       ? err
       : (err as { message?: string })?.message || (err as { error_description?: string })?.error_description || ''
   for (const code of CODES) {
-    if (raw.includes(code)) return MESSAGES[code]
+    if (raw.includes(code)) return t(MESSAGES[code])
   }
-  if (/Invalid login credentials/i.test(raw)) return 'Correo o contraseña incorrectos.'
-  if (/User already registered/i.test(raw)) return 'Ya existe una cuenta con ese correo. Entra con tu contraseña.'
-  if (/Email not confirmed/i.test(raw)) return 'Confirma tu correo antes de entrar (revisa tu bandeja de entrada).'
-  if (/Password should be at least/i.test(raw)) return 'La contraseña debe tener al menos 6 caracteres.'
-  if (/rate limit/i.test(raw)) return 'Demasiados intentos. Espera unos minutos y vuelve a probar.'
+  if (/Invalid login credentials/i.test(raw)) return t('Correo o contraseña incorrectos.')
+  if (/User already registered/i.test(raw)) return t('Ya existe una cuenta con ese correo. Entra con tu contraseña.')
+  if (/Email not confirmed/i.test(raw)) return t('Confirma tu correo antes de entrar (revisa tu bandeja de entrada).')
+  if (/Password should be at least/i.test(raw)) return t('La contraseña debe tener al menos 6 caracteres.')
+  if (/rate limit/i.test(raw)) return t('Demasiados intentos. Espera unos minutos y vuelve a probar.')
   if (/schema cache|column .* does not exist|Could not find the/i.test(raw)) {
     return 'La base de datos no está actualizada: hay que volver a ejecutar supabase/schema.sql en Supabase.'
   }
-  if (/Failed to fetch|NetworkError|network/i.test(raw)) return 'Sin conexión. Revisa tus datos o el wifi y vuelve a intentarlo.'
-  if (/exclusion constraint/i.test(raw)) return 'A esa hora ya no queda sitio libre. Elige otra hora o mueve otra cita.'
-  if (/duplicate key|unique/i.test(raw)) return 'Ese dato ya existe.'
-  return raw || 'Algo salió mal. Inténtalo de nuevo.'
+  if (/Failed to fetch|NetworkError|network/i.test(raw)) return t('Sin conexión. Revisa tus datos o el wifi y vuelve a intentarlo.')
+  if (/exclusion constraint/i.test(raw)) return t('A esa hora ya no queda sitio libre. Elige otra hora o mueve otra cita.')
+  if (/duplicate key|unique/i.test(raw)) return t('Ese dato ya existe.')
+  return raw || t('Algo salió mal. Inténtalo de nuevo.')
 }

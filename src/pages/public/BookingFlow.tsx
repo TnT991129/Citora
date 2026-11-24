@@ -14,14 +14,16 @@ import NotFound from '../NotFound'
 import { hasMainService, ServicePicker } from './ServicePicker'
 import { applyOptions, missingOption, optionsFor, type OptionChoice } from '../../lib/serviceOptions'
 import { Closed, PublicHeader, usePublicBusiness } from './shared'
+import { IS_EN, t } from '../../lib/i18n'
+import { IS_INT } from '../../lib/market'
 
 type StepKey = 'servicio' | 'equipo' | 'fecha' | 'datos' | 'confirmar'
 const STEP_TITLES: Record<StepKey, string> = {
-  servicio: 'Elige el servicio',
-  equipo: '¿Con quién quieres tu cita?',
-  fecha: 'Elige día y hora',
-  datos: 'Tus datos',
-  confirmar: 'Confirma tu cita',
+  servicio: t('Elige el servicio'),
+  equipo: t('¿Con quién quieres tu cita?'),
+  fecha: t('Elige día y hora'),
+  datos: t('Tus datos'),
+  confirmar: t('Confirma tu cita'),
 }
 
 export default function BookingFlow() {
@@ -111,21 +113,21 @@ export default function BookingFlow() {
 
   const next = () => {
     if (cur === 'servicio' && !hasMainService(services, selected)) {
-      return setError(chosen.length ? 'Elige también un servicio principal: los complementos se añaden a un servicio.' : 'Elige al menos un servicio.')
+      return setError(chosen.length ? t('Elige también un servicio principal: los complementos se añaden a un servicio.') : t('Elige al menos un servicio.'))
     }
-    if (cur === 'servicio' && who === null) return setError(MIXED_PEOPLE)
+    if (cur === 'servicio' && who === null) return setError(t(MIXED_PEOPLE))
     const noOption = cur === 'servicio' && missingOption(services, selected, choice)
-    if (noOption) return setError(`Elige una opción de «${noOption.name}».`)
-    if (cur === 'fecha' && (!date || !time)) return setError('Elige el día y la hora.')
+    if (noOption) return setError(t('Elige una opción de «{name}».', { name: noOption.name }))
+    if (cur === 'fecha' && (!date || !time)) return setError(t('Elige el día y la hora.'))
     if (cur === 'datos') {
-      if (name.trim().length < 2) return setError('Escribe tu nombre.')
-      if (phone.replace(/\D/g, '').length < 8) return setError('Escribe tu teléfono (al menos 8 dígitos).')
+      if (name.trim().length < 2) return setError(t('Escribe tu nombre.'))
+      if (phone.replace(/\D/g, '').length < 8) return setError(t('Escribe tu teléfono (al menos 8 dígitos).'))
     }
     go(step + 1)
   }
 
   const confirm = async () => {
-    if (!accepted) return setError('Acepta las condiciones para continuar.')
+    if (!accepted) return setError(t('Acepta las condiciones para continuar.'))
     setBusy(true)
     setError(null)
     save('citora:cliente', { name: name.trim(), phone: phone.trim() })
@@ -145,11 +147,12 @@ export default function BookingFlow() {
     if (error) {
       const msg = errorMessage(error)
       setError(msg)
-      if (/turno|horario/i.test(msg)) {
+      // Por el código del error (el mensaje puede estar en inglés)
+      if (/TURNO_/.test(error.message)) {
         setTime(null)
         setStep(steps.indexOf('fecha'))
       }
-      if (/código de descuento/i.test(msg)) setCoupon(null)
+      if (/CUPON_/.test(error.message)) setCoupon(null)
       return
     }
     const token = data as string
@@ -167,7 +170,7 @@ export default function BookingFlow() {
             <div key={k} className={`h-1.5 flex-1 rounded-full ${i <= step ? 'bg-brand' : 'bg-slate-200'}`} />
           ))}
         </div>
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand">Paso {steps.indexOf(cur) + 1} de {steps.length}</p>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand">{t('Paso {a} de {b}', { a: steps.indexOf(cur) + 1, b: steps.length })}</p>
         <h1 className="mt-1 text-2xl font-extrabold tracking-tight">{STEP_TITLES[cur]}</h1>
 
         {cur === 'servicio' && (
@@ -181,19 +184,19 @@ export default function BookingFlow() {
 
         {cur === 'equipo' && (
           <div className="mt-4 space-y-2.5">
-            <p className="text-sm text-slate-500">Elige a la persona que prefieras o deja que te atienda quien esté libre.</p>
+            <p className="text-sm text-slate-500">{t('Elige a la persona que prefieras o deja que te atienda quien esté libre.')}</p>
             <StaffCard
-              name="Cualquiera disponible"
-              hint="Te atiende quien esté libre a la hora que elijas. Así verás más horas."
+              name={t('Cualquiera disponible')}
+              hint={t('Te atiende quien esté libre a la hora que elijas. Así verás más horas.')}
               icon="any"
               selected={staffId === null}
               onClick={() => pickStaff(null)}
             />
             {eligibleTeam.map((s) => (
-              <StaffCard key={s.id} name={s.name} photo={s.photo_url} hint="Ver sus horas libres" selected={staffId === s.id} onClick={() => pickStaff(s.id)} />
+              <StaffCard key={s.id} name={s.name} photo={s.photo_url} hint={t('Ver sus horas libres')} selected={staffId === s.id} onClick={() => pickStaff(s.id)} />
             ))}
             {eligibleTeam.length < team.length && (
-              <p className="text-xs text-slate-400">Algunas personas del equipo no hacen los servicios que elegiste.</p>
+              <p className="text-xs text-slate-400">{t('Algunas personas del equipo no hacen los servicios que elegiste.')}</p>
             )}
           </div>
         )}
@@ -204,10 +207,10 @@ export default function BookingFlow() {
               <div className="flex items-center gap-3 rounded-2xl bg-white p-3 ring-1 ring-slate-200">
                 <Initial name={withTeam ? person?.name || '?' : ownerName} any={withTeam && !person} />
                 <p className="min-w-0 flex-1 text-sm">
-                  <span className="block text-slate-500">Tu cita con</span>
-                  <span className="block truncate font-bold">{withTeam ? person?.name || 'Cualquiera disponible' : ownerName}</span>
+                  <span className="block text-slate-500">{t('Tu cita con')}</span>
+                  <span className="block truncate font-bold">{withTeam ? person?.name || t('Cualquiera disponible') : ownerName}</span>
                 </p>
-                {askWho && <button onClick={() => go(steps.indexOf('equipo'))} className="text-sm font-semibold text-brand">Cambiar</button>}
+                {askWho && <button onClick={() => go(steps.indexOf('equipo'))} className="text-sm font-semibold text-brand">{t('Cambiar')}</button>}
               </div>
             )}
             <div className="card">
@@ -242,14 +245,14 @@ export default function BookingFlow() {
 
         {cur === 'datos' && (
           <div className="mt-4 space-y-4">
-            <Field label="Tu nombre">
+            <Field label={t('Tu nombre')}>
               <input className="input" autoComplete="name" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
             </Field>
-            <Field label="Tu teléfono (WhatsApp)" hint="El negocio te escribirá aquí si hace falta.">
-              <input className="input" type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="53 5555 5555" />
+            <Field label={t('Tu teléfono (WhatsApp)')} hint={t('El negocio te escribirá aquí si hace falta.')}>
+              <input className="input" type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={IS_INT ? '1 305 555 1234' : '53 5555 5555'} />
             </Field>
-            <Field label="Nota para el negocio (opcional)">
-              <textarea className="input min-h-[90px]" maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Algo que debamos saber" />
+            <Field label={t('Nota para el negocio (opcional)')}>
+              <textarea className="input min-h-[90px]" maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('Algo que debamos saber')} />
             </Field>
           </div>
         )}
@@ -257,11 +260,11 @@ export default function BookingFlow() {
         {cur === 'confirmar' && (
           <div className="mt-4 space-y-4">
             <div className="card space-y-3">
-              <Row label="Día" value={<span>{dayTitle(date!)}</span>} />
-              <Row label="Hora" value={time12(time!)} />
-              {team.length > 0 && <Row label="Con" value={withTeam ? person?.name || 'Cualquiera disponible' : ownerName} />}
-              <Row label="Nombre" value={name} />
-              <Row label="Teléfono" value={phone} />
+              <Row label={t('Día')} value={<span>{dayTitle(date!)}</span>} />
+              <Row label={t('Hora')} value={time12(time!)} />
+              {team.length > 0 && <Row label={t('Con')} value={withTeam ? person?.name || t('Cualquiera disponible') : ownerName} />}
+              <Row label={t('Nombre')} value={name} />
+              <Row label={t('Teléfono')} value={phone} />
               <div className="border-t border-slate-100 pt-3">
                 {chosen.map((s) => (
                   <div key={s.id} className="flex justify-between gap-3 py-1 text-slate-700">
@@ -271,21 +274,23 @@ export default function BookingFlow() {
                 ))}
                 {coupon && (
                   <div className="flex justify-between gap-3 py-1 font-medium text-emerald-700">
-                    <span className="min-w-0 break-words">Descuento ({coupon.code})</span>
+                    <span className="min-w-0 break-words">{t('Descuento')} ({coupon.code})</span>
                     <span className="shrink-0 text-right">-{money(coupon.discount, currency)}</span>
                   </div>
                 )}
                 <div className="mt-2 flex justify-between gap-3 border-t border-slate-100 pt-2 text-lg font-bold">
-                  <span className="shrink-0">Total</span>
+                  <span className="shrink-0">{t('Total')}</span>
                   <span className="min-w-0 text-right">{price(coupon ? coupon.total : total, currency, rate)}</span>
                 </div>
-                <p className="mt-1 text-xs text-slate-500">Se paga en el negocio. Duración aproximada: {duration(minutes)}.</p>
+                <p className="mt-1 text-xs text-slate-500">{t('Se paga en el negocio. Duración aproximada: {d}.', { d: duration(minutes) })}</p>
               </div>
             </div>
             {business.deposit_enabled && (
               <div className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900 ring-1 ring-amber-200">
                 <p className="font-bold">
-                  Este negocio pide un depósito{business.deposit_amount ? ` de ${money(business.deposit_amount, currency)}` : ''} para asegurar la cita.
+                  {business.deposit_amount
+                    ? t('Este negocio pide un depósito de {amount} para asegurar la cita.', { amount: money(business.deposit_amount, currency) })
+                    : t('Este negocio pide un depósito para asegurar la cita.')}
                 </p>
                 {business.deposit_instructions && <p className="mt-1 whitespace-pre-line">{business.deposit_instructions}</p>}
               </div>
@@ -293,7 +298,7 @@ export default function BookingFlow() {
             <label className="flex items-start gap-3 rounded-xl bg-white p-3 ring-1 ring-slate-200">
               <input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} className="mt-1 h-5 w-5 accent-[rgb(var(--brand-rgb))]" />
               <span className="text-sm text-slate-700">
-                Acepto las condiciones del negocio. Puedo cancelar mi cita hasta {business.cancel_notice_hours} h antes, o cambiarla hasta {business.reschedule_notice_hours} h antes.
+                {t('Acepto las condiciones del negocio. Puedo cancelar mi cita hasta {c} h antes, o cambiarla hasta {r} h antes.', { c: business.cancel_notice_hours, r: business.reschedule_notice_hours })}
                 {business.policies && (
                   <span className="mt-2 block max-h-48 overflow-y-auto whitespace-pre-line rounded-lg bg-slate-50 px-3 py-2 text-slate-500">{business.policies}</span>
                 )}
@@ -308,13 +313,13 @@ export default function BookingFlow() {
         {/* Los avisos, junto al botón: así se ven aunque la lista sea larga */}
         {error && <div className="ui-fade mx-auto mb-2 max-w-xl"><Alert>{error}</Alert></div>}
         <div className="mx-auto flex max-w-xl items-center gap-3">
-          {step > 0 && <Button variant="secondary" onClick={() => go(step - 1)} disabled={busy}>Atrás</Button>}
+          {step > 0 && <Button variant="secondary" onClick={() => go(step - 1)} disabled={busy}>{t('Atrás')}</Button>}
           {step < last ? (
             <Button block size="lg" onClick={next}>
-              {cur === 'servicio' && chosen.length > 0 ? `Continuar · ${price(coupon ? coupon.total : total, currency, rate)}` : 'Continuar'}
+              {cur === 'servicio' && chosen.length > 0 ? `${t('Continuar')} · ${price(coupon ? coupon.total : total, currency, rate)}` : t('Continuar')}
             </Button>
           ) : (
-            <Button block size="lg" onClick={confirm} loading={busy}>Confirmar reserva</Button>
+            <Button block size="lg" onClick={confirm} loading={busy}>{t('Confirmar reserva')}</Button>
           )}
         </div>
       </div>
@@ -376,8 +381,8 @@ function CouponBox({ slug, serviceIds, options, applied, onApplied }: {
   if (applied) {
     return (
       <div className="flex items-center justify-between rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-900 ring-1 ring-emerald-200">
-        <span>Código <b>{applied.code}</b> aplicado</span>
-        <button onClick={() => onApplied(null)} className="font-semibold underline">Quitar</button>
+        <span>{t('Código')} <b>{applied.code}</b> {t('aplicado')}</span>
+        <button onClick={() => onApplied(null)} className="font-semibold underline">{t('Quitar')}</button>
       </div>
     )
   }
@@ -387,7 +392,7 @@ function CouponBox({ slug, serviceIds, options, applied, onApplied }: {
         onClick={() => setOpen(true)}
         className="flex w-full items-center gap-2 rounded-xl border border-dashed border-brand/40 bg-brand/5 px-3 py-2.5 text-sm font-semibold text-brand"
       >
-        🎁 ¿Tienes un código de descuento?
+        🎁 {t('¿Tienes un código de descuento?')}
       </button>
     )
   }
@@ -408,14 +413,14 @@ function CouponBox({ slug, serviceIds, options, applied, onApplied }: {
       <div className="flex gap-2">
         <input
           className="input uppercase"
-          placeholder="CÓDIGO"
+          placeholder={t('CÓDIGO')}
           value={code}
           maxLength={20}
           onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
           onKeyDown={(e) => e.key === 'Enter' && apply()}
-          aria-label="Código de descuento"
+          aria-label={t('Código de descuento')}
         />
-        <Button variant="secondary" onClick={apply} loading={busy}>Aplicar</Button>
+        <Button variant="secondary" onClick={apply} loading={busy}>{t('Aplicar')}</Button>
       </div>
       {error && <Alert>{error}</Alert>}
     </div>
@@ -435,14 +440,14 @@ function WaitlistForm({ slug, date, name: initialName, phone: initialPhone }: { 
   if (done) {
     return (
       <div className="rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-900 ring-1 ring-emerald-200">
-        <b>¡Te apuntamos!</b> Si se libera un hueco el {dayTitle(date).toLowerCase()}, el negocio te escribirá por WhatsApp.
+        <b>{t('¡Te apuntamos!')}</b> {t('Si se libera un hueco el {day}, el negocio te escribirá por WhatsApp.', { day: IS_EN ? dayTitle(date) : dayTitle(date).toLowerCase() })}
       </div>
     )
   }
 
   const join = async () => {
-    if (name.trim().length < 2) return setError('Escribe tu nombre.')
-    if (phone.replace(/\D/g, '').length < 8) return setError('Escribe tu teléfono (al menos 8 dígitos).')
+    if (name.trim().length < 2) return setError(t('Escribe tu nombre.'))
+    if (phone.replace(/\D/g, '').length < 8) return setError(t('Escribe tu teléfono (al menos 8 dígitos).'))
     setBusy(true)
     setError(null)
     save('citora:cliente', { name: name.trim(), phone: phone.trim() })
@@ -455,14 +460,14 @@ function WaitlistForm({ slug, date, name: initialName, phone: initialPhone }: { 
   return (
     <div className="card space-y-3">
       <div>
-        <h3 className="font-bold">Apúntate a la lista de espera</h3>
-        <p className="text-sm text-slate-500">Si alguien cancela, el negocio te avisa por WhatsApp.</p>
+        <h3 className="font-bold">{t('Apúntate a la lista de espera')}</h3>
+        <p className="text-sm text-slate-500">{t('Si alguien cancela, el negocio te avisa por WhatsApp.')}</p>
       </div>
-      <input className="input" placeholder="Tu nombre" autoComplete="name" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
-      <input className="input" placeholder="Tu teléfono (WhatsApp)" type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
-      <input className="input" placeholder="Horario que te viene bien (opcional)" value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} />
+      <input className="input" placeholder={t('Tu nombre')} autoComplete="name" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
+      <input className="input" placeholder={t('Tu teléfono (WhatsApp)')} type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+      <input className="input" placeholder={t('Horario que te viene bien (opcional)')} value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} />
       {error && <Alert>{error}</Alert>}
-      <Button block variant="secondary" onClick={join} loading={busy}>Avisarme si se libera un hueco</Button>
+      <Button block variant="secondary" onClick={join} loading={busy}>{t('Avisarme si se libera un hueco')}</Button>
     </div>
   )
 }

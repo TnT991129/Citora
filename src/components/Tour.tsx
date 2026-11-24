@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { load, save } from '../lib/storage'
 import { Button, Modal } from './ui'
+import { t } from '../lib/i18n'
 
 export interface TourStep {
   emoji: string
@@ -38,8 +39,8 @@ export function Tour({ steps, open, onClose }: { steps: TourStep[]; open: boolea
             ))}
           </div>
           <div className="flex gap-2">
-            {i > 0 && <Button variant="ghost" size="sm" onClick={() => setI((n) => n - 1)}>Atrás</Button>}
-            <Button size="sm" onClick={() => (last ? close() : setI((n) => n + 1))}>{last ? 'Entendido' : 'Siguiente'}</Button>
+            {i > 0 && <Button variant="ghost" size="sm" onClick={() => setI((n) => n - 1)}>{t('Atrás')}</Button>}
+            <Button size="sm" onClick={() => (last ? close() : setI((n) => n + 1))}>{last ? t('Entendido') : t('Siguiente')}</Button>
           </div>
         </div>
       }
@@ -50,7 +51,7 @@ export function Tour({ steps, open, onClose }: { steps: TourStep[]; open: boolea
       </div>
       {i === 0 && (
         <button onClick={close} className="mx-auto mt-3 block text-sm font-medium text-slate-400 underline">
-          Saltar
+          {t('Saltar')}
         </button>
       )}
     </Modal>

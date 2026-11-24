@@ -3,6 +3,7 @@ import { addDays, MONTHS, time12, WEEKDAYS_SHORT, weekdayOf } from '../lib/forma
 import { supabase } from '../lib/supabase'
 import { errorMessage } from '../lib/errors'
 import { Alert, Spinner } from './ui'
+import { t } from '../lib/i18n'
 
 interface CalendarProps {
   today: string
@@ -43,7 +44,7 @@ export function Calendar({ today, maxDays, isOpen, value, onChange }: CalendarPr
           disabled={!canPrev}
           onClick={() => setMonth(prevMonth)}
           className="rounded-full p-2 text-slate-600 hover:bg-slate-100 disabled:opacity-30"
-          aria-label="Mes anterior"
+          aria-label={t('Mes anterior')}
         >
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 6l-6 6 6 6" /></svg>
         </button>
@@ -53,7 +54,7 @@ export function Calendar({ today, maxDays, isOpen, value, onChange }: CalendarPr
           disabled={!canNext}
           onClick={() => setMonth(nextMonth)}
           className="rounded-full p-2 text-slate-600 hover:bg-slate-100 disabled:opacity-30"
-          aria-label="Mes siguiente"
+          aria-label={t('Mes siguiente')}
         >
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 6l6 6-6 6" /></svg>
         </button>
@@ -138,7 +139,7 @@ export function SlotPicker({ slug, date, duration, value, onChange, staff, servi
   if (!slots.some((s) => s.available)) {
     return (
       <div className="space-y-3">
-        <Alert kind="warning">No quedan turnos libres este día. Prueba con otro día.</Alert>
+        <Alert kind="warning">{t('No quedan turnos libres este día. Prueba con otro día.')}</Alert>
         {slots.length > 0 && whenFull}
       </div>
     )
