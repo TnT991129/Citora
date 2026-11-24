@@ -23,8 +23,7 @@ interface Settings {
   trial_days: number
   price_int_basico: number
   price_int_ultra: number
-  paypal_url: string
-  int_pay_note: string
+  paypal_client_id: string
   push_function_url: string | null
   push_shared_secret: string | null
   moderate_function_url: string | null
@@ -54,7 +53,7 @@ export default function AdminSettings() {
   if (!s) return <PageLoader />
 
   const communityError = s.community_url && !/^https:\/\//.test(s.community_url) ? 'Pega el enlace completo, empezando por https://' : null
-  const paypalError = s.paypal_url && !/^https:\/\//.test(s.paypal_url) ? 'Pega el enlace completo, empezando por https:// (ej. https://paypal.me/tunombre)' : null
+  const paypalError = s.paypal_client_id && !/^[A-Za-z0-9_-]+$/.test(s.paypal_client_id) ? 'El Client ID solo lleva letras, números, guiones y guiones bajos (cópialo tal cual de PayPal).' : null
 
   const save = async () => {
     if (communityError) return setError(communityError)
@@ -108,7 +107,7 @@ export default function AdminSettings() {
           </div>
         </SettingsGroup>
 
-        <SettingsGroup title="Versión internacional" desc="Negocios de fuera de Cuba (citora-app.com/int/). Pagan en USD; lo ven al pagar su mensualidad y en la portada internacional.">
+        <SettingsGroup title="Versión internacional" desc="Negocios de fuera de Cuba (citora-app.com/int/). Pagan en USD con PayPal o tarjeta y se activan solos, sin que tengas que aprobar nada.">
           <div className="card space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Citora Solo, al mes">
@@ -119,14 +118,11 @@ export default function AdminSettings() {
               </Field>
             </div>
             <Field
-              label="Enlace de PayPal (opcional)"
-              hint="Ej. https://paypal.me/tunombre. Al pagar, se abre con el importe ya puesto. Vacío: se les pide escribirte por WhatsApp para pagar."
+              label="PayPal · Client ID"
+              hint="De developer.paypal.com → Apps & Credentials. Con él salen los botones de pago y el cobro es automático: el negocio paga y se activa solo. La clave secreta NO va aquí (va en la función paypal-checkout). Vacío: aún no se puede pagar."
               error={paypalError}
             >
-              <input className="input" inputMode="url" value={s.paypal_url || ''} onChange={(e) => setS({ ...s, paypal_url: e.target.value.trim() })} placeholder="https://paypal.me/..." />
-            </Field>
-            <Field label="Instrucciones para pagar (opcional)" hint="Lo leen junto al botón de pagar. Ej. «Elige Amigos y familiares»">
-              <textarea className="input" rows={2} maxLength={500} value={s.int_pay_note || ''} onChange={(e) => setS({ ...s, int_pay_note: e.target.value })} />
+              <input className="input font-mono" value={s.paypal_client_id || ''} onChange={(e) => setS({ ...s, paypal_client_id: e.target.value.trim() })} placeholder="AXxx…" autoComplete="off" />
             </Field>
           </div>
         </SettingsGroup>

@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase'
 import type { PaymentClaim, PlanKey } from '../../lib/types'
 import { waLink } from '../../lib/whatsapp'
 import { usePanel } from './context'
+import { PayPalPay } from './PayPalPay'
 
 interface PaymentInfo {
   card_number: string
@@ -19,9 +20,8 @@ interface PaymentInfo {
   plus: number
   ultra: number
   currency?: 'CUP' | 'USD'
-  /** Versión internacional: enlace de PayPal (vacío: pagar escribiendo por WhatsApp) e instrucciones */
-  paypal_url?: string
-  pay_note?: string
+  /** Versión internacional: Client ID de PayPal para los botones de pago (vacío: aún no se puede pagar) */
+  paypal_client_id?: string
 }
 
 interface PaymentRow {
@@ -35,7 +35,7 @@ interface PaymentRow {
 }
 
 export default function PlanPage({ blocked }: { blocked?: boolean }) {
-  const { business, status, progress, staff } = usePanel()
+  const { business, status, progress, staff, reloadBusiness } = usePanel()
   const team = staff.filter((s) => s.active).length
   // Plan que paga: el que ya tiene; si no, Equipo si ya usa equipo y Solo si no
   const [plan, setPlan] = useState<PaidPlan>(() => (status.plan === 'ultra' || (!status.plan && team > 0) ? 'ultra' : 'basico'))
@@ -77,10 +77,13 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
   const intl = cur === 'USD'
   const price = plan === 'ultra' ? info.ultra : info.basico
   const amount = Math.round(price * months * 100) / 100
-  // paypal.me admite el importe al final (ej. paypal.me/nombre/20USD): se abre con el importe puesto
-  const paypalHref = info.paypal_url
-    ? /^https:\/\/(www\.)?paypal\.me\/[^/]+\/?$/i.test(info.paypal_url) ? `${info.paypal_url.replace(/\/$/, '')}/${amount}USD` : info.paypal_url
-    : null
+
+  // Pagado con PayPal: los meses ya están sumados (lo confirmó el servidor)
+  const paidOnline = async (until: string) => {
+    flash(`¡Pago recibido! Tu app está pagada hasta el ${fullDateFromIso(until, business.timezone)}`)
+    await reloadBusiness()
+    supabase.from('payments').select('*').order('created_at', { ascending: false }).limit(12).then(({ data }) => setHistory((data as PaymentRow[]) || []))
+  }
   const message = [
     `Hola, acabo de pagar la mensualidad de Citora (${months} ${months === 1 ? 'mes' : 'meses'}).`,
     `Plan: *${PLANS[plan].name}*`,
@@ -275,21 +278,14 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
       </section>
 
       {intl ? (
+        // Versión internacional: pago automático, sin capturas ni esperas
         <section className="card space-y-3">
-          <h2 className="font-bold">3. Paga con PayPal</h2>
-          {paypalHref ? (
-            <>
-              <LinkButton href={paypalHref} block size="lg" newTab>Pagar {money(amount, cur)} con PayPal</LinkButton>
-              <p className="text-sm text-slate-500">Se abre PayPal con el importe ya puesto. Al terminar, haz una captura de pantalla del pago.</p>
-            </>
+          <h2 className="font-bold">3. Paga {money(amount, cur)}</h2>
+          <p className="text-sm text-slate-500">Con PayPal o con tarjeta, sin necesidad de cuenta. Tu app se activa al momento.</p>
+          {info.paypal_client_id ? (
+            <PayPalPay clientId={info.paypal_client_id} plan={plan} months={months} onPaid={paidOnline} />
           ) : (
-            <Alert kind="warning">Escríbenos por WhatsApp y te decimos cómo pagar.</Alert>
-          )}
-          {info.pay_note && <p className="whitespace-pre-line rounded-xl bg-slate-50 p-3 text-sm text-slate-600">{info.pay_note}</p>}
-          {!paypalHref && info.admin_whatsapp && (
-            <LinkButton href={waLink(info.admin_whatsapp, `Hola, quiero pagar la mensualidad de Citora (${PLANS[plan].name}, ${months} ${months === 1 ? 'mes' : 'meses'}, ${money(amount, cur)}). Negocio: ${business.name}, código ${business.code}.`)} variant="whatsapp" block newTab>
-              <WhatsAppIcon className="h-4 w-4" /> Escribir por WhatsApp
-            </LinkButton>
+            <Alert kind="warning">El pago en línea se activa muy pronto. Si tu prueba termina antes, escríbenos y te ayudamos.</Alert>
           )}
         </section>
       ) : (
@@ -320,6 +316,7 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
       </section>
       )}
 
+      {!intl && (
       <section className="card space-y-3">
         <h2 className="font-bold">4. Declara tu pago</h2>
         <p className="text-sm text-slate-500">Sube la captura {intl ? 'del pago' : 'de la transferencia'}. La revisamos y activamos tu mes en cuanto la confirmemos.</p>
@@ -352,6 +349,7 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
           </LinkButton>
         )}
       </section>
+      )}
 
       {claims.length > 0 && (
         <section className="card">

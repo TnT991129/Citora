@@ -44,16 +44,36 @@ alter table public.platform_settings add column if not exists push_shared_secret
 -- piden un número de teléfono además de la tarjeta, para confirmar que el destino es correcto.
 alter table public.platform_settings add column if not exists card_phone text not null default '';
 
--- Versión internacional (citora-app.com/int/): precios en USD y cómo se paga desde fuera de Cuba.
--- paypal_url vacío: en vez del botón de pagar se le pide escribir por WhatsApp.
+-- Versión internacional (citora-app.com/int/): precios en USD y pago automático con PayPal (ver
+-- online_orders y supabase/functions/paypal-checkout). paypal_client_id es público (lo usan los botones
+-- de PayPal en el navegador); la clave secreta va solo en la función (PAYPAL_SECRET). Vacío: aún no
+-- se puede pagar desde la app.
 alter table public.platform_settings add column if not exists price_int_basico numeric(10, 2) not null default 10
   check (price_int_basico >= 0);
 alter table public.platform_settings add column if not exists price_int_ultra numeric(10, 2) not null default 20
   check (price_int_ultra >= 0);
-alter table public.platform_settings add column if not exists paypal_url text not null default ''
-  check (paypal_url = '' or paypal_url ~ '^https://');
-alter table public.platform_settings add column if not exists int_pay_note text not null default ''
-  check (char_length(int_pay_note) <= 500);
+alter table public.platform_settings add column if not exists paypal_client_id text not null default ''
+  check (paypal_client_id ~ '^[A-Za-z0-9_-]*$');
+
+-- Pagos en línea (versión internacional): cada intento de pago con PayPal. Los crea y los completa
+-- solo la función paypal-checkout (con la clave de servicio): nadie más los lee ni los escribe.
+--   status: 'creada' (abrió PayPal), 'pagada' (PayPal confirmó el cobro y se sumaron los meses)
+create table if not exists public.online_orders (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid references public.businesses(id) on delete set null,
+  provider text not null default 'paypal' check (provider in ('paypal')),
+  provider_order_id text not null unique,
+  plan text not null check (plan in ('basico', 'ultra')),
+  months int not null check (months between 1 and 24),
+  amount numeric(10, 2) not null check (amount > 0),
+  currency text not null default 'USD' check (currency in ('USD')),
+  status text not null default 'creada' check (status in ('creada', 'pagada')),
+  capture_id text,
+  created_at timestamptz not null default now(),
+  paid_at timestamptz
+);
+create index if not exists online_orders_business_idx on public.online_orders (business_id, created_at desc);
+alter table public.online_orders enable row level security;
 
 -- Enlace al grupo de WhatsApp de los dueños (lo ven en su panel, en "Más"). Vacío: no se muestra.
 alter table public.platform_settings add column if not exists community_url text not null default ''
@@ -2903,8 +2923,7 @@ begin
     'card_number', case when v_int then '' else card_number end,
     'card_holder', case when v_int then '' else card_holder end,
     'card_phone', case when v_int then '' else card_phone end,
-    'paypal_url', case when v_int then paypal_url else '' end,
-    'pay_note', case when v_int then int_pay_note else '' end,
+    'paypal_client_id', case when v_int then paypal_client_id else '' end,
     'basico', case when v_int then price_int_basico else price_basico end,
     'plus', case when v_int then price_int_basico else price_plus end,
     'ultra', case when v_int then price_int_ultra else price_ultra end)
@@ -3277,14 +3296,15 @@ begin
 end;
 $$;
 
-create or replace function public.admin_activate_plan(
-  p_business uuid, p_plan text, p_months int, p_amount numeric default null, p_note text default null)
+-- Suma los meses pagados a un negocio y apunta el pago (lo usan admin_activate_plan, a mano, y
+-- online_payment_complete, al pagar con PayPal). La moneda es la de su versión: CUP o USD.
+create or replace function public._activate_plan(
+  p_business uuid, p_plan text, p_months int, p_amount numeric, p_note text, p_by uuid)
 returns timestamptz language plpgsql volatile security definer set search_path = public as $$
 declare
   b businesses;
   v_until timestamptz;
 begin
-  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
   if p_plan not in ('basico', 'plus', 'ultra') then raise exception 'PLAN_INVALIDO'; end if;
   if p_months is null or p_months not between 1 and 24 then raise exception 'MESES_INVALIDOS'; end if;
   select * into b from businesses where id = p_business for update;
@@ -3297,8 +3317,57 @@ begin
                         comped_prev_plan = null, comped_prev_paid_until = null
    where id = b.id;
   insert into payments (business_id, plan, months, amount, note, paid_until, created_by, business_name, business_code, currency)
-  values (b.id, p_plan, p_months, p_amount, nullif(btrim(coalesce(p_note, '')), ''), v_until, auth.uid(), b.name, b.code,
+  values (b.id, p_plan, p_months, p_amount, nullif(btrim(coalesce(p_note, '')), ''), v_until, p_by, b.name, b.code,
           case when b.market = 'int' then 'USD' else 'CUP' end);
+  return v_until;
+end;
+$$;
+
+create or replace function public.admin_activate_plan(
+  p_business uuid, p_plan text, p_months int, p_amount numeric default null, p_note text default null)
+returns timestamptz language plpgsql volatile security definer set search_path = public as $$
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  return _activate_plan(p_business, p_plan, p_months, p_amount, p_note, auth.uid());
+end;
+$$;
+
+-- Precio de un pago en línea (versión internacional): plan y meses al precio en USD de los ajustes.
+-- Lo calcula siempre la base de datos: el navegador no puede elegir cuánto paga.
+create or replace function public.online_order_price(p_business uuid, p_plan text, p_months int)
+returns numeric language plpgsql stable security definer set search_path = public as $$
+declare
+  s platform_settings;
+begin
+  if p_plan not in ('basico', 'ultra') then raise exception 'PLAN_INVALIDO'; end if;
+  if p_months is null or p_months not between 1 and 24 then raise exception 'MESES_INVALIDOS'; end if;
+  if not exists (select 1 from businesses where id = p_business and market = 'int') then raise exception 'NEGOCIO_NO_EXISTE'; end if;
+  select * into s from platform_settings where id = 1;
+  return round((case when p_plan = 'ultra' then s.price_int_ultra else s.price_int_basico end) * p_months, 2);
+end;
+$$;
+
+-- PayPal confirmó el cobro de un pedido (lo llama la función paypal-checkout tras capturarlo). Suma los
+-- meses y apunta el pago, una sola vez aunque se llame dos veces. El importe y la moneda cobrados tienen
+-- que ser los del pedido. Devuelve hasta cuándo queda pagado.
+create or replace function public.online_payment_complete(p_order text, p_amount numeric, p_currency text, p_capture text)
+returns timestamptz language plpgsql volatile security definer set search_path = public as $$
+declare
+  o online_orders;
+  v_until timestamptz;
+begin
+  select * into o from online_orders where provider_order_id = p_order for update;
+  if not found then raise exception 'PEDIDO_NO_EXISTE'; end if;
+  if o.status = 'pagada' then
+    return (select paid_until from businesses where id = o.business_id);
+  end if;
+  if p_currency is distinct from o.currency or p_amount is distinct from o.amount then raise exception 'IMPORTE_INVALIDO'; end if;
+  if o.business_id is null then raise exception 'NEGOCIO_NO_EXISTE'; end if;
+  v_until := _activate_plan(o.business_id, o.plan, o.months, o.amount, 'PayPal · ' || coalesce(p_capture, p_order), null);
+  update online_orders set status = 'pagada', capture_id = p_capture, paid_at = now() where id = o.id;
+  perform _notify_admin_push('Pago recibido (PayPal)',
+    coalesce((select name || ' (' || code || ')' from businesses where id = o.business_id), 'Un negocio') ||
+    ' pagó ' || o.months || case when o.months = 1 then ' mes' else ' meses' end || ' · ' || o.amount || ' USD.');
   return v_until;
 end;
 $$;
@@ -4065,6 +4134,9 @@ revoke execute on function public._approve_unmoderated_photos() from anon, authe
 revoke execute on function public._purge_analytics() from anon, authenticated;
 revoke execute on function public._purge_expired_trials() from anon, authenticated;
 revoke execute on function public._replay_payments(uuid, timestamptz) from anon, authenticated;
+revoke execute on function public._activate_plan(uuid, text, int, numeric, text, uuid) from anon, authenticated;
+revoke execute on function public.online_order_price(uuid, text, int) from anon, authenticated;
+revoke execute on function public.online_payment_complete(text, numeric, text, text) from anon, authenticated;
 revoke execute on function public.admin_update_payment(uuid, text, int, numeric, text) from anon;
 revoke execute on function public.admin_delete_payment(uuid) from anon;
 revoke execute on function public._clean_survey_questions(jsonb) from anon, authenticated;

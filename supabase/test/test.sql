@@ -1444,16 +1444,31 @@ do $$ begin
 end $$;
 -- Mensualidad en USD: precios de fuera y PayPal en vez de la tarjeta
 reset role;
-update platform_settings set price_int_basico = 12, price_int_ultra = 25, paypal_url = 'https://paypal.me/prueba';
+update platform_settings set price_int_basico = 12, price_int_ultra = 25, paypal_client_id = 'AbC-123_x';
 set role authenticated;
 do $$ declare i jsonb := get_payment_info(); begin
   assert i->>'currency' = 'USD' and (i->>'basico')::numeric = 12 and (i->>'ultra')::numeric = 25, 'precios en USD';
-  assert i->>'card_number' = '' and i->>'paypal_url' = 'https://paypal.me/prueba', 'PayPal y no la tarjeta';
+  assert i->>'card_number' = '' and i->>'paypal_client_id' = 'AbC-123_x', 'PayPal y no la tarjeta';
 end $$;
-select submit_payment_claim(2, 50, null, my_business_id() || '/pago-1.jpg', 'ultra') as claim_int \gset
-insert into ctx values ('claim_int', :'claim_int');
+-- El pago en línea solo lo hace la función de PayPal (clave de servicio), nunca el navegador
+select expect_error($$select online_order_price(my_business_id(), 'ultra', 2)$$, 'permission denied');
+select expect_error($$select online_payment_complete('PEDIDO-1', 50, 'USD', 'CAP-1')$$, 'permission denied');
 reset role;
-do $$ begin assert (select currency from payment_claims where id = (select v from ctx where k='claim_int')::uuid) = 'USD', 'declaración en USD'; end $$;
+do $$ declare b uuid := (select id from businesses where slug = 'nails-miami'); begin
+  assert online_order_price(b, 'ultra', 2) = 50 and online_order_price(b, 'basico', 3) = 36, 'precio en USD por meses';
+  insert into online_orders (business_id, provider_order_id, plan, months, amount) values (b, 'PEDIDO-1', 'ultra', 2, 50);
+end $$;
+select expect_error($$select online_payment_complete('PEDIDO-1', 1, 'USD', 'CAP-1')$$, 'IMPORTE_INVALIDO');
+select expect_error($$select online_payment_complete('PEDIDO-X', 50, 'USD', 'CAP-1')$$, 'PEDIDO_NO_EXISTE');
+select online_payment_complete('PEDIDO-1', 50, 'USD', 'CAP-1');
+select online_payment_complete('PEDIDO-1', 50, 'USD', 'CAP-1');
+do $$ declare b uuid := (select id from businesses where slug = 'nails-miami'); begin
+  assert (select count(*) from payments where business_id = b) = 1, 'el mismo pago cuenta una sola vez';
+  assert (select currency from payments where business_id = b) = 'USD', 'pago en USD';
+  assert (select plan from businesses where id = b) = 'ultra', 'con el plan pagado';
+  assert (select paid_until from businesses where id = b) > now() + interval '55 days', 'dos meses pagados';
+  assert (select status from online_orders where provider_order_id = 'PEDIDO-1') = 'pagada', 'pedido pagado';
+end $$;
 set role authenticated;
 -- El dueño no puede pasarse a la versión de Cuba (ni cambiando su negocio a mano)
 update businesses set market = 'cu', name = 'Nails Miami Beach' where slug = 'nails-miami';
@@ -1481,7 +1496,7 @@ update businesses set whatsapp = '5355558888' where slug = 'spa-habana';
 update businesses set currency = 'EUR' where slug = 'spa-habana';
 do $$ begin assert (select currency from businesses where slug = 'spa-habana') = 'CUP', 'en Cuba, CUP o USD'; end $$;
 do $$ declare i jsonb := get_payment_info(); begin
-  assert i->>'currency' = 'CUP' and i->>'card_number' = '9200 1111 2222 3333' and i->>'paypal_url' = '', 'Cuba: tarjeta y CUP';
+  assert i->>'currency' = 'CUP' and i->>'card_number' = '9200 1111 2222 3333' and i->>'paypal_client_id' = '', 'Cuba: tarjeta y CUP';
 end $$;
 set role anon;
 do $$ begin
@@ -1493,13 +1508,11 @@ set role authenticated;
 select expect_error($$select admin_set_market((select id from businesses where slug = 'spa-habana'), 'int')$$, 'NO_AUTORIZADO');
 set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
 select expect_error($$select admin_set_market((select id from businesses where slug = 'spa-habana'), 'marte')$$, 'MERCADO_INVALIDO');
-insert into ctx select 'cup_antes', admin_stats()->'totals'->>'revenue';
-select admin_approve_payment_claim((select v from ctx where k='claim_int')::uuid);
 reset role;
 do $$ begin
-  assert (select currency from payments where business_id = (select id from businesses where slug = 'nails-miami')) = 'USD', 'pago en USD';
-  assert (admin_stats()->'totals'->>'revenue')::numeric = (select v from ctx where k='cup_antes')::numeric, 'los USD no se suman a los CUP';
-  assert (admin_stats()->'totals'->>'revenue_usd')::numeric >= 50, 'van aparte';
+  assert (admin_stats()->'totals'->>'revenue_usd')::numeric >= 50, 'los USD van aparte';
+  assert (admin_stats()->'totals'->>'revenue')::numeric = (select coalesce(sum(p.amount), 0) from payments p
+    left join businesses b on b.id = p.business_id where not coalesce(b.comped, false) and p.currency = 'CUP'), 'los CUP sin los USD';
 end $$;
 set role authenticated;
 select admin_set_market((select id from businesses where slug = 'nails-miami'), 'cu');
@@ -1508,7 +1521,7 @@ do $$ begin
   assert (select whatsapp from businesses where slug = 'nails-miami') = '13055551234', 'aunque su número sea de fuera';
 end $$;
 reset role;
-update platform_settings set price_int_basico = 10, price_int_ultra = 20, paypal_url = '';
+update platform_settings set price_int_basico = 10, price_int_ultra = 20, paypal_client_id = '';
 delete from businesses where slug in ('nails-miami', 'spa-habana');
 delete from auth.users where id in ('66666666-6666-6666-6666-666666666666', '77777777-7777-7777-7777-777777777777');
 set role authenticated;
