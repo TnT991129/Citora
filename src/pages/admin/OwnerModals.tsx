@@ -13,7 +13,7 @@ import { BizAvatar, StateCell } from './adminUi'
 
 export type Prices = Record<PlanKey, number>
 
-export type ConfirmKind = 'grant' | 'revoke' | 'deactivate'
+export type ConfirmKind = 'grant' | 'revoke' | 'deactivate' | 'to_int' | 'to_cu'
 
 // Lo que dice cada confirmación
 export const CONFIRM: Record<ConfirmKind, (name: string) => { title: string; text: string; confirmLabel: string; danger?: boolean }> = {
@@ -33,6 +33,16 @@ export const CONFIRM: Record<ConfirmKind, (name: string) => { title: string; tex
     text: `Los clientes de ${name} no podrán reservar desde ahora y el dueño solo verá la pantalla de pago. No se borra nada: vuelve a funcionar en cuanto registres un pago. Ojo: si nunca ha pagado, se borra solo a los 5 días.`,
     confirmLabel: 'Sí, inhabilitar',
     danger: true,
+  }),
+  to_int: (name) => ({
+    title: '¿Pasar a la versión internacional?',
+    text: `${name} se abrirá desde ahora en citora-app.com/int/, con los precios de fuera de Cuba. Sus enlaces de siempre siguen valiendo: llevan solos a la versión nueva. No se borra nada y puedes deshacerlo.`,
+    confirmLabel: 'Sí, pasar a internacional',
+  }),
+  to_cu: (name) => ({
+    title: '¿Pasar a la versión de Cuba?',
+    text: `${name} se abrirá desde ahora en citora-app.com, con los precios de Cuba. Sus enlaces de siempre siguen valiendo: llevan solos a la versión nueva. No se borra nada y puedes deshacerlo.`,
+    confirmLabel: 'Sí, pasar a Cuba',
   }),
 }
 

@@ -6,6 +6,7 @@ import { applyAppearance } from '../../lib/appearance'
 import { setBrandColor } from '../../lib/brand'
 import { setAppManifest } from '../../lib/pwa'
 import { errorMessage } from '../../lib/errors'
+import { goToMarket } from '../../lib/market'
 import { cupRate, dateKey, duration, longDate, money, price, timeOf, todayKey, weekdayOf, dayTitle } from '../../lib/format'
 import { buildAppointmentIcs, downloadIcs } from '../../lib/ics'
 import { hasModule } from '../../lib/plans'
@@ -37,6 +38,8 @@ export default function BookingPage() {
       return
     }
     const b = data as PublicBooking | null
+    // Negocio de la otra versión (Cuba o /int/): la cita se abre allí
+    if (b && goToMarket(b.business.market)) return
     setBooking(b)
     if (b) {
       setBrandColor(b.business.color_primary)

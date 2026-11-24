@@ -1,3 +1,4 @@
+import { browserTimezone, MARKET } from './market'
 import { currencyFields, generateSlots, type CurrencyMode } from './format'
 import { load, remove, save } from './storage'
 import { supabase } from './supabase'
@@ -96,6 +97,9 @@ export async function createBusinessFromDraft(d: Draft): Promise<{ id: string; s
     p_currency: money.currency,
     p_usd_prices: money.usd_prices,
     p_usd_rate: money.usd_prices ? d.usd_rate ?? null : null,
+    // Versión donde se crea (Cuba o /int/) y, fuera de Cuba, la hora del móvil
+    p_market: MARKET,
+    p_timezone: MARKET === 'int' ? browserTimezone() : null,
   })
   if (error) throw error
   const created = data as { id: string; slug: string; code: string }

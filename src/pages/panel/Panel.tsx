@@ -9,6 +9,7 @@ import { setAppManifest } from '../../lib/pwa'
 import { createBusinessFromDraft, loadDraft } from '../../lib/draft'
 import { stopTracking } from '../../lib/analytics'
 import { errorMessage } from '../../lib/errors'
+import { goToMarket } from '../../lib/market'
 import { fetchProgress, mergeOnboarding, readOnboarding, saveOnboarding, type Onboarding, type Progress } from '../../lib/onboarding'
 import { load, save } from '../../lib/storage'
 import { APP_VERSION } from '../../lib/version'
@@ -69,6 +70,8 @@ export default function Panel() {
       setError(errorMessage(e1 || e2))
       return
     }
+    // Negocio de la otra versión (Cuba o /int/): su panel está allí
+    if (b && goToMarket((b as Business).market)) return
     setBusiness(b as Business | null)
     setStatus(st as MyStatus | null)
     if (b) {

@@ -16,6 +16,7 @@ import { supabase } from '../lib/supabase'
 import { BUSINESS_TYPES, businessType } from '../lib/templates'
 import { DEFAULT_PRICE, DEFAULT_TEAM_PRICE } from '../lib/plans'
 import type { Prices } from '../lib/types'
+import { IS_INT, isCubanPhone, marketBase } from '../lib/market'
 import { panelPath, publicUrl, siteUrl } from '../lib/url'
 
 const STEPS = ['Tipo', 'Negocio', 'Moneda', 'Servicios', 'Horario', 'Cuenta']
@@ -129,7 +130,9 @@ export default function Create() {
       if (draft.name.trim().length < 2) return 'Escribe el nombre de tu negocio.'
       if (draft.slug.length < 3) return 'Elige el enlace de tu app (mínimo 3 caracteres).'
       if (slugState === 'taken') return 'Ese enlace ya está en uso. Prueba otro.'
-      if (cleanPhone(draft.whatsapp).length < 8) return 'Escribe tu número de WhatsApp con el código del país (ej. 53 5555 5555).'
+      if (cleanPhone(draft.whatsapp).length < 8) return `Escribe tu número de WhatsApp con el código del país (ej. ${IS_INT ? '1 305 555 1234' : '53 5555 5555'}).`
+      // La versión de Cuba es para negocios con WhatsApp de Cuba (ver market.ts)
+      if (!IS_INT && !isCubanPhone(draft.whatsapp)) return 'Ese número no es de Cuba. Si tu negocio está fuera de Cuba, créalo en la versión internacional (enlace debajo del WhatsApp).'
     }
     if (step === 2 && mode === 'AMBAS' && !(rate > 0)) return 'Escribe la tasa del dólar: cuántos CUP vale 1 USD.'
     if (step === 3) {
@@ -208,7 +211,7 @@ export default function Create() {
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
-        options: { emailRedirectTo: `${window.location.origin}${import.meta.env.BASE_URL}panel` },
+        options: { emailRedirectTo: `${siteUrl()}panel` },
       })
       if (error) throw error
       if (!data.session) {
@@ -341,9 +344,18 @@ export default function Create() {
               />
             </div>
           </Field>
-          <Field label="WhatsApp del negocio" hint="Con el código del país. Ej: 53 5555 5555. Tus clientes te escribirán aquí.">
-            <input className="input" inputMode="tel" value={draft.whatsapp} placeholder="53 5555 5555" onChange={(e) => update({ whatsapp: e.target.value })} />
+          <Field label="WhatsApp del negocio" hint={`Con el código del país. Ej: ${IS_INT ? '1 305 555 1234' : '53 5555 5555'}. Tus clientes te escribirán aquí.`}>
+            <input className="input" inputMode="tel" value={draft.whatsapp} placeholder={IS_INT ? '1 305 555 1234' : '53 5555 5555'} onChange={(e) => update({ whatsapp: e.target.value })} />
           </Field>
+          {!IS_INT && cleanPhone(draft.whatsapp).length >= 8 && !isCubanPhone(draft.whatsapp) && (
+            <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">
+              <p><b>Ese número no es de Cuba.</b> Esta versión de Citora es para negocios en Cuba.</p>
+              {/* Recarga: la otra versión arranca con lo suyo. El borrador se guarda en el móvil y sigue allí. */}
+              <a href={`${marketBase('int')}crear`} className="mt-1 inline-block font-semibold text-amber-900 underline">
+                ¿Tu negocio está fuera de Cuba? Créalo en la versión internacional →
+              </a>
+            </div>
+          )}
           <Field label="Dirección (opcional)">
             <input className="input" value={draft.address} maxLength={120} placeholder="Calle, número, municipio" onChange={(e) => update({ address: e.target.value })} />
           </Field>

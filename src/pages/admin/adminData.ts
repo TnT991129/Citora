@@ -26,6 +26,8 @@ export interface AdminOwner {
   created_at: string | null
   comped: boolean
   timezone: string | null
+  /** Versión de Citora: 'cu' (Cuba) o 'int' (internacional). Null si aún no creó su negocio. */
+  market?: 'cu' | 'int' | null
   status: BusinessStatus | 'sin_negocio'
 }
 

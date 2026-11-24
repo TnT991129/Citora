@@ -8,6 +8,7 @@ import { TimeChips } from '../../components/TimeChips'
 import { Alert, BusinessAvatar, Button, CitoraLogo, Field, Modal, PageLoader, Toggle, flash } from '../../components/ui'
 import { setBrandColor } from '../../lib/brand'
 import { errorMessage } from '../../lib/errors'
+import { goToMarket, type Market } from '../../lib/market'
 import { duration, money, WEEKDAYS } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import { StaffAgenda, StaffStats } from './StaffPortalAgenda'
@@ -26,7 +27,7 @@ interface PortalService {
 interface PortalDay { weekday: number; is_open: boolean; slots: string[] }
 interface Portal {
   staff: { id: string; name: string; photo_url: string | null; specialty?: string | null }
-  business: { name: string; slug: string; logo_url: string | null; color_primary: string; currency: string; usd_prices: boolean; timezone: string }
+  business: { name: string; slug: string; market?: Market; logo_url: string | null; color_primary: string; currency: string; usd_prices: boolean; timezone: string }
   all_services: boolean
   bookable?: { id: string; name: string; is_extra: boolean }[]
   services: PortalService[]
@@ -56,6 +57,8 @@ export default function StaffPortal() {
     const { data, error } = await supabase.rpc('staff_portal', { p_token: token })
     if (error) return setError(errorMessage(error))
     const p = data as Portal
+    // Negocio de la otra versión (Cuba o /int/): el enlace se abre allí
+    if (goToMarket(p.business.market)) return
     setData(p)
     setSpecialty(p.staff.specialty || '')
     setBrandColor(p.business.color_primary)

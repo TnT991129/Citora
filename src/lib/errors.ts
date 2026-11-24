@@ -17,6 +17,8 @@ const MESSAGES: Record<string, string> = {
   SIN_SESION: 'Tu sesión expiró. Vuelve a entrar.',
   YA_TIENE_NEGOCIO: 'Esta cuenta ya tiene un negocio creado.',
   ENLACE_NO_DISPONIBLE: 'Ese enlace ya está en uso o no es válido. Prueba otro.',
+  WHATSAPP_NO_CUBANO: 'Ese WhatsApp no es de Cuba. Los negocios de fuera de Cuba usan la versión internacional de Citora: escríbenos y te ayudamos.',
+  MERCADO_INVALIDO: 'Versión de Citora no válida.',
   ENLACE_INVALIDO: 'El enlace solo puede tener letras minúsculas, números y guiones (3 a 40 caracteres).',
   SIN_NEGOCIO: 'Todavía no has creado tu negocio.',
   NEGOCIO_ACTIVO: 'Este negocio está en prueba o pagando. Inhabilítalo primero si quieres eliminarlo.',

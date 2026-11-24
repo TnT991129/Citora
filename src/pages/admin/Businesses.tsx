@@ -198,11 +198,12 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
   const state = rowState(r)
   const name = r.name || r.email || ''
 
-  const act = async (fn: 'admin_extend_trial' | 'admin_deactivate_business' | 'admin_grant_free' | 'admin_revoke_free', msg: string) => {
+  const act = async (fn: 'admin_extend_trial' | 'admin_deactivate_business' | 'admin_grant_free' | 'admin_revoke_free' | 'admin_set_market', msg: string, market?: 'cu' | 'int') => {
     if (!biz) return
     setActing(true)
     setError(null)
-    const { error } = await supabase.rpc(fn, fn === 'admin_extend_trial' ? { p_business: biz.id, p_days: 3 } : { p_business: biz.id })
+    const { error } = await supabase.rpc(fn, fn === 'admin_extend_trial' ? { p_business: biz.id, p_days: 3 }
+      : fn === 'admin_set_market' ? { p_business: biz.id, p_market: market } : { p_business: biz.id })
     setActing(false)
     setConfirming(null)
     if (error) return setError(errorMessage(error))
@@ -229,6 +230,7 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
 
         <div className="mt-4 flex items-center gap-2">
           <StateChip owner={r} />
+          {r.market === 'int' && <span className="chip shrink-0 bg-indigo-100 font-semibold text-indigo-800">Internacional</span>}
           <span className="truncate text-sm text-slate-500">
             {state === 'prueba' && r.trial_ends_at && <>Termina el {fullDateFromIso(r.trial_ends_at, ADMIN_TZ)}</>}
             {state === 'activo' && r.paid_until && <>{planName(r.plan)} · pagado hasta el {fullDateFromIso(r.paid_until, ADMIN_TZ)} · {money(r.plan === 'ultra' ? prices.ultra : prices.basico, 'CUP')}/mes</>}
@@ -326,6 +328,11 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
             {biz && !r.comped && <MoreAction icon="gift" onClick={() => setConfirming('grant')}>Regalar para siempre (cortesía)</MoreAction>}
             {biz && r.comped && <MoreAction icon="gift" onClick={() => setConfirming('revoke')}>Quitar la cortesía</MoreAction>}
             {biz && <MoreAction icon="globe" onClick={() => setZoning(true)}>Cambiar zona horaria</MoreAction>}
+            {biz && (
+              <MoreAction icon="globe" onClick={() => setConfirming(r.market === 'int' ? 'to_cu' : 'to_int')}>
+                {r.market === 'int' ? 'Pasar a la versión de Cuba' : 'Pasar a la versión internacional'}
+              </MoreAction>
+            )}
             {biz && state !== 'vencido' && <MoreAction icon="lock" danger onClick={() => setConfirming('deactivate')}>Inhabilitar</MoreAction>}
             {(state === 'vencido' || state === 'sin_negocio') && <MoreAction icon="x" danger onClick={() => setDeleting(true)}>Eliminar para siempre</MoreAction>}
           </div>
@@ -340,6 +347,8 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
           onConfirm={() => {
             if (confirming === 'grant') act('admin_grant_free', `${name} tiene Citora gratis para siempre`)
             else if (confirming === 'revoke') act('admin_revoke_free', `Cortesía quitada: ${name} vuelve a como estaba`)
+            else if (confirming === 'to_int') act('admin_set_market', `${name} pasa a la versión internacional`, 'int')
+            else if (confirming === 'to_cu') act('admin_set_market', `${name} pasa a la versión de Cuba`, 'cu')
             else act('admin_deactivate_business', `${name} inhabilitado`)
           }}
         />

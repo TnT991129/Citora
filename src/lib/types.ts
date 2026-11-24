@@ -1,4 +1,5 @@
 import type { Appearance } from './appearance'
+import type { Market } from './market'
 import type { Onboarding } from './onboarding'
 
 export type PlanKey = 'basico' | 'plus' | 'ultra'
@@ -10,6 +11,8 @@ export interface Business {
   owner_id: string
   slug: string
   code: string
+  /** Versión de Citora: 'cu' (Cuba) o 'int' (internacional, citora-app.com/int/). La cambia el administrador. */
+  market: Market
   name: string
   business_type: string
   whatsapp: string
@@ -264,6 +267,7 @@ export interface PublicBusiness {
   id?: string
   name: string
   slug: string
+  market?: Market
   accepting: boolean
   logo_url: string | null
   color_primary: string
@@ -392,6 +396,7 @@ export interface PublicBooking {
   business: {
     name: string
     slug: string
+    market?: Market
     whatsapp: string
     address: string | null
     logo_url: string | null

@@ -1,8 +1,7 @@
 // App instalable: cada negocio se instala con su nombre, su color y su logo.
 // El manifiesto se genera en el navegador porque cada negocio es distinto.
 import { useEffect, useState } from 'react'
-
-const BASE = import.meta.env.BASE_URL || '/'
+import { APP_BASE, SITE_BASE as BASE } from './market'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
@@ -130,7 +129,8 @@ export async function setAppManifest(opts: { name: string; shortName?: string; p
   if (key === current) return
   current = key
   const origin = window.location.origin
-  const start = `${origin}${BASE}${opts.path}`
+  // Cada versión (Cuba o /int/) se instala con su propia dirección
+  const start = `${origin}${APP_BASE}${opts.path}`
   const [i192, i512] = await Promise.all([
     makeIcon(192, opts.name, opts.color, opts.logo || null),
     makeIcon(512, opts.name, opts.color, opts.logo || null),

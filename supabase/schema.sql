@@ -111,6 +111,12 @@ drop table if exists public.owner_prefs;
 alter table public.businesses add column if not exists cover_url text;
 alter table public.businesses add column if not exists appearance jsonb not null default '{}'::jsonb;
 
+-- Versión de Citora del negocio: 'cu' (Cuba, citora-app.com) o 'int' (internacional, citora-app.com/int/).
+-- Se elige al crear la app según la dirección en la que se crea, y después solo la cambia el
+-- administrador (admin_set_market). Los negocios de antes son todos de Cuba.
+alter table public.businesses add column if not exists market text not null default 'cu'
+  check (market in ('cu', 'int'));
+
 -- Servicios del negocio
 create table if not exists public.services (
   id uuid primary key default gen_random_uuid(),
@@ -1013,6 +1019,13 @@ $$;
 -- ---------------------------------------------------------------------
 
 -- Protege los campos que solo puede tocar el administrador
+-- Teléfono de Cuba: 8 cifras sin el código (5xxx xxxx móviles, 7xxx xxxx fijos…) o con el 53
+-- delante. Igual que isCubanPhone en src/lib/market.ts.
+create or replace function public._is_cuban_phone(p text)
+returns boolean language sql immutable as $$
+  select regexp_replace(coalesce(p, ''), '\D', '', 'g') ~ '^(53)?[2-7][0-9]{7}$';
+$$;
+
 create or replace function public.businesses_guard()
 returns trigger language plpgsql set search_path = public as $$
 begin
@@ -1051,6 +1064,13 @@ begin
     new.comped := old.comped;
     new.comped_prev_plan := old.comped_prev_plan;
     new.comped_prev_paid_until := old.comped_prev_paid_until;
+    new.market := old.market;
+  end if;
+  -- Los negocios de Cuba tienen WhatsApp de Cuba (los de fuera usan la versión internacional, con
+  -- su propio precio). Se mira al crear y cuando el dueño cambia el número; el administrador no.
+  if new.market = 'cu' and new.whatsapp <> '' and not _is_cuban_phone(new.whatsapp)
+     and (tg_op = 'INSERT' or (new.whatsapp is distinct from old.whatsapp and not is_platform_admin())) then
+    raise exception 'WHATSAPP_NO_CUBANO';
   end if;
   return new;
 end;
@@ -1585,13 +1605,14 @@ begin
   v_plan := business_effective_plan(b.plan, b.trial_ends_at, b.paid_until);
   if v_plan is null then
     return jsonb_build_object(
-      'name', b.name, 'slug', b.slug, 'logo_url', b.logo_url,
+      'name', b.name, 'slug', b.slug, 'market', b.market, 'logo_url', b.logo_url,
       'color_primary', b.color_primary, 'appearance', b.appearance, 'accepting', false);
   end if;
   return jsonb_build_object(
     'id', b.id,
     'name', b.name,
     'slug', b.slug,
+    'market', b.market,
     'business_type', b.business_type,
     'whatsapp', b.whatsapp,
     'address', b.address,
@@ -2159,7 +2180,7 @@ returns jsonb language sql stable security definer set search_path = public as $
                  from appointments x
                  where x.business_id = a.business_id and x.customer_phone = a.customer_phone),
     'business', jsonb_build_object(
-      'name', b.name, 'slug', b.slug, 'whatsapp', b.whatsapp, 'address', b.address,
+      'name', b.name, 'slug', b.slug, 'market', b.market, 'whatsapp', b.whatsapp, 'address', b.address,
       'logo_url', b.logo_url, 'color_primary', b.color_primary, 'timezone', b.timezone,
       'currency', b.currency, 'cancel_notice_hours', b.cancel_notice_hours,
       'reschedule_notice_hours', b.reschedule_notice_hours, 'max_reschedules', b.max_reschedules,
@@ -2463,7 +2484,7 @@ begin
   select * into b from businesses where id = st.business_id;
   return jsonb_build_object(
     'staff', jsonb_build_object('id', st.id, 'name', st.name, 'photo_url', st.photo_url, 'specialty', st.specialty),
-    'business', jsonb_build_object('name', b.name, 'slug', b.slug, 'logo_url', b.logo_url, 'color_primary', b.color_primary,
+    'business', jsonb_build_object('name', b.name, 'slug', b.slug, 'market', b.market, 'logo_url', b.logo_url, 'color_primary', b.color_primary,
                                    'currency', b.currency, 'usd_prices', b.usd_prices, 'timezone', b.timezone),
     -- Hace todos los servicios del negocio: entonces no tiene servicios propios que cambiar
     'all_services', not st.own_services and not exists (select 1 from staff_services where staff_id = st.id),
@@ -2671,10 +2692,14 @@ $$;
 -- Moneda: p_currency 'CUP' o 'USD'; con p_usd_prices, precios en USD y su equivalente en CUP a la tasa p_usd_rate.
 drop function if exists public.create_business(text, text, text, text, text, text, jsonb, jsonb);
 drop function if exists public.create_business(text, text, text, text, text, text, jsonb, jsonb, text, boolean);
+-- p_market: 'cu' o 'int' (la versión donde se crea). p_timezone: la del móvil, solo para 'int'
+-- (en Cuba se usa la de los ajustes).
+drop function if exists public.create_business(text, text, text, text, text, text, jsonb, jsonb, text, boolean, numeric);
 create or replace function public.create_business(
   p_name text, p_slug text, p_type text, p_whatsapp text, p_address text,
   p_color text, p_services jsonb, p_schedule jsonb,
-  p_currency text default 'CUP', p_usd_prices boolean default false, p_usd_rate numeric default null)
+  p_currency text default 'CUP', p_usd_prices boolean default false, p_usd_rate numeric default null,
+  p_market text default 'cu', p_timezone text default null)
 returns jsonb language plpgsql volatile security definer set search_path = public as $$
 declare
   v_uid uuid := auth.uid();
@@ -2690,10 +2715,13 @@ begin
   if v_uid is null then raise exception 'SIN_SESION'; end if;
   if exists (select 1 from businesses where owner_id = v_uid) then raise exception 'YA_TIENE_NEGOCIO'; end if;
   if not check_slug_available(p_slug) then raise exception 'ENLACE_NO_DISPONIBLE'; end if;
+  if coalesce(p_market, 'cu') not in ('cu', 'int') then raise exception 'MERCADO_INVALIDO'; end if;
 
   select trial_days, default_timezone into v_trial, v_tz from platform_settings where id = 1;
   -- Una zona mal escrita en los ajustes no debe impedir que alguien cree su app
   if v_tz is null or not _is_valid_timezone(v_tz) then v_tz := 'Etc/GMT+4'; end if;
+  -- Fuera de Cuba, la hora del móvil de quien la crea (si es una zona válida)
+  if p_market = 'int' and p_timezone is not null and _is_valid_timezone(p_timezone) then v_tz := p_timezone; end if;
 
   v_prefix := upper(left(regexp_replace(lower(p_slug), '[^a-z]', '', 'g') || 'cit', 3));
   loop
@@ -2704,14 +2732,14 @@ begin
   end loop;
 
   insert into businesses (owner_id, slug, code, name, business_type, whatsapp, address,
-                          color_primary, trial_ends_at, policies, currency, usd_prices, usd_rate, timezone)
+                          color_primary, trial_ends_at, policies, currency, usd_prices, usd_rate, timezone, market)
   values (v_uid, lower(p_slug), v_code, btrim(p_name), coalesce(nullif(p_type, ''), 'otro'),
           _clean_phone(p_whatsapp), nullif(btrim(coalesce(p_address, '')), ''),
           coalesce(nullif(p_color, ''), '#f0532e'),
           now() + make_interval(days => coalesce(v_trial, 3)),
           'Llega 5 minutos antes de tu cita. Si no puedes venir, cancela o cambia la fecha desde el enlace de tu cita.',
           coalesce(p_currency, 'CUP'), coalesce(p_usd_prices, false),
-          case when p_usd_rate > 0 then round(p_usd_rate, 2) end, v_tz)
+          case when p_usd_rate > 0 then round(p_usd_rate, 2) end, v_tz, coalesce(p_market, 'cu'))
   returning id into v_id;
 
   for v_item in select * from jsonb_array_elements(coalesce(p_services, '[]'::jsonb)) loop
@@ -2733,7 +2761,7 @@ begin
     on conflict (business_id, weekday) do update set is_open = excluded.is_open, slots = excluded.slots;
   end loop;
 
-  perform _notify_admin_push('Negocio nuevo registrado',
+  perform _notify_admin_push(case when p_market = 'int' then 'Negocio nuevo registrado (internacional)' else 'Negocio nuevo registrado' end,
     btrim(p_name) || ' (' || v_code || ') acaba de empezar su prueba gratis.');
 
   return jsonb_build_object('id', v_id, 'slug', lower(p_slug), 'code', v_code);
@@ -3162,12 +3190,24 @@ begin
     select jsonb_agg(jsonb_build_object(
       'id', b.id, 'name', b.name, 'slug', b.slug, 'code', b.code, 'business_type', b.business_type,
       'whatsapp', b.whatsapp, 'plan', b.plan, 'trial_ends_at', b.trial_ends_at,
-      'paid_until', b.paid_until, 'created_at', b.created_at,
+      'paid_until', b.paid_until, 'created_at', b.created_at, 'market', b.market,
       'status', business_status(b.plan, b.trial_ends_at, b.paid_until),
       'owner_email', u.email,
       'appointments_count', (select count(*) from appointments a where a.business_id = b.id)
     ) order by b.created_at desc)
     from businesses b left join auth.users u on u.id = b.owner_id), '[]'::jsonb);
+end;
+$$;
+
+-- El administrador pasa un negocio a la otra versión ('cu' Cuba o 'int' internacional). Su web y su
+-- panel se abren desde entonces en la suya (los enlaces de la otra llevan allí solos).
+create or replace function public.admin_set_market(p_business uuid, p_market text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  if p_market is null or p_market not in ('cu', 'int') then raise exception 'MERCADO_INVALIDO'; end if;
+  update businesses set market = p_market where id = p_business;
+  if not found then raise exception 'NEGOCIO_NO_EXISTE'; end if;
 end;
 $$;
 
@@ -3193,7 +3233,7 @@ begin
       'id', b.id, 'name', b.name, 'slug', b.slug, 'code', b.code, 'business_type', b.business_type,
       'whatsapp', b.whatsapp, 'plan', b.plan, 'trial_ends_at', b.trial_ends_at,
       'paid_until', b.paid_until, 'created_at', b.created_at, 'comped', coalesce(b.comped, false),
-      'timezone', b.timezone,
+      'timezone', b.timezone, 'market', b.market,
       'status', case when b.id is null then 'sin_negocio'
                      else business_status(b.plan, b.trial_ends_at, b.paid_until) end
     ) order by u.created_at desc)
@@ -3885,7 +3925,8 @@ grant execute on function public.reschedule_booking(text, date, text) to anon, a
 grant execute on function public.edit_booking(text, uuid[], date, text, text, text, uuid, jsonb) to anon, authenticated;
 grant execute on function public.check_slug_available(text) to anon, authenticated;
 
-grant execute on function public.create_business(text, text, text, text, text, text, jsonb, jsonb, text, boolean, numeric) to authenticated;
+grant execute on function public.create_business(text, text, text, text, text, text, jsonb, jsonb, text, boolean, numeric, text, text) to authenticated;
+grant execute on function public.admin_set_market(uuid, text) to authenticated;
 grant execute on function public.get_my_business_status() to authenticated;
 grant execute on function public.get_my_progress() to authenticated;
 grant execute on function public.owner_staff_link(uuid, text) to authenticated;
@@ -3947,6 +3988,7 @@ grant execute on function public.is_valid_slug(text) to anon, authenticated;
 grant execute on function public.is_reserved_slug(text) to anon, authenticated;
 grant execute on function public._is_valid_timezone(text) to authenticated;
 grant execute on function public._clean_phone(text) to anon, authenticated;
+grant execute on function public._is_cuban_phone(text) to anon, authenticated;
 grant execute on function public._clean_appearance(jsonb) to authenticated;
 grant execute on function public.businesses_guard() to authenticated;
 grant execute on function public.appointments_guard() to authenticated;

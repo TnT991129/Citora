@@ -3,12 +3,15 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import './index.css'
+import { APP_BASE, IS_INT } from './lib/market'
 import { initPwa } from './lib/pwa'
 import { reloadOnce } from './lib/reload'
 import { initSentry, SentryErrorBoundary } from './lib/sentry'
 import { openSharedLink } from './lib/url'
 
 openSharedLink()
+// Para que los estilos o textos puedan distinguir la versión internacional
+if (IS_INT) document.documentElement.dataset.market = 'int'
 initPwa()
 initSentry()
 // Un archivo de la versión anterior que ya no existe (ver lib/reload.ts)
@@ -31,7 +34,7 @@ function CrashFallback() {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <SentryErrorBoundary fallback={<CrashFallback />}>
-      <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+      <BrowserRouter basename={APP_BASE.replace(/\/$/, '')}>
         <App />
       </BrowserRouter>
     </SentryErrorBoundary>

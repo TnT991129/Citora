@@ -1,4 +1,6 @@
-const BASE = import.meta.env.BASE_URL || '/'
+import { APP_BASE as BASE } from './market'
+
+// Todas las rutas cuelgan de la versión que se está viendo: "/" (Cuba) o "/int/" (ver market.ts)
 
 // Cada negocio tiene dos partes, colgando de su enlace:
 //   /barberia-leo/client       → la web donde reservan sus clientes
@@ -14,7 +16,7 @@ export function panelPath(slug: string, sub = ''): string {
   return `/${slug}/panel-admin${sub ? `/${sub}` : ''}`
 }
 
-/** Dirección de la plataforma, ej. https://usuario.github.io/Citora/ */
+/** Dirección de la plataforma, ej. https://citora-app.com/ (o https://citora-app.com/int/) */
 export function siteUrl(): string {
   return `${window.location.origin}${BASE}`
 }

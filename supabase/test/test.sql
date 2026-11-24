@@ -1097,12 +1097,12 @@ insert into auth.users (id, email) values
 update platform_settings set default_timezone = 'Europe/Madrid';
 set role authenticated;
 set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
-select create_business('Zona Madrid', 'zona-madrid', 'otro', '+34600000000', null, '#0ea5e9', '[]', '[]');
+select create_business('Zona Madrid', 'zona-madrid', 'otro', '55550100', null, '#0ea5e9', '[]', '[]');
 reset role;
 update platform_settings set default_timezone = 'Europe/Madrdi';
 set role authenticated;
 set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
-select create_business('Zona Erratas', 'zona-erratas', 'otro', '+34600000001', null, '#0ea5e9', '[]', '[]');
+select create_business('Zona Erratas', 'zona-erratas', 'otro', '55550101', null, '#0ea5e9', '[]', '[]');
 reset role;
 do $$ begin
   assert (select timezone from businesses where slug = 'zona-madrid') = 'Europe/Madrid', 'zona de los ajustes';
@@ -1417,6 +1417,66 @@ delete from appointments where token = 'silla1';
 update businesses b set plan = x.v->>'plan', paid_until = (x.v->>'paid')::timestamptz, trial_ends_at = (x.v->>'trial')::timestamptz,
        slot_capacity = (x.v->>'cap')::int, comped = (x.v->>'comped')::boolean
   from (select v::jsonb as v from ctx where k = 'mar_antes') x where b.slug = 'spa-mar';
+set role authenticated;
+
+-- ===== Dos versiones: Cuba (citora-app.com) e internacional (/int/) =====
+do $$ begin
+  assert _is_cuban_phone('+53 5 555 1234') and _is_cuban_phone('55551234') and _is_cuban_phone('72041234'), 'números de Cuba';
+  assert not _is_cuban_phone('+34600000000') and not _is_cuban_phone('13055551234') and not _is_cuban_phone('5355'), 'números de fuera';
+  assert (select count(*) from businesses where market <> 'cu') = 0, 'los negocios de antes son de Cuba';
+end $$;
+reset role;
+insert into auth.users (id, email) values
+  ('66666666-6666-6666-6666-666666666666', 'miami@test.com'),
+  ('77777777-7777-7777-7777-777777777777', 'cuba@test.com');
+set role authenticated;
+set request.jwt.claim.sub = '66666666-6666-6666-6666-666666666666';
+-- En la versión de Cuba, un WhatsApp de fuera no vale
+select expect_error($$select create_business('Nails Miami', 'nails-miami', 'unas', '+1 305 555 1234', '', '#db2777', '[]', '[]')$$, 'WHATSAPP_NO_CUBANO');
+select expect_error($$select create_business('Nails Miami', 'nails-miami', 'unas', '+1 305 555 1234', '', '#db2777', '[]', '[]',
+  'CUP', false, null, 'otra')$$, 'MERCADO_INVALIDO');
+-- En la internacional sí, y con la hora del móvil
+select create_business('Nails Miami', 'nails-miami', 'unas', '+1 305 555 1234', '', '#db2777', '[]', '[]',
+  'USD', false, null, 'int', 'America/New_York');
+do $$ begin
+  assert (select market from businesses where slug = 'nails-miami') = 'int', 'negocio internacional';
+  assert (select timezone from businesses where slug = 'nails-miami') = 'America/New_York', 'con la hora del móvil';
+end $$;
+-- El dueño no puede pasarse a la versión de Cuba (ni cambiando su negocio a mano)
+update businesses set market = 'cu', name = 'Nails Miami Beach' where slug = 'nails-miami';
+do $$ begin
+  assert (select market from businesses where slug = 'nails-miami') = 'int', 'la versión no la cambia el dueño';
+  assert (select name from businesses where slug = 'nails-miami') = 'Nails Miami Beach', 'lo demás sí';
+end $$;
+-- Una zona inventada no vale: la de los ajustes
+set request.jwt.claim.sub = '77777777-7777-7777-7777-777777777777';
+select create_business('Spa Habana', 'spa-habana', 'spa', '53 5 555 7777', '', '#db2777', '[]', '[]',
+  'CUP', false, null, 'cu', 'America/New_York');
+do $$ begin
+  assert (select market from businesses where slug = 'spa-habana') = 'cu', 'negocio de Cuba';
+  assert (select timezone from businesses where slug = 'spa-habana') <> 'America/New_York', 'en Cuba no se usa la hora del móvil';
+end $$;
+-- Un negocio de Cuba no puede cambiar su WhatsApp a uno de fuera (sí a otro de Cuba)
+select expect_error($$update businesses set whatsapp = '+34600000000' where slug = 'spa-habana'$$, 'WHATSAPP_NO_CUBANO');
+update businesses set whatsapp = '5355558888' where slug = 'spa-habana';
+set role anon;
+do $$ begin
+  assert get_public_business('nails-miami')->>'market' = 'int', 'la web sabe su versión';
+  assert get_public_business('spa-habana')->>'market' = 'cu', 'la web sabe su versión (Cuba)';
+end $$;
+-- Solo el administrador cambia la versión
+set role authenticated;
+select expect_error($$select admin_set_market((select id from businesses where slug = 'spa-habana'), 'int')$$, 'NO_AUTORIZADO');
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+select expect_error($$select admin_set_market((select id from businesses where slug = 'spa-habana'), 'marte')$$, 'MERCADO_INVALIDO');
+select admin_set_market((select id from businesses where slug = 'nails-miami'), 'cu');
+do $$ begin
+  assert (select market from businesses where slug = 'nails-miami') = 'cu', 'el administrador lo pasa a Cuba';
+  assert (select whatsapp from businesses where slug = 'nails-miami') = '13055551234', 'aunque su número sea de fuera';
+end $$;
+reset role;
+delete from businesses where slug in ('nails-miami', 'spa-habana');
+delete from auth.users where id in ('66666666-6666-6666-6666-666666666666', '77777777-7777-7777-7777-777777777777');
 set role authenticated;
 
 -- ===== Borrar dueños =====

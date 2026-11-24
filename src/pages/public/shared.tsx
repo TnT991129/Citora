@@ -6,6 +6,7 @@ import { applyAppearance, gradientCss, socialUrl } from '../../lib/appearance'
 import { setBrandColor } from '../../lib/brand'
 import { setAppManifest } from '../../lib/pwa'
 import { errorMessage } from '../../lib/errors'
+import { goToMarket } from '../../lib/market'
 import { supabase } from '../../lib/supabase'
 import type { PublicBusiness } from '../../lib/types'
 import { clientPath } from '../../lib/url'
@@ -25,6 +26,8 @@ export function usePublicBusiness(slug: string | undefined) {
         return
       }
       const b = data as PublicBusiness | null
+      // Negocio de la otra versión (Cuba o /int/): se abre allí
+      if (b && goToMarket(b.market)) return
       setBusiness(b)
       if (b) {
         setBrandColor(b.color_primary)

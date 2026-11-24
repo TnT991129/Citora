@@ -6,8 +6,9 @@ import { useSession } from '../lib/auth'
 import { track } from '../lib/analytics'
 import { setBrandColor } from '../lib/brand'
 import { errorMessage } from '../lib/errors'
+import { goToMarket, type Market } from '../lib/market'
 import { supabase } from '../lib/supabase'
-import { panelPath } from '../lib/url'
+import { panelPath, siteUrl } from '../lib/url'
 
 export default function Login() {
   const session = useSession()
@@ -33,7 +34,9 @@ export default function Login() {
     if (next) return navigate(next, { replace: true })
     const { data: isAdmin } = await supabase.rpc('is_platform_admin')
     if (isAdmin) return navigate('/admin', { replace: true })
-    const { data: biz } = await supabase.from('businesses').select('slug').maybeSingle()
+    const { data: biz } = await supabase.from('businesses').select('slug, market').maybeSingle()
+    // Negocio de la otra versión (Cuba o /int/): su panel está allí
+    if (biz && goToMarket((biz as { market: Market }).market, panelPath((biz as { slug: string }).slug))) return
     navigate(biz ? panelPath((biz as { slug: string }).slug) : '/panel', { replace: true })
   }
 
@@ -58,7 +61,7 @@ export default function Login() {
     setBusy(true)
     setError(null)
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}restablecer`,
+      redirectTo: `${siteUrl()}restablecer`,
     })
     setBusy(false)
     if (error) setError(errorMessage(error))
