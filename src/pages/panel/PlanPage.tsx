@@ -14,9 +14,14 @@ interface PaymentInfo {
   card_holder: string
   card_phone: string
   admin_whatsapp: string
+  /** Precios al mes en la moneda de su versión: CUP (Cuba) o USD (internacional) */
   basico: number
   plus: number
   ultra: number
+  currency?: 'CUP' | 'USD'
+  /** Versión internacional: enlace de PayPal (vacío: pagar escribiendo por WhatsApp) e instrucciones */
+  paypal_url?: string
+  pay_note?: string
 }
 
 interface PaymentRow {
@@ -24,6 +29,7 @@ interface PaymentRow {
   plan: PlanKey
   months: number
   amount: number | null
+  currency?: 'CUP' | 'USD'
   paid_until: string
   created_at: string
 }
@@ -66,14 +72,21 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
   if (error) return <Alert>{error}</Alert>
   if (!info) return <PageLoader />
 
+  // Moneda de la mensualidad: CUP en Cuba, USD en la versión internacional (citora-app.com/int/)
+  const cur = info.currency || 'CUP'
+  const intl = cur === 'USD'
   const price = plan === 'ultra' ? info.ultra : info.basico
-  const amount = price * months
+  const amount = Math.round(price * months * 100) / 100
+  // paypal.me admite el importe al final (ej. paypal.me/nombre/20USD): se abre con el importe puesto
+  const paypalHref = info.paypal_url
+    ? /^https:\/\/(www\.)?paypal\.me\/[^/]+\/?$/i.test(info.paypal_url) ? `${info.paypal_url.replace(/\/$/, '')}/${amount}USD` : info.paypal_url
+    : null
   const message = [
     `Hola, acabo de pagar la mensualidad de Citora (${months} ${months === 1 ? 'mes' : 'meses'}).`,
     `Plan: *${PLANS[plan].name}*`,
     `Negocio: *${business.name}*`,
     `Código: *${business.code}*`,
-    `Importe: *${money(amount, 'CUP')}*`,
+    `Importe: *${money(amount, cur)}*`,
     'Te adjunto la captura del pago.',
   ].join('\n')
 
@@ -133,7 +146,7 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
             {[
               [String(progress.bookings), progress.bookings === 1 ? 'reserva' : 'reservas'],
               [String(progress.web_total), 'por tu enlace'],
-              [money(progress.revenue, business.currency).replace(/\s*(CUP|USD)$/, ''), `${business.currency} en citas hechas`],
+              [money(progress.revenue, business.currency).replace(/\s*[A-Z]{3}$/, ''), `${business.currency} en citas hechas`],
             ].map(([v, l]) => (
               <div key={l} className="card p-3.5 text-center">
                 <p className="truncate text-2xl font-extrabold tracking-tight">{v}</p>
@@ -190,7 +203,7 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
             {[
               [String(progress.bookings), progress.bookings === 1 ? 'reserva' : 'reservas'],
               [String(progress.web_total), 'por tu enlace'],
-              [money(progress.revenue, business.currency).replace(/\s*(CUP|USD)$/, ''), `${business.currency} en citas hechas`],
+              [money(progress.revenue, business.currency).replace(/\s*[A-Z]{3}$/, ''), `${business.currency} en citas hechas`],
             ].map(([v, l]) => (
               <div key={l} className="card p-3.5 text-center">
                 <p className="truncate text-2xl font-extrabold tracking-tight">{v}</p>
@@ -223,7 +236,7 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
                     {on && <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-10" /></svg>}
                   </span>
                 </span>
-                <span className="mt-3 block"><span className="text-2xl font-extrabold">{money(k === 'ultra' ? info.ultra : info.basico, 'CUP')}</span><span className="text-sm text-slate-500"> /mes</span></span>
+                <span className="mt-3 block"><span className="text-2xl font-extrabold">{money(k === 'ultra' ? info.ultra : info.basico, cur)}</span><span className="text-sm text-slate-500"> /mes</span></span>
                 <span className="mt-2 block text-sm text-slate-600">
                   {k === 'ultra' ? <>✓ Todo lo de Solo<br />✓ Tu equipo: cada persona con sus servicios, su horario y su enlace</> : <>✓ {includedIn('basico').length} funciones: reservas, agenda, clientes, WhatsApp, cupones…<br /><span className="text-slate-400">✗ Sin equipo (una sola agenda)</span></>}
                 </span>
@@ -258,9 +271,28 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
             </button>
           ))}
         </div>
-        <p className="text-lg">Total a pagar: <b>{money(amount, 'CUP')}</b></p>
+        <p className="text-lg">Total a pagar: <b>{money(amount, cur)}</b></p>
       </section>
 
+      {intl ? (
+        <section className="card space-y-3">
+          <h2 className="font-bold">3. Paga con PayPal</h2>
+          {paypalHref ? (
+            <>
+              <LinkButton href={paypalHref} block size="lg" newTab>Pagar {money(amount, cur)} con PayPal</LinkButton>
+              <p className="text-sm text-slate-500">Se abre PayPal con el importe ya puesto. Al terminar, haz una captura de pantalla del pago.</p>
+            </>
+          ) : (
+            <Alert kind="warning">Escríbenos por WhatsApp y te decimos cómo pagar.</Alert>
+          )}
+          {info.pay_note && <p className="whitespace-pre-line rounded-xl bg-slate-50 p-3 text-sm text-slate-600">{info.pay_note}</p>}
+          {!paypalHref && info.admin_whatsapp && (
+            <LinkButton href={waLink(info.admin_whatsapp, `Hola, quiero pagar la mensualidad de Citora (${PLANS[plan].name}, ${months} ${months === 1 ? 'mes' : 'meses'}, ${money(amount, cur)}). Negocio: ${business.name}, código ${business.code}.`)} variant="whatsapp" block newTab>
+              <WhatsAppIcon className="h-4 w-4" /> Escribir por WhatsApp
+            </LinkButton>
+          )}
+        </section>
+      ) : (
       <section className="card space-y-3">
         <h2 className="font-bold">3. Transfiere a esta tarjeta</h2>
         {info.card_number ? (
@@ -286,10 +318,11 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
         )}
         <p className="text-sm text-slate-500">Por Transfermóvil o EnZona. Haz una captura de pantalla del comprobante.</p>
       </section>
+      )}
 
       <section className="card space-y-3">
         <h2 className="font-bold">4. Declara tu pago</h2>
-        <p className="text-sm text-slate-500">Sube la captura de la transferencia. La revisamos y activamos tu mes en cuanto la confirmemos.</p>
+        <p className="text-sm text-slate-500">Sube la captura {intl ? 'del pago' : 'de la transferencia'}. La revisamos y activamos tu mes en cuanto la confirmemos.</p>
         <Alert kind="info">Demoramos un máximo de 24 horas en confirmar tu pago.</Alert>
         {proofPreview ? (
           <div className="flex items-center gap-3">
@@ -310,9 +343,9 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
             e.target.value = ''
           }}
         />
-        <input className="input" placeholder="Nota (opcional, ej. últimos dígitos de la tarjeta)" value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} />
+        <input className="input" placeholder={intl ? 'Nota (opcional, ej. el nombre o correo de quien pagó)' : 'Nota (opcional, ej. últimos dígitos de la tarjeta)'} value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} />
         {!proofPath && <p className="text-sm text-amber-700">Sube la captura para poder declarar el pago.</p>}
-        <Button block size="lg" onClick={submitClaim} loading={submitting} disabled={!proofPath}>Declarar pago de {money(amount, 'CUP')}</Button>
+        <Button block size="lg" onClick={submitClaim} loading={submitting} disabled={!proofPath}>Declarar pago de {money(amount, cur)}</Button>
         {info.admin_whatsapp && (
           <LinkButton href={waLink(info.admin_whatsapp, message)} variant="ghost" size="sm" newTab>
             <WhatsAppIcon className="h-4 w-4" /> O avísanos por WhatsApp
@@ -328,7 +361,7 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
               <li key={c.id} className="flex items-center justify-between gap-2 py-2">
                 <span>
                   {fullDateFromIso(c.created_at, business.timezone)} · {c.months} {c.months === 1 ? 'mes' : 'meses'}
-                  {c.amount != null && <> · {money(c.amount, 'CUP')}</>}
+                  {c.amount != null && <> · {money(c.amount, c.currency || 'CUP')}</>}
                   {c.status === 'rechazado' && c.admin_note && <span className="block text-xs text-red-600">{c.admin_note}</span>}
                 </span>
                 <span className={`chip text-xs ${
@@ -349,7 +382,7 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
             {history.map((h) => (
               <li key={h.id} className="flex justify-between py-2">
                 <span>{fullDateFromIso(h.created_at, business.timezone)} · {h.months} {h.months === 1 ? 'mes' : 'meses'}</span>
-                {h.amount != null && <span className="font-semibold">{money(h.amount, 'CUP')}</span>}
+                {h.amount != null && <span className="font-semibold">{money(h.amount, h.currency || 'CUP')}</span>}
               </li>
             ))}
           </ul>

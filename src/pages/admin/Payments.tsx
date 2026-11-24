@@ -11,7 +11,7 @@ import { Icon } from '../panel/Panel'
 import { ADMIN_TZ, agoShort, shortDay, type AdminOwner, type OwnerWithBusiness } from './adminData'
 import { PageTitle, SectionTitle } from './adminUi'
 import { PLANS, planName } from '../../lib/plans'
-import { ActivateModal, PickBusinessModal, type Prices } from './OwnerModals'
+import { ActivateModal, PickBusinessModal, planPrice, type Prices } from './OwnerModals'
 
 interface AdminClaim {
   id: string
@@ -25,7 +25,9 @@ interface AdminClaim {
   status: PaymentClaimStatus
   admin_note: string | null
   created_at: string
-  businesses: { name: string; code: string; whatsapp: string } | null
+  /** CUP (Cuba) o USD (versión internacional) */
+  currency?: 'CUP' | 'USD'
+  businesses: { name: string; code: string; whatsapp: string; market?: 'cu' | 'int' } | null
 }
 
 export interface RecentPayment {
@@ -35,6 +37,8 @@ export interface RecentPayment {
   plan: PlanKey
   months: number
   amount: number | null
+  /** CUP (Cuba) o USD (versión internacional); los de antes, CUP */
+  currency?: 'CUP' | 'USD'
   note: string | null
   paid_until: string
   /** El negocio ya no existe: corregir el pago solo cambia el historial y las cifras */
@@ -59,7 +63,7 @@ export function Payments({ onChanged }: { onChanged: () => void }) {
 
   const load = useCallback(async () => {
     const [c, s, o, p] = await Promise.all([
-      supabase.from('payment_claims').select('*, businesses(name, code, whatsapp)').order('created_at', { ascending: false }).limit(200),
+      supabase.from('payment_claims').select('*, businesses(name, code, whatsapp, market)').order('created_at', { ascending: false }).limit(200),
       supabase.rpc('admin_stats'),
       supabase.rpc('admin_list_owners'),
       supabase.rpc('get_public_prices'),
@@ -110,6 +114,8 @@ export function Payments({ onChanged }: { onChanged: () => void }) {
   if (error && !claims) return <Alert>{error}</Alert>
   if (!claims) return <PageLoader />
 
+  // Lo que cuesta lo que declaró, en su moneda (USD si es de la versión internacional)
+  const claimCost = (c: AdminClaim) => planPrice(prices, c.plan || 'basico', c.currency === 'USD' ? 'int' : 'cu') * c.months
   const pending = claims.filter((c) => c.status === 'pendiente')
   const reviewed = claims.filter((c) => c.status !== 'pendiente')
 
@@ -146,9 +152,9 @@ export function Payments({ onChanged }: { onChanged: () => void }) {
                   <div className="flex min-w-0 flex-col">
                     <p className="truncate font-bold">{c.businesses?.name || 'Negocio eliminado'}</p>
                     <p className="truncate text-sm text-slate-500"><b className={c.plan === 'ultra' ? 'text-violet-700' : 'text-slate-700'}>{planName(c.plan || 'basico')}</b> · {months(c.months)} · enviado {agoShort(c.created_at)}</p>
-                    <p className="mt-1 text-2xl font-extrabold tracking-tight">{c.amount != null ? money(c.amount, 'CUP') : money((c.plan === 'ultra' ? prices.ultra : prices.basico) * c.months, 'CUP')}</p>
-                    {c.amount != null && c.amount < (c.plan === 'ultra' ? prices.ultra : prices.basico) * c.months && (
-                      <p className="text-xs font-semibold text-amber-700">Menos de lo que cuesta ({money((c.plan === 'ultra' ? prices.ultra : prices.basico) * c.months, 'CUP')}): revísalo</p>
+                    <p className="mt-1 text-2xl font-extrabold tracking-tight">{money(c.amount ?? claimCost(c), c.currency || 'CUP')}</p>
+                    {c.amount != null && c.amount < claimCost(c) && (
+                      <p className="text-xs font-semibold text-amber-700">Menos de lo que cuesta ({money(claimCost(c), c.currency || 'CUP')}): revísalo</p>
                     )}
                     {c.note && <p className="truncate text-sm text-slate-600" title={c.note}>"{c.note}"</p>}
                     <div className="mt-auto grid grid-cols-[1fr_1fr_40px] gap-2 pt-3">
@@ -195,7 +201,7 @@ export function Payments({ onChanged }: { onChanged: () => void }) {
                       <span className="block text-xs text-slate-400 md:hidden">{planName(p.plan)} · {months(p.months)}</span>
                     </span>
                     <span className="hidden text-right text-slate-500 md:block">{PLANS[p.plan === 'ultra' ? 'ultra' : 'basico'].short} · {months(p.months)}</span>
-                    <b className="text-right tabular-nums">{p.amount === null ? '—' : money(Number(p.amount), 'CUP')}</b>
+                    <b className="text-right tabular-nums">{p.amount === null ? '—' : money(Number(p.amount), p.currency || 'CUP')}</b>
                   </button>
                 </li>
               ))}
@@ -215,7 +221,7 @@ export function Payments({ onChanged }: { onChanged: () => void }) {
                 <span className="min-w-0">
                   <span className="block truncate font-semibold">{c.businesses?.name || 'Negocio eliminado'}</span>
                   <span className="block truncate text-xs text-slate-500">
-                    {shortDay(c.created_at)} · {months(c.months)}{c.amount != null && <> · {money(c.amount, 'CUP')}</>}
+                    {shortDay(c.created_at)} · {months(c.months)}{c.amount != null && <> · {money(c.amount, c.currency || 'CUP')}</>}
                     {c.status === 'rechazado' && c.admin_note && <> · Motivo: {c.admin_note}</>}
                   </span>
                 </span>
@@ -290,7 +296,7 @@ function EditPaymentModal({ payment, onClose, onDone }: { payment: RecentPayment
         <div className="space-y-3">
           <p className="text-slate-600">
             Se borra el pago de <b>{payment.name}</b> del {fullDateFromIso(payment.created_at, ADMIN_TZ)}
-            {payment.amount !== null && <> ({money(Number(payment.amount), 'CUP')})</>} y deja de contar en tus cifras. No se puede deshacer.
+            {payment.amount !== null && <> ({money(Number(payment.amount), payment.currency || 'CUP')})</>} y deja de contar en tus cifras. No se puede deshacer.
           </p>
           {!payment.deleted && (
             <p className="text-slate-600">
@@ -339,7 +345,7 @@ function EditPaymentModal({ payment, onClose, onDone }: { payment: RecentPayment
               {Array.from({ length: 24 }, (_, i) => i + 1).map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
           </Field>
-          <Field label="Importe recibido (CUP)">
+          <Field label={`Importe recibido (${payment.currency || 'CUP'})`}>
             <input className="input" type="number" inputMode="decimal" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} />
           </Field>
         </div>

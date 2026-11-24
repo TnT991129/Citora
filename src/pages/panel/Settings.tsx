@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { Alert, BusinessAvatar, Button, Field, Toggle, flash } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
-import { CURRENCY_MODES, currencyFields, currencyMode, slugify } from '../../lib/format'
+import { currencyFields, currencyMode, currencyOptions, slugify, type CurrencyMode } from '../../lib/format'
 import { imageExt, resizeImage } from '../../lib/image'
 import { isPushSubscribed, pushSupported, subscribeOwnerPush, unsubscribePush } from '../../lib/push'
 import { supabase } from '../../lib/supabase'
@@ -132,17 +132,23 @@ export default function Settings() {
             {BUSINESS_TYPES.map((t) => <option key={t.key} value={t.key}>{t.name}</option>)}
           </select>
         </Field>
-        <Field label="WhatsApp" hint="Con código de país, ej. 53 5555 5555.">
+        <Field label="WhatsApp" hint={`Con código de país, ej. ${business.market === 'int' ? '1 305 555 1234' : '53 5555 5555'}.`}>
           <input className="input" type="tel" inputMode="tel" value={form.whatsapp} onChange={(e) => set({ whatsapp: e.target.value })} />
         </Field>
         <Field label="Moneda" hint="En la que pones los precios de tus servicios y descuentos.">
-          <div className="grid grid-cols-3 gap-2">
-            {CURRENCY_MODES.map((c) => (
-              <button key={c.key} type="button" onClick={() => set({ currency: c.key })} className={`rounded-xl py-2.5 text-sm font-semibold ${form.currency === c.key ? 'bg-brand text-white' : 'bg-white ring-1 ring-slate-300'}`}>
-                {c.name}
-              </button>
-            ))}
-          </div>
+          {business.market === 'int' ? (
+            <select className="input" value={form.currency} onChange={(e) => set({ currency: e.target.value as CurrencyMode })}>
+              {currencyOptions(true).map((c) => <option key={c.key} value={c.key}>{c.name} · {c.hint}</option>)}
+            </select>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {currencyOptions(false).map((c) => (
+                <button key={c.key} type="button" onClick={() => set({ currency: c.key })} className={`rounded-xl py-2.5 text-sm font-semibold ${form.currency === c.key ? 'bg-brand text-white' : 'bg-white ring-1 ring-slate-300'}`}>
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          )}
         </Field>
         {form.currency === 'AMBAS' && (
           <Field label="Tasa del dólar" hint="Tus precios van en USD y tus clientes ven también su cambio en CUP. Las citas ya hechas mantienen la tasa con la que se reservaron.">

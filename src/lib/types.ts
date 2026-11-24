@@ -243,6 +243,8 @@ export interface PaymentClaim {
   business_id: string
   months: number
   amount: number | null
+  /** CUP (Cuba) o USD (versión internacional) */
+  currency?: 'CUP' | 'USD'
   note: string | null
   proof_path: string | null
   status: PaymentClaimStatus
@@ -437,4 +439,7 @@ export interface Prices {
   plus: number
   ultra: number
   trial_days?: number
+  /** Versión internacional: precios en USD */
+  int_basico?: number
+  int_ultra?: number
 }

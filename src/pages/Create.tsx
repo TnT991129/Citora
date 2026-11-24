@@ -11,7 +11,7 @@ import { track } from '../lib/analytics'
 import { changeCurrency, createBusinessFromDraft, draftSlots, loadDraft, newDraft, saveDraft, type Draft } from '../lib/draft'
 import { DEFAULT_TOOLS, saveOnboarding, type SkipKey } from '../lib/onboarding'
 import { errorMessage } from '../lib/errors'
-import { cleanPhone, currencyFields, CURRENCY_MODES, duration, money, price, slugify, WEEKDAYS_SHORT } from '../lib/format'
+import { cleanPhone, currencyFields, currencyOptions, duration, money, price, slugify, WEEKDAYS_SHORT } from '../lib/format'
 import { supabase } from '../lib/supabase'
 import { BUSINESS_TYPES, businessType } from '../lib/templates'
 import { DEFAULT_PRICE, DEFAULT_TEAM_PRICE } from '../lib/plans'
@@ -37,7 +37,14 @@ const SKIP_NAMES: Record<SkipKey, string> = {
 export default function Create() {
   const session = useSession()
   const navigate = useNavigate()
-  const [draft, setDraft] = useState<Draft>(() => loadDraft() || newDraft())
+  // En la versión internacional se empieza en USD (y un borrador hecho en la de Cuba se pasa a USD)
+  const [draft, setDraft] = useState<Draft>(() => {
+    const d = loadDraft() || newDraft('otro', IS_INT ? 'USD' : 'CUP')
+    const cur = d.currency || 'CUP'
+    if (IS_INT && (cur === 'CUP' || cur === 'AMBAS')) return { ...d, currency: 'USD', usd_rate: null, services: changeCurrency(d.services, d.type, cur, 'USD') }
+    if (!IS_INT && cur !== 'CUP' && cur !== 'USD' && cur !== 'AMBAS') return { ...d, currency: 'CUP', services: changeCurrency(d.services, d.type, cur, 'CUP') }
+    return d
+  })
   const [step, setStep] = useState(0)
   const [slugState, setSlugState] = useState<'idle' | 'checking' | 'ok' | 'taken'>('idle')
   const [slugTouched, setSlugTouched] = useState(false)
@@ -92,7 +99,7 @@ export default function Create() {
     await supabase.auth.signOut()
     setExisting(null)
     setStep(0)
-    setDraft(newDraft())
+    setDraft(newDraft('otro', IS_INT ? 'USD' : 'CUP'))
   }
 
   // Comprueba si el enlace está libre
@@ -379,8 +386,8 @@ export default function Create() {
         <section>
           <h1 className="text-2xl font-bold">¿En qué moneda cobras?</h1>
           <p className="mt-1 text-slate-600">Es la moneda en la que tus clientes verán tus precios.</p>
-          <div className="mt-5 space-y-3">
-            {CURRENCY_MODES.map((c) => (
+          <div className={IS_INT ? 'mt-5 grid gap-3 sm:grid-cols-2' : 'mt-5 space-y-3'}>
+            {currencyOptions(IS_INT).map((c) => (
               <button
                 key={c.key}
                 type="button"
@@ -398,7 +405,7 @@ export default function Create() {
                   <span className="block text-sm text-slate-500">{c.hint}</span>
                 </span>
                 <span className="shrink-0 text-sm font-semibold text-slate-600">
-                  {c.key === 'CUP' ? price(1500, 'CUP') : price(5, 'USD', c.key === 'AMBAS' ? rate || 300 : null)}
+                  {IS_INT ? null : c.key === 'CUP' ? price(1500, 'CUP') : price(5, 'USD', c.key === 'AMBAS' ? rate || 300 : null)}
                 </span>
               </button>
             ))}
@@ -593,7 +600,7 @@ export default function Create() {
             <p className="text-sm text-slate-700">
               <b>{businessType(draft.type).emoji} {draft.name}</b> · {draft.services.filter((s) => s.name.trim()).length} servicios · desde {money(Math.min(...draft.services.filter((s) => s.name.trim()).map((s) => s.price)), main)}
             </p>
-            <p className="mt-1 text-sm text-slate-600">{prices.trial_days ? `Tendrás ${prices.trial_days} días gratis con todo incluido.` : 'Empiezas con una prueba gratis con todo incluido.'} Después eliges: Solo ({money(prices.basico, 'CUP')}/mes) o Equipo, si trabajas con más personas ({money(prices.ultra, 'CUP')}/mes).</p>
+            <p className="mt-1 text-sm text-slate-600">{prices.trial_days ? `Tendrás ${prices.trial_days} días gratis con todo incluido.` : 'Empiezas con una prueba gratis con todo incluido.'} Después eliges: Solo ({IS_INT ? money(prices.int_basico ?? 10, 'USD') : money(prices.basico, 'CUP')}/mes) o Equipo, si trabajas con más personas ({IS_INT ? money(prices.int_ultra ?? 20, 'USD') : money(prices.ultra, 'CUP')}/mes).</p>
           </div>
           <p className="text-sm text-slate-500">
             ¿Ya tienes cuenta? <Link to="/entrar" className="font-semibold text-brand">Entra</Link> y tu app se creará con estos datos.

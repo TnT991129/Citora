@@ -47,7 +47,9 @@ export function AdminHome({ go }: { go: (t: AdminTab, filter?: BizFilter) => voi
   const lastMonth = stats.months[stats.months.length - 2]
   const revenue = Number(thisMonth?.revenue || 0)
   const prevRevenue = Number(lastMonth?.revenue || 0)
-  const revenueHint = prevRevenue > 0
+  // Lo cobrado en USD (versión internacional) va aparte, nunca sumado a los CUP
+  const revenueUsd = Number(thisMonth?.revenue_usd || 0)
+  const revenueHint = revenueUsd > 0 ? `y ${money(revenueUsd, 'USD')} de fuera` : prevRevenue > 0
     ? `${revenue >= prevRevenue ? '+' : '−'}${Math.abs(Math.round(((revenue - prevRevenue) / prevRevenue) * 100))} % que el mes pasado`
     : `${thisMonth?.payments || 0} ${thisMonth?.payments === 1 ? 'pago' : 'pagos'} este mes`
   const signups = thisMonth?.signups || 0
@@ -104,7 +106,7 @@ export function AdminHome({ go }: { go: (t: AdminTab, filter?: BizFilter) => voi
                     <span className="block truncate font-semibold">{p.name}</span>
                     <span className="block text-xs text-slate-400">{shortDay(p.created_at)} · {p.months} {p.months === 1 ? 'mes' : 'meses'}</span>
                   </span>
-                  <b className="tabular-nums">{p.amount === null ? '—' : money(Number(p.amount), 'CUP')}</b>
+                  <b className="tabular-nums">{p.amount === null ? '—' : money(Number(p.amount), p.currency || 'CUP')}</b>
                 </li>
               ))}
             </ul>

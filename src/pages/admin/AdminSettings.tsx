@@ -21,6 +21,10 @@ interface Settings {
   price_plus: number
   price_ultra: number
   trial_days: number
+  price_int_basico: number
+  price_int_ultra: number
+  paypal_url: string
+  int_pay_note: string
   push_function_url: string | null
   push_shared_secret: string | null
   moderate_function_url: string | null
@@ -50,9 +54,11 @@ export default function AdminSettings() {
   if (!s) return <PageLoader />
 
   const communityError = s.community_url && !/^https:\/\//.test(s.community_url) ? 'Pega el enlace completo, empezando por https://' : null
+  const paypalError = s.paypal_url && !/^https:\/\//.test(s.paypal_url) ? 'Pega el enlace completo, empezando por https:// (ej. https://paypal.me/tunombre)' : null
 
   const save = async () => {
     if (communityError) return setError(communityError)
+    if (paypalError) return setError(paypalError)
     setBusy(true)
     setError(null)
     const { error } = await supabase.from('platform_settings').update({ ...s, updated_at: new Date().toISOString() }).eq('id', 1)
@@ -98,6 +104,29 @@ export default function AdminSettings() {
             </Field>
             <Field label="Prueba gratis" hint="Para los negocios nuevos.">
               <SuffixInput value={s.trial_days} suffix="días" min={0} max={60} onChange={(v) => setS({ ...s, trial_days: v })} />
+            </Field>
+          </div>
+        </SettingsGroup>
+
+        <SettingsGroup title="Versión internacional" desc="Negocios de fuera de Cuba (citora-app.com/int/). Pagan en USD; lo ven al pagar su mensualidad y en la portada internacional.">
+          <div className="card space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Citora Solo, al mes">
+                <SuffixInput value={s.price_int_basico ?? 10} suffix="USD" min={0} onChange={(v) => setS({ ...s, price_int_basico: v })} />
+              </Field>
+              <Field label="Citora Equipo, al mes">
+                <SuffixInput value={s.price_int_ultra ?? 20} suffix="USD" min={0} onChange={(v) => setS({ ...s, price_int_ultra: v })} />
+              </Field>
+            </div>
+            <Field
+              label="Enlace de PayPal (opcional)"
+              hint="Ej. https://paypal.me/tunombre. Al pagar, se abre con el importe ya puesto. Vacío: se les pide escribirte por WhatsApp para pagar."
+              error={paypalError}
+            >
+              <input className="input" inputMode="url" value={s.paypal_url || ''} onChange={(e) => setS({ ...s, paypal_url: e.target.value.trim() })} placeholder="https://paypal.me/..." />
+            </Field>
+            <Field label="Instrucciones para pagar (opcional)" hint="Lo leen junto al botón de pagar. Ej. «Elige Amigos y familiares»">
+              <textarea className="input" rows={2} maxLength={500} value={s.int_pay_note || ''} onChange={(e) => setS({ ...s, int_pay_note: e.target.value })} />
             </Field>
           </div>
         </SettingsGroup>

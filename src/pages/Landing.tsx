@@ -7,6 +7,7 @@ import { setBrandColor } from '../lib/brand'
 import { money } from '../lib/format'
 import { DEFAULT_PRICE, DEFAULT_TEAM_PRICE, PLANS } from '../lib/plans'
 import { supabase } from '../lib/supabase'
+import { IS_INT } from '../lib/market'
 import { BUSINESS_TYPES } from '../lib/templates'
 import type { Prices } from '../lib/types'
 import { AgendaClean, BarsArt, ChatChaos, HeroPhone, Ico, NightArt, Phone, ScreenAgenda, ScreenCreate, ScreenShare, StarsArt } from './landing/Demos'
@@ -71,7 +72,8 @@ export default function Landing() {
   }, [])
 
   const trial = prices.trial_days ?? 5
-  const price = prices.basico
+  // Versión internacional (/int/): precios en USD (ver market.ts)
+  const price = IS_INT ? prices.int_basico ?? 10 : prices.basico
   const freeLine = `${trial} días gratis · Sin tarjeta · Lista en 5 minutos`
 
   return (
@@ -98,7 +100,7 @@ export default function Landing() {
 
       <Calculator price={price} trial={trial} />
 
-      <Pricing price={price} teamPrice={prices.ultra || DEFAULT_TEAM_PRICE} trial={trial} />
+      <Pricing price={price} teamPrice={IS_INT ? prices.int_ultra ?? 20 : prices.ultra || DEFAULT_TEAM_PRICE} trial={trial} />
 
       <Faq />
 
@@ -216,7 +218,7 @@ function Hero({ trial }: { trial: number }) {
             </a>
           </div>
           <ul className="lp-fade-in mt-5 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-white/60 lg:justify-start" style={{ ['--i' as string]: 2 }}>
-            {[`${trial} días gratis`, 'Sin tarjeta', 'Lista en 5 minutos', 'Pagas en CUP'].map((t) => (
+            {[`${trial} días gratis`, 'Sin tarjeta', 'Lista en 5 minutos', IS_INT ? 'Pagas en USD' : 'Pagas en CUP'].map((t) => (
               <li key={t} className="flex items-center gap-1.5">
                 <Ico name="check" className="h-4 w-4 text-emerald-400" /> {t}
               </li>
@@ -425,10 +427,13 @@ function FeatureCard({ className, i, eyebrow, title, text, children }: { classNa
   )
 }
 
+/** Moneda de la mensualidad en esta versión: CUP (Cuba) o USD (internacional) */
+const PAY = IS_INT ? 'USD' : 'CUP'
+
 /* ---- 7. Calculadora: cuánto dinero se escapa sin reservas online ---- */
 function Calculator({ price, trial }: { price: number; trial: number }) {
   const [lost, setLost] = useState(4)
-  const [avg, setAvg] = useState(1200)
+  const [avg, setAvg] = useState(IS_INT ? 30 : 1200)
   const { ref, inView } = useInView<HTMLDivElement>('-20% 0px')
   // La cifra sube desde 0 la primera vez que se ve; después solo sigue a los controles
   const [seen, setSeen] = useState(false)
@@ -453,17 +458,17 @@ function Calculator({ price, trial }: { price: number; trial: number }) {
             </label>
             <label className="block">
               <span className="flex items-baseline justify-between gap-3 font-semibold">
-                Precio medio de tu servicio <b className="text-2xl text-rose-500">{money(avg, 'CUP')}</b>
+                Precio medio de tu servicio <b className="text-2xl text-rose-500">{money(avg, PAY)}</b>
               </span>
-              <input type="range" min={200} max={6000} step={100} value={avg} onChange={(e) => setAvg(Number(e.target.value))} className="mt-3 w-full" aria-label="Precio medio de tu servicio" />
+              <input type="range" min={IS_INT ? 5 : 200} max={IS_INT ? 200 : 6000} step={IS_INT ? 5 : 100} value={avg} onChange={(e) => setAvg(Number(e.target.value))} className="mt-3 w-full" aria-label="Precio medio de tu servicio" />
             </label>
           </div>
           <div className="relative flex flex-col justify-center overflow-hidden bg-[#0b0b14] p-7 text-white sm:p-10">
             <div className="lp-glow -bottom-24 -right-16 h-64 w-64 bg-rose-500/40" aria-hidden />
             <p className="relative text-sm font-semibold text-white/60">Pierdes cada mes, más o menos</p>
-            <p className="relative mt-1 text-5xl font-extrabold tracking-tight sm:text-6xl"><span className="lp-gradient-text">{money(shownLoss, 'CUP')}</span></p>
+            <p className="relative mt-1 text-5xl font-extrabold tracking-tight sm:text-6xl"><span className="lp-gradient-text">{money(shownLoss, PAY)}</span></p>
             <p className="relative mt-5 text-white/75">
-              Citora cuesta <b className="text-white">{money(price, 'CUP')} al mes</b>: se paga sola con{' '}
+              Citora cuesta <b className="text-white">{money(price, PAY)} al mes</b>: se paga sola con{' '}
               <b className="text-white">{paysWith === 1 ? 'una sola cita' : `${paysWith} citas`}</b> que antes se te escapaban.
             </p>
             <Link to="/crear" className="lp-cta relative mt-7 inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3.5 font-bold text-white">
@@ -500,8 +505,8 @@ function Pricing({ price, teamPrice, trial }: { price: number; teamPrice: number
               <div className={`flex h-full flex-col rounded-[inherit] p-7 sm:p-9 ${p.highlight ? 'bg-[#0b0b14] text-white' : 'bg-white text-slate-900'}`}>
                 <p className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-bold ${p.highlight ? 'bg-white/10 text-rose-200 ring-1 ring-white/15' : 'bg-slate-100 text-slate-600'}`}>{p.who}</p>
                 <p className="mt-4 text-lg font-extrabold">{p.name}</p>
-                <p className="mt-1 text-5xl font-extrabold tracking-tight">{money(p.price, 'CUP')}</p>
-                <p className={p.highlight ? 'text-white/60' : 'text-slate-500'}>al mes · unos <b className={p.highlight ? 'text-white' : 'text-slate-900'}>{money(Math.round(p.price / 30), 'CUP')} al día</b></p>
+                <p className="mt-1 text-5xl font-extrabold tracking-tight">{money(p.price, PAY)}</p>
+                <p className={p.highlight ? 'text-white/60' : 'text-slate-500'}>al mes · unos <b className={p.highlight ? 'text-white' : 'text-slate-900'}>{money(IS_INT ? Math.round((p.price / 30) * 100) / 100 : Math.round(p.price / 30), PAY)} al día</b></p>
                 <ul className="mt-6 grid flex-1 content-start gap-2.5 text-sm">
                   {p.items.map((name) => (
                     <li key={name} className={`flex items-start gap-2 ${p.highlight ? 'text-white/85' : 'text-slate-700'}`}>

@@ -44,6 +44,17 @@ alter table public.platform_settings add column if not exists push_shared_secret
 -- piden un número de teléfono además de la tarjeta, para confirmar que el destino es correcto.
 alter table public.platform_settings add column if not exists card_phone text not null default '';
 
+-- Versión internacional (citora-app.com/int/): precios en USD y cómo se paga desde fuera de Cuba.
+-- paypal_url vacío: en vez del botón de pagar se le pide escribir por WhatsApp.
+alter table public.platform_settings add column if not exists price_int_basico numeric(10, 2) not null default 10
+  check (price_int_basico >= 0);
+alter table public.platform_settings add column if not exists price_int_ultra numeric(10, 2) not null default 20
+  check (price_int_ultra >= 0);
+alter table public.platform_settings add column if not exists paypal_url text not null default ''
+  check (paypal_url = '' or paypal_url ~ '^https://');
+alter table public.platform_settings add column if not exists int_pay_note text not null default ''
+  check (char_length(int_pay_note) <= 500);
+
 -- Enlace al grupo de WhatsApp de los dueños (lo ven en su panel, en "Más"). Vacío: no se muestra.
 alter table public.platform_settings add column if not exists community_url text not null default ''
   check (community_url = '' or community_url ~ '^https://');
@@ -534,6 +545,13 @@ alter table public.services add column if not exists hidden_with_staff uuid;
 -- El plan que eligió al declarar el pago (Solo o Equipo). Las declaraciones antiguas, Solo.
 alter table public.payment_claims add column if not exists plan text not null default 'basico'
   check (plan in ('basico', 'ultra'));
+
+-- Moneda de la mensualidad: CUP en Cuba, USD en la versión internacional (según businesses.market al
+-- pagar). Los pagos de antes son en CUP. Las cuentas nunca suman CUP con USD (ver admin_stats).
+alter table public.payments add column if not exists currency text not null default 'CUP'
+  check (currency in ('CUP', 'USD'));
+alter table public.payment_claims add column if not exists currency text not null default 'CUP'
+  check (currency in ('CUP', 'USD'));
 
 -- Horario propio de un profesional (si no tiene ninguna fila aquí, usa el horario del negocio:
 -- ver _staff_slot_valid). Misma forma que schedule_days, pero por profesional.
@@ -1034,8 +1052,11 @@ begin
     raise exception 'ENLACE_INVALIDO';
   end if;
   new.appearance := _clean_appearance(new.appearance);
-  if new.currency not in ('CUP', 'USD') then
-    new.currency := 'CUP';
+  -- CUP y USD en Cuba; los negocios de la versión internacional, además, su moneda local
+  -- (igual que INT_CURRENCIES en src/lib/format.ts)
+  if new.currency not in ('CUP', 'USD')
+     and not (new.market = 'int' and new.currency in ('EUR', 'MXN', 'COP', 'ARS', 'CLP', 'PEN', 'UYU', 'DOP', 'BRL', 'CAD', 'GBP')) then
+    new.currency := case when new.market = 'int' then 'USD' else 'CUP' end;
   end if;
   if new.usd_prices then
     new.currency := 'USD';
@@ -1587,7 +1608,8 @@ $$;
 create or replace function public.get_public_prices()
 returns jsonb language sql stable security definer set search_path = public as $$
   select jsonb_build_object(
-    'basico', price_basico, 'plus', price_plus, 'ultra', price_ultra, 'trial_days', trial_days)
+    'basico', price_basico, 'plus', price_plus, 'ultra', price_ultra, 'trial_days', trial_days,
+    'int_basico', price_int_basico, 'int_ultra', price_int_ultra)
   from platform_settings where id = 1;
 $$;
 
@@ -2866,14 +2888,26 @@ end;
 $$;
 
 -- Datos para pagar (tarjeta y WhatsApp del administrador)
+-- En la versión internacional, los precios en USD y el PayPal en vez de la tarjeta.
 create or replace function public.get_payment_info()
 returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_int boolean;
 begin
   if auth.uid() is null then raise exception 'SIN_SESION'; end if;
+  v_int := coalesce((select market = 'int' from businesses where owner_id = auth.uid()), false);
   return (select jsonb_build_object(
-    'card_number', card_number, 'card_holder', card_holder, 'card_phone', card_phone, 'admin_whatsapp', admin_whatsapp,
-    'community_url', community_url,
-    'basico', price_basico, 'plus', price_plus, 'ultra', price_ultra)
+    'admin_whatsapp', admin_whatsapp, 'community_url', community_url,
+    'market', case when v_int then 'int' else 'cu' end,
+    'currency', case when v_int then 'USD' else 'CUP' end,
+    'card_number', case when v_int then '' else card_number end,
+    'card_holder', case when v_int then '' else card_holder end,
+    'card_phone', case when v_int then '' else card_phone end,
+    'paypal_url', case when v_int then paypal_url else '' end,
+    'pay_note', case when v_int then int_pay_note else '' end,
+    'basico', case when v_int then price_int_basico else price_basico end,
+    'plus', case when v_int then price_int_basico else price_plus end,
+    'ultra', case when v_int then price_int_ultra else price_ultra end)
     from platform_settings where id = 1);
 end;
 $$;
@@ -3262,8 +3296,9 @@ begin
   update businesses set plan = p_plan, paid_until = v_until, comped = false,
                         comped_prev_plan = null, comped_prev_paid_until = null
    where id = b.id;
-  insert into payments (business_id, plan, months, amount, note, paid_until, created_by, business_name, business_code)
-  values (b.id, p_plan, p_months, p_amount, nullif(btrim(coalesce(p_note, '')), ''), v_until, auth.uid(), b.name, b.code);
+  insert into payments (business_id, plan, months, amount, note, paid_until, created_by, business_name, business_code, currency)
+  values (b.id, p_plan, p_months, p_amount, nullif(btrim(coalesce(p_note, '')), ''), v_until, auth.uid(), b.name, b.code,
+          case when b.market = 'int' then 'USD' else 'CUP' end);
   return v_until;
 end;
 $$;
@@ -3318,8 +3353,9 @@ begin
   if p_proof_path not like v_business::text || '/%' or p_proof_path like '%..%' then
     raise exception 'FALTA_COMPROBANTE';
   end if;
-  insert into payment_claims (business_id, months, amount, note, proof_path, plan)
-  values (v_business, p_months, p_amount, nullif(btrim(coalesce(p_note, '')), ''), p_proof_path, coalesce(p_plan, 'basico'))
+  insert into payment_claims (business_id, months, amount, note, proof_path, plan, currency)
+  values (v_business, p_months, p_amount, nullif(btrim(coalesce(p_note, '')), ''), p_proof_path, coalesce(p_plan, 'basico'),
+          (select case when market = 'int' then 'USD' else 'CUP' end from businesses where id = v_business))
   returning id into v_id;
 
   select name, code into v_name, v_code from businesses where id = v_business;
@@ -3593,7 +3629,10 @@ begin
                     where t.created_at >= m at time zone v_tz and t.created_at < (m + interval '1 month') at time zone v_tz),
         'revenue', (select coalesce(sum(p.amount), 0) from payments p left join businesses b2 on b2.id = p.business_id
                     where p.created_at >= m at time zone v_tz and p.created_at < (m + interval '1 month') at time zone v_tz
-                      and not coalesce(b2.comped, false)),
+                      and not coalesce(b2.comped, false) and p.currency = 'CUP'),
+        'revenue_usd', (select coalesce(sum(p.amount), 0) from payments p left join businesses b2 on b2.id = p.business_id
+                    where p.created_at >= m at time zone v_tz and p.created_at < (m + interval '1 month') at time zone v_tz
+                      and not coalesce(b2.comped, false) and p.currency = 'USD'),
         'payments', (select count(*) from payments p left join businesses b2 on b2.id = p.business_id
                      where p.created_at >= m at time zone v_tz and p.created_at < (m + interval '1 month') at time zone v_tz
                        and not coalesce(b2.comped, false)),
@@ -3604,7 +3643,10 @@ begin
     'totals', (select jsonb_build_object(
         'businesses', (select count(*) from businesses where not comped),
         'revenue', (select coalesce(sum(p.amount), 0) from payments p left join businesses b2 on b2.id = p.business_id
-                    where not coalesce(b2.comped, false)),
+                    where not coalesce(b2.comped, false) and p.currency = 'CUP'),
+        'revenue_usd', (select coalesce(sum(p.amount), 0) from payments p left join businesses b2 on b2.id = p.business_id
+                    where not coalesce(b2.comped, false) and p.currency = 'USD'),
+        'businesses_int', (select count(*) from businesses where not comped and market = 'int'),
         'appointments', (select count(*) from appointments),
         'appointments_30d', (select count(*) from appointments where created_at > now() - interval '30 days'),
         'active_30d', (select count(distinct business_id) from appointments where created_at > now() - interval '30 days'),
@@ -3643,9 +3685,10 @@ begin
          or (business_status(b.plan, b.trial_ends_at, b.paid_until) = 'prueba' and b.trial_ends_at < now() + interval '3 days')),
     'recent_payments', (select coalesce(jsonb_agg(jsonb_build_object(
         'id', t.id, 'name', t.name, 'code', t.code, 'plan', t.plan, 'months', t.months, 'amount', t.amount,
+        'currency', t.currency,
         'note', t.note, 'paid_until', t.paid_until, 'deleted', t.deleted, 'created_at', t.created_at) order by t.created_at desc), '[]'::jsonb)
       from (select p.id, coalesce(b.name, p.business_name || ' (eliminado)') as name, coalesce(b.code, p.business_code) as code,
-                   p.plan, p.months, p.amount, p.note, p.paid_until, b.id is null as deleted, p.created_at
+                   p.plan, p.months, p.amount, p.currency, p.note, p.paid_until, b.id is null as deleted, p.created_at
             from payments p left join businesses b on b.id = p.business_id
             where not coalesce(b.comped, false)
             order by p.created_at desc limit 300) t)

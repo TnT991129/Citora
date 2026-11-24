@@ -11,7 +11,17 @@ import type { PlanKey } from '../../lib/types'
 import { ADMIN_TZ, hasBusiness, type AdminOwner, type OwnerWithBusiness } from './adminData'
 import { BizAvatar, StateCell } from './adminUi'
 
-export type Prices = Record<PlanKey, number>
+/** Precios al mes: los de Cuba (CUP) y los de la versión internacional (USD) */
+export type Prices = Record<PlanKey, number> & { int_basico?: number; int_ultra?: number }
+
+/** Moneda de la mensualidad según la versión del negocio */
+export const payCurrency = (market?: string | null): 'CUP' | 'USD' => (market === 'int' ? 'USD' : 'CUP')
+
+/** Precio al mes de un plan en la versión del negocio (Cuba en CUP, internacional en USD) */
+export function planPrice(prices: Prices, plan: PlanKey | null | undefined, market?: string | null): number {
+  if (market === 'int') return plan === 'ultra' ? prices.int_ultra ?? 20 : prices.int_basico ?? 10
+  return plan === 'ultra' ? prices.ultra : prices.basico
+}
 
 export type ConfirmKind = 'grant' | 'revoke' | 'deactivate' | 'to_int' | 'to_cu'
 
@@ -118,7 +128,7 @@ export function DeleteModal({ owner, onClose, onDone }: { owner: AdminOwner; onC
 }
 
 export function ActivateModal({ business, prices, onClose, onDone, plan: initialPlan = 'basico' }: {
-  business: { id: string; name: string; code: string }
+  business: { id: string; name: string; code: string; market?: 'cu' | 'int' | null }
   prices: Prices
   onClose: () => void
   onDone: () => void
@@ -127,12 +137,13 @@ export function ActivateModal({ business, prices, onClose, onDone, plan: initial
 }) {
   const [plan, setPlan] = useState<PaidPlan>(initialPlan)
   const [months, setMonths] = useState(1)
-  const [amount, setAmount] = useState<number>(prices.basico)
+  const cur = payCurrency(business.market)
+  const [amount, setAmount] = useState<number>(planPrice(prices, initialPlan, business.market))
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => setAmount((plan === 'ultra' ? prices.ultra : prices.basico) * months), [months, prices, plan])
+  useEffect(() => setAmount(planPrice(prices, plan, business.market) * months), [months, prices, plan, business.market])
 
   const activate = async () => {
     setBusy(true)
@@ -158,7 +169,10 @@ export function ActivateModal({ business, prices, onClose, onDone, plan: initial
       footer={<Button block onClick={activate} loading={busy}>Confirmar pago y activar</Button>}
     >
       <div className="space-y-4">
-        <p className="text-sm text-slate-600">Código <b className="font-mono">{business.code}</b>. Comprueba que el pago llegó a tu tarjeta antes de activar.</p>
+        <p className="text-sm text-slate-600">
+          Código <b className="font-mono">{business.code}</b>. Comprueba que el pago llegó {cur === 'USD' ? 'a tu PayPal' : 'a tu tarjeta'} antes de activar.
+          {cur === 'USD' && <> Es de la <b>versión internacional</b>: en USD.</>}
+        </p>
         <div className="grid grid-cols-2 gap-2">
           {(['basico', 'ultra'] as const).map((k) => (
             <button
@@ -169,7 +183,7 @@ export function ActivateModal({ business, prices, onClose, onDone, plan: initial
               className={`rounded-xl border p-3 text-left transition ${plan === k ? 'border-brand bg-brand/5 ring-1 ring-brand' : 'border-slate-200'}`}
             >
               <span className="block font-bold">{PLANS[k].short}</span>
-              <span className="block text-sm text-slate-500">{money(k === 'ultra' ? prices.ultra : prices.basico, 'CUP')}/mes</span>
+              <span className="block text-sm text-slate-500">{money(planPrice(prices, k, business.market), cur)}/mes</span>
             </button>
           ))}
         </div>
@@ -179,7 +193,7 @@ export function ActivateModal({ business, prices, onClose, onDone, plan: initial
               {[1, 2, 3, 4, 5, 6, 12].map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
           </Field>
-          <Field label="Importe recibido (CUP)">
+          <Field label={`Importe recibido (${cur})`}>
             <input className="input" type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} />
           </Field>
         </div>

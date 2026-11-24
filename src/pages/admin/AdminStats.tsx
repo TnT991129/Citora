@@ -16,10 +16,14 @@ import type { RecentPayment } from './Payments'
 import { Traffic } from './Traffic'
 
 export interface AdminStatsData {
-  months: { month: string; signups: number; revenue: number; payments: number; appointments: number }[]
+  /** revenue: CUP (Cuba); revenue_usd: USD (versión internacional). Nunca se suman. */
+  months: { month: string; signups: number; revenue: number; revenue_usd?: number; payments: number; appointments: number }[]
   totals: {
     businesses: number
     revenue: number
+    revenue_usd?: number
+    /** Negocios de la versión internacional (sin contar cortesías) */
+    businesses_int?: number
     appointments: number
     appointments_30d: number
     active_30d: number
@@ -95,6 +99,13 @@ export default function AdminStats() {
             <Kpi label="Cobrado en total" value={cup(Number(t.revenue))} hint="desde el principio" />
           </div>
         </div>
+        {/* Versión internacional: en USD, aparte (nunca se suma a los CUP) */}
+        {(Number(t.revenue_usd || 0) > 0 || Number(t.businesses_int || 0) > 0) && (
+          <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-3">
+            <Kpi label="En USD este mes" value={money(Number(thisMonth?.revenue_usd || 0), 'USD')} hint="versión internacional" />
+            <Kpi label="En USD en total" value={money(Number(t.revenue_usd || 0), 'USD')} hint={`${t.businesses_int || 0} ${t.businesses_int === 1 ? 'negocio' : 'negocios'} de fuera`} />
+          </div>
+        )}
         <div className="card mt-3">
           <h3 className="font-bold">Cobrado por mes</h3>
           <BarChart

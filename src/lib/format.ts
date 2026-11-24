@@ -6,7 +6,11 @@ export const DEFAULT_TZ = 'Etc/GMT+4'
 
 // Moneda del negocio. "Ambas": los precios van en USD y se muestra también su cambio en CUP
 // con la tasa del día que pone el dueño (usd_rate = CUP por 1 USD).
-export type CurrencyMode = 'CUP' | 'USD' | 'AMBAS'
+/** Monedas de los negocios de la versión internacional (igual que en businesses_guard, schema.sql) */
+export const INT_CURRENCIES = ['USD', 'EUR', 'MXN', 'COP', 'ARS', 'CLP', 'PEN', 'UYU', 'DOP', 'BRL', 'CAD', 'GBP'] as const
+export type IntCurrency = (typeof INT_CURRENCIES)[number]
+
+export type CurrencyMode = 'CUP' | 'AMBAS' | IntCurrency
 
 export const CURRENCY_MODES: { key: CurrencyMode; name: string; hint: string }[] = [
   { key: 'CUP', name: 'CUP', hint: 'Pesos cubanos' },
@@ -14,13 +18,25 @@ export const CURRENCY_MODES: { key: CurrencyMode; name: string; hint: string }[]
   { key: 'AMBAS', name: 'USD y CUP', hint: 'Precios en USD y su cambio en CUP a la tasa del día' },
 ]
 
+const INT_NAMES: Record<IntCurrency, string> = {
+  USD: 'Dólar estadounidense', EUR: 'Euro', MXN: 'Peso mexicano', COP: 'Peso colombiano', ARS: 'Peso argentino',
+  CLP: 'Peso chileno', PEN: 'Sol peruano', UYU: 'Peso uruguayo', DOP: 'Peso dominicano', BRL: 'Real brasileño',
+  CAD: 'Dólar canadiense', GBP: 'Libra esterlina',
+}
+
+/** Monedas para elegir: las de Cuba (CUP, USD, USD y CUP) o, en la versión internacional, las de fuera */
+export function currencyOptions(intl: boolean): { key: CurrencyMode; name: string; hint: string }[] {
+  return intl ? INT_CURRENCIES.map((k) => ({ key: k, name: k, hint: INT_NAMES[k] })) : CURRENCY_MODES
+}
+
 export function currencyMode(b: { currency?: string; usd_prices?: boolean }): CurrencyMode {
-  return b.usd_prices ? 'AMBAS' : b.currency === 'USD' ? 'USD' : 'CUP'
+  if (b.usd_prices) return 'AMBAS'
+  return (INT_CURRENCIES as readonly string[]).includes(b.currency || '') ? (b.currency as IntCurrency) : 'CUP'
 }
 
 /** Columnas del negocio para una moneda elegida */
 export function currencyFields(m: CurrencyMode): { currency: string; usd_prices: boolean } {
-  return { currency: m === 'CUP' ? 'CUP' : 'USD', usd_prices: m === 'AMBAS' }
+  return { currency: m === 'AMBAS' ? 'USD' : m, usd_prices: m === 'AMBAS' }
 }
 
 /** Tasa con la que se muestra el cambio en CUP; null si el negocio no lo muestra */

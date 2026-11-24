@@ -15,7 +15,7 @@ import {
 } from './adminData'
 import { BizAvatar, Drawer, FilterPills, PageTitle, StateCell, StateChip, StateDetail, StepsBar } from './adminUi'
 import { planName } from '../../lib/plans'
-import { ActivateModal, CONFIRM, ConfirmModal, DeleteModal, TimezoneModal, type ConfirmKind, type Prices } from './OwnerModals'
+import { ActivateModal, CONFIRM, ConfirmModal, DeleteModal, payCurrency, planPrice, TimezoneModal, type ConfirmKind, type Prices } from './OwnerModals'
 
 export type BizFilter = 'todos' | 'prueba' | 'activo' | 'vencido' | 'atascados' | 'cortesia' | 'sin_negocio'
 type Sort = 'recientes' | 'pago' | 'reservas'
@@ -233,7 +233,7 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
           {r.market === 'int' && <span className="chip shrink-0 bg-indigo-100 font-semibold text-indigo-800">Internacional</span>}
           <span className="truncate text-sm text-slate-500">
             {state === 'prueba' && r.trial_ends_at && <>Termina el {fullDateFromIso(r.trial_ends_at, ADMIN_TZ)}</>}
-            {state === 'activo' && r.paid_until && <>{planName(r.plan)} · pagado hasta el {fullDateFromIso(r.paid_until, ADMIN_TZ)} · {money(r.plan === 'ultra' ? prices.ultra : prices.basico, 'CUP')}/mes</>}
+            {state === 'activo' && r.paid_until && <>{planName(r.plan)} · pagado hasta el {fullDateFromIso(r.paid_until, ADMIN_TZ)} · {money(planPrice(prices, r.plan, r.market), payCurrency(r.market))}/mes</>}
             {state === 'vencido' && <>Sus clientes no pueden reservar</>}
             {state === 'cortesia' && <>Todo incluido, no paga</>}
             {state === 'sin_negocio' && <>Se registró pero no terminó de crear su negocio</>}

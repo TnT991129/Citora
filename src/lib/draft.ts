@@ -51,6 +51,7 @@ export function newDraft(typeKey = 'otro', currency: CurrencyMode = 'CUP'): Draf
 
 /** Los precios sugeridos están en CUP: en USD (o USD y CUP) se dejan a 0 para que el dueño ponga los suyos */
 export function changeCurrency(services: ServiceTemplate[], typeKey: string, from: CurrencyMode, to: CurrencyMode): ServiceTemplate[] {
+  // Los precios de ejemplo son de Cuba (CUP); en otra moneda se dejan a 0 para que el dueño ponga los suyos
   if ((from === 'CUP') === (to === 'CUP')) return services
   const suggested = businessType(typeKey).services
   return services.map((s) => ({
