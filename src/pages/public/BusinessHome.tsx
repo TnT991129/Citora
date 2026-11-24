@@ -18,6 +18,7 @@ import { Announcement, BusinessHero, Centered, Closed, PoweredBy, Stars, usePubl
 import { serverNow } from '../../lib/clockSkew'
 import { groupServices, ownerInfo } from '../../lib/staff'
 import { GroupJump, GroupTitle } from './ServicePicker'
+import { IS_EN, t, tn } from '../../lib/i18n'
 
 const WEEK = [1, 2, 3, 4, 5, 6, 0]
 
@@ -55,8 +56,8 @@ export default function BusinessHome() {
   const todayOpen = today ? openDays.includes(weekdayOf(today)) && !(business.closed_days || []).includes(today) : false
   const rating = showReviews && business.rating && business.rating.count > 0 ? business.rating : null
   const book = (serviceId?: string) => clientPath(business.slug, serviceId ? `reservar?s=${serviceId}` : 'reservar')
-  const wa = business.whatsapp ? waLink(business.whatsapp, `Hola, tengo una pregunta sobre ${business.name}.`) : null
-  const bookLabel = look.book_label || 'Reservar cita'
+  const wa = business.whatsapp ? waLink(business.whatsapp, t('Hola, tengo una pregunta sobre {name}.', { name: business.name })) : null
+  const bookLabel = look.book_label || t('Reservar cita')
   const from = main.length > 0 && showPrices ? money(minPrice, currency) : null
   const mapsUrl = look.maps_url || (business.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(business.address)}` : null)
 
@@ -65,7 +66,7 @@ export default function BusinessHome() {
       <BusinessHero
         business={business}
         rating={rating}
-        status={today && showHours ? { open: todayOpen, label: todayOpen ? 'Abierto hoy' : 'Hoy cerrado' } : null}
+        status={today && showHours ? { open: todayOpen, label: todayOpen ? t('Abierto hoy') : t('Hoy cerrado') } : null}
         actions={
           <div className="flex flex-wrap items-center justify-center gap-2">
             {main.length > 0 && (
@@ -80,7 +81,7 @@ export default function BusinessHome() {
             )}
             {look.maps_url && (
               <a href={look.maps_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-btn bg-white/15 px-4 py-3 font-semibold text-white ring-1 ring-white/25 backdrop-blur transition hover:bg-white/25">
-                <Ico name="pin" /> Cómo llegar
+                <Ico name="pin" /> {t('Cómo llegar')}
               </a>
             )}
           </div>
@@ -101,9 +102,9 @@ export default function BusinessHome() {
         <MyBookings slug={business.slug} tz={tz} />
 
         <section>
-          <SectionTitle eyebrow="Lo que hacemos" title="Servicios" />
+          <SectionTitle eyebrow={t('Lo que hacemos')} title={t('Servicios')} />
           {main.length === 0 ? (
-            <div className="card text-slate-500">Pronto publicaremos nuestros servicios.</div>
+            <div className="card text-slate-500">{t('Pronto publicaremos nuestros servicios.')}</div>
           ) : (
             <div className="space-y-3">
               <GroupJump groups={groups} />
@@ -112,7 +113,7 @@ export default function BusinessHome() {
                   {g.title && <GroupTitle group={g} />}
                   <div className="card divide-y divide-slate-100 overflow-hidden p-0 sm:p-0">
                     {g.services.map((s) => (
-                      <ServiceCard key={s.id} s={s} to={book(s.id)} price={showPrices ? `${hasOptions(s) ? 'desde ' : ''}${price(s.price, currency, rate)}` : null} showDuration={showDurations} />
+                      <ServiceCard key={s.id} s={s} to={book(s.id)} price={showPrices ? `${hasOptions(s) ? t('desde') + ' ' : ''}${price(s.price, currency, rate)}` : null} showDuration={showDurations} />
                     ))}
                   </div>
                 </div>
@@ -121,26 +122,26 @@ export default function BusinessHome() {
           )}
           {extras.length > 0 && main.length > 0 && (
             <div className="card mt-3">
-              <p className="font-bold">Complementos</p>
-              <p className="text-sm text-slate-500">Añádelos a tu servicio al reservar.</p>
+              <p className="font-bold">{t('Complementos')}</p>
+              <p className="text-sm text-slate-500">{t('Añádelos a tu servicio al reservar.')}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {extras.map((s) => (
                   <span key={s.id} className="inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-3 py-1.5 text-sm font-semibold text-brand">
                     + {s.name}
-                    {showPrices && <span className="font-normal opacity-80">· {hasOptions(s) ? 'desde ' : ''}{price(s.price, currency, rate)}</span>}
+                    {showPrices && <span className="font-normal opacity-80">· {hasOptions(s) ? t('desde') + ' ' : ''}{price(s.price, currency, rate)}</span>}
                   </span>
                 ))}
               </div>
             </div>
           )}
           {rate && showPrices && (
-            <p className="mt-3 text-center text-xs text-slate-500">Cambio en CUP a la tasa de hoy: 1 USD = {money(rate, 'CUP')}</p>
+            <p className="mt-3 text-center text-xs text-slate-500">{t('Cambio en CUP a la tasa de hoy')}: 1 USD = {money(rate, 'CUP')}</p>
           )}
         </section>
 
         {team.length > 0 && main.length > 0 && (
           <section>
-            <SectionTitle eyebrow="Quién te atiende" title="Nuestro equipo" />
+            <SectionTitle eyebrow={t('Quién te atiende')} title={t('Nuestro equipo')} />
             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
               {team.map((s) => (
                 <Link
@@ -157,7 +158,7 @@ export default function BusinessHome() {
                   )}
                   <span className="w-full truncate font-bold">{s.name}</span>
                   {s.specialty && <span className="-mt-2 w-full truncate text-sm text-slate-500">{s.specialty}</span>}
-                  <span className="rounded-full bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">Reservar con {s.name.split(' ')[0]}</span>
+                  <span className="rounded-full bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">{t('Reservar con {name}', { name: s.name.split(' ')[0] })}</span>
                 </Link>
               ))}
             </div>
@@ -170,7 +171,7 @@ export default function BusinessHome() {
 
         {(showHours || business.address) && (
           <section className="card">
-            <SectionTitle eyebrow="Visítanos" title="Dónde y cuándo" inCard />
+            <SectionTitle eyebrow={t('Visítanos')} title={t('Dónde y cuándo')} inCard />
             {business.address && (
               <div className="flex items-center gap-3">
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand"><Ico name="pin" /></span>
@@ -182,7 +183,7 @@ export default function BusinessHome() {
                     rel="noopener noreferrer"
                     className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-brand/10 px-3.5 py-2 text-sm font-semibold text-brand transition hover:bg-brand/15"
                   >
-                    <Ico name="navigate" className="h-4 w-4" /> Cómo llegar
+                    <Ico name="navigate" className="h-4 w-4" /> {t('Cómo llegar')}
                   </a>
                 )}
               </div>
@@ -199,10 +200,10 @@ export default function BusinessHome() {
                         className={`flex flex-col items-center rounded-xl py-2.5 text-xs font-semibold ${
                           isToday ? 'bg-brand text-white shadow-md shadow-brand/25' : on ? 'bg-brand/10 text-brand' : 'bg-slate-100 text-slate-400'
                         }`}
-                        title={`${WEEKDAYS[w]}: ${on ? 'abierto' : 'cerrado'}`}
+                        title={`${WEEKDAYS[w]}: ${on ? t('abierto') : t('cerrado')}`}
                       >
                         <span className={on ? '' : 'line-through'}>{WEEKDAYS_SHORT[w]}</span>
-                        {isToday && <span className="mt-0.5 text-[10px] font-medium opacity-90">Hoy</span>}
+                        {isToday && <span className="mt-0.5 text-[10px] font-medium opacity-90">{t('Hoy')}</span>}
                       </div>
                     )
                   })}
@@ -210,8 +211,8 @@ export default function BusinessHome() {
                 {today && (
                   <p className="mt-3 flex items-center gap-2 text-sm text-slate-600">
                     <span className={`h-2 w-2 shrink-0 rounded-full ${todayOpen ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                    {todayOpen ? 'Hoy estamos abiertos.' : 'Hoy está cerrado.'}{' '}
-                    Abrimos {daysSummary(openDays, true)}.
+                    {todayOpen ? t('Hoy estamos abiertos.') : t('Hoy está cerrado.')}{' '}
+                    {t('Abrimos {days}.', { days: daysSummary(openDays, true) })}
                   </p>
                 )}
               </>
@@ -221,11 +222,11 @@ export default function BusinessHome() {
 
         {business.policies && (
           <section className="card">
-            <SectionTitle eyebrow="Importante" title="Antes de tu cita" inCard />
+            <SectionTitle eyebrow={t('Importante')} title={t('Antes de tu cita')} inCard />
             <p className="whitespace-pre-line text-slate-700">{business.policies}</p>
             <p className="mt-3 flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
               <Ico name="refresh" className="mt-0.5 h-4 w-4 shrink-0" />
-              Puedes cancelar tu cita hasta {business.cancel_notice_hours} h antes, o cambiar el día o la hora hasta {business.reschedule_notice_hours} h antes, desde el enlace que recibes al reservar.
+              {t('Puedes cancelar tu cita hasta {c} h antes, o cambiar el día o la hora hasta {r} h antes, desde el enlace que recibes al reservar.', { c: business.cancel_notice_hours, r: business.reschedule_notice_hours })}
             </p>
           </section>
         )}
@@ -233,16 +234,16 @@ export default function BusinessHome() {
         <InstallReminder appName={business.name} />
 
         <section className="card text-center">
-          <p className="text-lg font-bold">¿Tienes alguna pregunta?</p>
-          <p className="text-sm text-slate-500">Escríbenos y te respondemos.</p>
+          <p className="text-lg font-bold">{t('¿Tienes alguna pregunta?')}</p>
+          <p className="text-sm text-slate-500">{t('Escríbenos y te respondemos.')}</p>
           {wa && (
             <LinkButton href={wa} variant="whatsapp" block newTab className="mt-4">
-              <WhatsAppIcon /> Escribir por WhatsApp
+              <WhatsAppIcon /> {t('Escribir por WhatsApp')}
             </LinkButton>
           )}
         </section>
         <button onClick={tour.relaunch} className="mx-auto flex items-center gap-1.5 text-sm font-semibold text-brand">
-          <Ico name="help" className="h-4 w-4" /> ¿Cómo reservar? Ver guía rápida
+          <Ico name="help" className="h-4 w-4" /> {t('¿Cómo reservar? Ver guía rápida')}
         </button>
         <PoweredBy />
       </main>
@@ -251,18 +252,18 @@ export default function BusinessHome() {
         <aside className="hidden lg:sticky lg:top-6 lg:block">
           <div className="card space-y-4 shadow-xl shadow-slate-900/5">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand">Reserva online</p>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand">{t('Reserva online')}</p>
               <p className="mt-1 text-lg font-extrabold leading-tight">{business.name}</p>
             </div>
             {from && (
               <p className="text-sm text-slate-500">
-                Desde <span className="text-2xl font-extrabold tracking-tight text-slate-900">{from}</span>
+                {t('Desde')} <span className="text-2xl font-extrabold tracking-tight text-slate-900">{from}</span>
               </p>
             )}
             {today && showHours && (
               <p className="flex items-center gap-2 text-sm font-medium text-slate-600">
                 <span className={`h-2 w-2 rounded-full ${todayOpen ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                {todayOpen ? 'Abierto hoy' : 'Hoy cerrado'}
+                {todayOpen ? t('Abierto hoy') : t('Hoy cerrado')}
               </p>
             )}
             <Link
@@ -278,12 +279,12 @@ export default function BusinessHome() {
                 rel="noopener noreferrer"
                 className="flex w-full items-center justify-center gap-2 rounded-btn py-3 font-semibold text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-50"
               >
-                <WhatsAppIcon className="h-5 w-5 text-[#25d366]" /> Escribir por WhatsApp
+                <WhatsAppIcon className="h-5 w-5 text-[#25d366]" /> {t('Escribir por WhatsApp')}
               </a>
             )}
             <p className="flex items-start gap-2 border-t border-slate-100 pt-4 text-xs text-slate-500">
               <Ico name="check" className="mt-px h-4 w-4 shrink-0 text-emerald-500" />
-              Sin cuenta ni contraseña. Puedes cambiar o cancelar tu cita desde el enlace que recibes al reservar.
+              {t('Sin cuenta ni contraseña. Puedes cambiar o cancelar tu cita desde el enlace que recibes al reservar.')}
             </p>
           </div>
         </aside>
@@ -295,7 +296,7 @@ export default function BusinessHome() {
           <div className="mx-auto flex max-w-xl items-center gap-3">
             {showPrices && (
               <div className="shrink-0 leading-tight">
-                <p className="text-xs text-slate-500">Desde</p>
+                <p className="text-xs text-slate-500">{t('Desde')}</p>
                 <p className="font-extrabold">{money(minPrice, currency)}</p>
               </div>
             )}
@@ -315,36 +316,37 @@ export default function BusinessHome() {
 }
 
 const CLIENT_TOUR = (name: string) => [
-  { emoji: '👋', title: '¡Bienvenido!', text: `Así reservas una cita con ${name} (y con cualquier negocio que use Citora): elige el servicio, el día y la hora, pones tus datos y listo.` },
-  { emoji: '✂️', title: 'Elige tu servicio', text: 'Toca "Reservar cita" y marca lo que quieras — puedes elegir varios servicios a la vez.' },
-  { emoji: '🗓️', title: 'Día y hora', text: 'Solo vas a ver los horarios realmente libres. Si el negocio tiene varias personas, puedes elegir con quién prefieres tu cita.' },
-  { emoji: '🔗', title: 'Guarda tu enlace', text: 'Al reservar te damos un enlace único para VER, CAMBIAR o CANCELAR tu cita cuando quieras — sin necesidad de cuenta ni contraseña.' },
-  { emoji: '🔔', title: 'Avisos', text: 'Si quieres, desde tu cita puedes activar un aviso en tu teléfono para que te recordemos la cita el día antes.' },
-  { emoji: '📱', title: 'Instálala en tu teléfono', text: 'Si vas a reservar seguido, instala esta web en la pantalla de inicio de tu teléfono: se abre como una app, sin buscarla en el navegador.' },
+  { emoji: '👋', title: t('¡Bienvenido!'), text: t('Así reservas una cita con {name} (y con cualquier negocio que use Citora): elige el servicio, el día y la hora, pones tus datos y listo.', { name }) },
+  { emoji: '✂️', title: t('Elige tu servicio'), text: t('Toca "Reservar cita" y marca lo que quieras — puedes elegir varios servicios a la vez.') },
+  { emoji: '🗓️', title: t('Día y hora'), text: t('Solo vas a ver los horarios realmente libres. Si el negocio tiene varias personas, puedes elegir con quién prefieres tu cita.') },
+  { emoji: '🔗', title: t('Guarda tu enlace'), text: t('Al reservar te damos un enlace único para VER, CAMBIAR o CANCELAR tu cita cuando quieras — sin necesidad de cuenta ni contraseña.') },
+  { emoji: '🔔', title: t('Avisos'), text: t('Si quieres, desde tu cita puedes activar un aviso en tu teléfono para que te recordemos la cita el día antes.') },
+  { emoji: '📱', title: t('Instálala en tu teléfono'), text: t('Si vas a reservar seguido, instala esta web en la pantalla de inicio de tu teléfono: se abre como una app, sin buscarla en el navegador.') },
 ]
 
 /** "Lun a Sáb", "Lun, Mié y Vie", "Todos los días"... Con long: "de lunes a sábado", "lunes, miércoles y viernes" */
 function daysSummary(days: number[], long = false): string {
-  if (days.length === 7) return long ? 'todos los días' : 'Todos los días'
-  const name = (w: number) => (long ? WEEKDAYS[w].toLowerCase() : WEEKDAYS_SHORT[w])
+  if (days.length === 7) return long ? t('todos los días') : t('Todos los días')
+  // En inglés los días van con mayúscula
+  const name = (w: number) => (long ? (IS_EN ? WEEKDAYS[w] : WEEKDAYS[w].toLowerCase()) : WEEKDAYS_SHORT[w])
   const idx = WEEK.map((w) => days.includes(w))
   const first = idx.indexOf(true)
   const last = idx.lastIndexOf(true)
   if (first >= 0 && idx.slice(first, last + 1).every(Boolean) && last > first) {
-    return `${long ? 'de ' : ''}${name(WEEK[first])} a ${name(WEEK[last])}`
+    return long ? t('de {a} a {b}', { a: name(WEEK[first]), b: name(WEEK[last]) }) : t('{a} a {b}', { a: name(WEEK[first]), b: name(WEEK[last]) })
   }
   const names = WEEK.filter((w) => days.includes(w)).map(name)
-  return names.length > 1 ? `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}` : names[0] || ''
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} ${t('y')} ${names[names.length - 1]}` : names[0] || ''
 }
 
 /** Tres datos rápidos bajo la portada */
 function Highlights({ rating, from, days, count }: { rating: PublicBusiness['rating']; from: string | null; days: string | null; count: number }) {
   const items: { icon: string; value: string; label: string }[] = []
-  if (rating) items.push({ icon: 'star', value: Number(rating.avg).toFixed(1), label: `${rating.count} ${rating.count === 1 ? 'opinión' : 'opiniones'}` })
-  if (from) items.push({ icon: 'tag', value: from, label: 'desde' })
-  if (days) items.push({ icon: 'clock', value: days, label: 'abrimos' })
+  if (rating) items.push({ icon: 'star', value: Number(rating.avg).toFixed(1), label: tn(rating.count, '{n} opinión', '{n} opiniones') })
+  if (from) items.push({ icon: 'tag', value: from, label: t('desde') })
+  if (days) items.push({ icon: 'clock', value: days, label: t('abrimos') })
   // El número de servicios solo si no hay nada mejor que mostrar
-  if (items.length === 0 && count > 0) items.push({ icon: 'list', value: String(count), label: count === 1 ? 'servicio' : 'servicios' })
+  if (items.length === 0 && count > 0) items.push({ icon: 'list', value: String(count), label: count === 1 ? t('servicio') : t('servicios') })
   if (items.length === 0) return null
   return (
     <div className={`grid divide-x divide-slate-100 rounded-2xl border border-slate-200 bg-white py-3.5 shadow-xl shadow-slate-900/5 ${items.length === 1 ? 'grid-cols-1' : items.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
@@ -417,16 +419,16 @@ function MyBookings({ slug, tz }: { slug: string; tz: string }) {
     if (!hasHistory) return null
     return (
       <Link to={clientPath(slug, 'mis-citas')} className="card flex items-center justify-between font-semibold">
-        <span className="flex items-center gap-2"><Ico name="history" className="h-5 w-5 text-brand" /> Mis citas</span>
-        <span className="text-brand">Ver historial →</span>
+        <span className="flex items-center gap-2"><Ico name="history" className="h-5 w-5 text-brand" /> {t('Mis citas')}</span>
+        <span className="text-brand">{t('Ver historial')} →</span>
       </Link>
     )
   }
   return (
     <section className="card border-brand/30 bg-brand/5">
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-lg font-bold">Tus próximas citas</h2>
-        <Link to={clientPath(slug, 'mis-citas')} className="text-sm font-semibold text-brand">Ver todas</Link>
+        <h2 className="text-lg font-bold">{t('Tus próximas citas')}</h2>
+        <Link to={clientPath(slug, 'mis-citas')} className="text-sm font-semibold text-brand">{t('Ver todas')}</Link>
       </div>
       <ul className="mt-2 divide-y divide-slate-100">
         {visible.map((b) => {
@@ -465,7 +467,7 @@ function Gallery({ photos }: { photos: GalleryPhoto[] }) {
 
   return (
     <section>
-      <SectionTitle eyebrow="Galería" title="Nuestros trabajos" />
+      <SectionTitle eyebrow={t('Galería')} title={t('Nuestros trabajos')} />
       {/* Mosaico: la primera foto más grande */}
       <div className="grid grid-cols-3 gap-1.5 overflow-hidden rounded-2xl">
         {photos.map((p, i) => (
@@ -474,21 +476,21 @@ function Gallery({ photos }: { photos: GalleryPhoto[] }) {
             onClick={() => setOpen(i)}
             className={`relative aspect-square overflow-hidden bg-slate-100 ${i === 0 && photos.length % 3 === 0 ? 'col-span-2 row-span-2' : ''}`}
           >
-            <img src={p.url} alt={p.caption || 'Trabajo'} loading="lazy" className="h-full w-full object-cover transition duration-300 hover:scale-105" />
+            <img src={p.url} alt={p.caption || t('Trabajo')} loading="lazy" className="h-full w-full object-cover transition duration-300 hover:scale-105" />
           </button>
         ))}
       </div>
       {current && (
         <div className="fixed inset-0 z-50 flex flex-col bg-black/90" onClick={() => setOpen(null)} role="dialog" aria-modal>
           <div className="flex justify-end p-3">
-            <button className="rounded-full p-2 text-white/80 hover:bg-white/10" aria-label="Cerrar">
+            <button className="rounded-full p-2 text-white/80 hover:bg-white/10" aria-label={t('Cerrar')}>
               <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
             </button>
           </div>
           <div className="flex flex-1 items-center justify-center px-3" onClick={(e) => e.stopPropagation()}>
             <img
               src={current.url}
-              alt={current.caption || 'Trabajo'}
+              alt={current.caption || t('Trabajo')}
               className="max-h-[75dvh] max-w-full rounded-xl object-contain"
               onClick={() => setOpen(((open ?? 0) + 1) % photos.length)}
             />
@@ -508,12 +510,12 @@ function Reviews({ reviews, rating, tz }: { reviews: PublicReview[]; rating: Non
   const shown = all ? reviews : reviews.slice(0, 3)
   return (
     <section id="opiniones" className="scroll-mt-4">
-      <SectionTitle eyebrow="Opiniones" title="Lo que dicen nuestros clientes" />
+      <SectionTitle eyebrow={t('Opiniones')} title={t('Lo que dicen nuestros clientes')} />
       <div className="card mb-2.5 flex items-center gap-4">
         <p className="text-5xl font-extrabold tracking-tight">{Number(rating.avg).toFixed(1)}</p>
         <div>
           <Stars value={Number(rating.avg)} size={20} />
-          <p className="text-sm text-slate-500">{rating.count} {rating.count === 1 ? 'opinión' : 'opiniones'} de clientes reales</p>
+          <p className="text-sm text-slate-500">{tn(rating.count, '{n} opinión de clientes reales', '{n} opiniones de clientes reales')}</p>
         </div>
       </div>
       <div className="space-y-2.5">
@@ -532,7 +534,7 @@ function Reviews({ reviews, rating, tz }: { reviews: PublicReview[]; rating: Non
             {r.comment && <p className="mt-3 text-slate-700">“{r.comment}”</p>}
             {r.reply && (
               <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                <b>Respuesta del negocio:</b> {r.reply}
+                <b>{t('Respuesta del negocio:')}</b> {r.reply}
               </p>
             )}
           </article>
@@ -540,7 +542,7 @@ function Reviews({ reviews, rating, tz }: { reviews: PublicReview[]; rating: Non
       </div>
       {reviews.length > 3 && !all && (
         <button onClick={() => setAll(true)} className="mt-3 w-full rounded-btn py-2.5 text-sm font-semibold text-brand ring-1 ring-brand/30 hover:bg-brand/5">
-          Ver las {reviews.length} opiniones
+          {t('Ver las {n} opiniones', { n: reviews.length })}
         </button>
       )}
     </section>

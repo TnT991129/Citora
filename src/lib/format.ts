@@ -1,5 +1,6 @@
 // Fechas y dinero. Las fechas "clave" son textos YYYY-MM-DD en la zona horaria del negocio.
 import { serverNow } from './clockSkew'
+import { IS_EN } from './i18n'
 
 // Cuba: UTC−4 todo el año (ver "Etc/GMT+4" en schema.sql)
 export const DEFAULT_TZ = 'Etc/GMT+4'
@@ -48,8 +49,9 @@ export function cupRate(b: { usd_prices?: boolean; usd_rate?: number | string | 
 export function money(n: number | string | null | undefined, currency = 'CUP'): string {
   const v = Number(n ?? 0)
   const [int, dec] = Math.abs(v).toFixed(v % 1 ? 2 : 0).split('.')
-  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-  return `${v < 0 ? '-' : ''}${grouped}${dec ? ',' + dec : ''} ${currency}`
+  // En inglés: 1,500.50; en español: 1.500,50
+  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, IS_EN ? ',' : '.')
+  return `${v < 0 ? '-' : ''}${grouped}${dec ? (IS_EN ? '.' : ',') + dec : ''} ${currency}`
 }
 
 /** Precio en la moneda del negocio y, con tasa, también su cambio en CUP: "5 USD · 1.500 CUP" */
@@ -59,6 +61,7 @@ export function price(n: number | string | null | undefined, currency: string, r
 }
 
 export function duration(min: number): string {
+
   if (min < 60) return `${min} min`
   const h = Math.floor(min / 60)
   const m = min % 60
@@ -81,7 +84,7 @@ export function timeOf(d: Date | string, tz = DEFAULT_TZ, hour12 = false): strin
 /** Convierte "HH:MM" (24h) a 12h con a.m./p.m., para los turnos que elige el cliente al reservar */
 export function time12(hhmm: string): string {
   const [h, m] = hhmm.split(':').map(Number)
-  const period = h < 12 ? 'a.m.' : 'p.m.'
+  const period = IS_EN ? (h < 12 ? 'AM' : 'PM') : h < 12 ? 'a.m.' : 'p.m.'
   const h12 = h % 12 === 0 ? 12 : h % 12
   return `${h12}:${String(m).padStart(2, '0')} ${period}`
 }
@@ -100,13 +103,19 @@ export function weekdayOf(key: string): number {
   return new Date(key + 'T12:00:00Z').getUTCDay()
 }
 
-export const WEEKDAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
-export const WEEKDAYS_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
-export const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+// En inglés en la versión internacional (ver i18n.ts); los meses van en minúscula en español
+export const WEEKDAYS = IS_EN
+  ? ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+  : ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+export const WEEKDAYS_SHORT = IS_EN ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] : ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+export const MONTHS = IS_EN
+  ? ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+  : ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 
-/** "lunes 5 de octubre" */
+/** "lunes 5 de octubre" (en inglés, "Monday, October 5") */
 export function longDate(key: string): string {
   const d = new Date(key + 'T12:00:00Z')
+  if (IS_EN) return `${WEEKDAYS[d.getUTCDay()]}, ${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`
   return `${WEEKDAYS[d.getUTCDay()].toLowerCase()} ${d.getUTCDate()} de ${MONTHS[d.getUTCMonth()]}`
 }
 
@@ -116,16 +125,18 @@ export function dayTitle(key: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-/** "Lun 5 oct" */
+/** "Lun 5 oct" (en inglés, "Mon, Oct 5") */
 export function shortDate(key: string): string {
   const d = new Date(key + 'T12:00:00Z')
+  if (IS_EN) return `${WEEKDAYS_SHORT[d.getUTCDay()]}, ${MONTHS[d.getUTCMonth()].slice(0, 3)} ${d.getUTCDate()}`
   return `${WEEKDAYS_SHORT[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()].slice(0, 3)}`
 }
 
-/** "5 de octubre de 2026" desde una fecha ISO */
+/** "5 de octubre de 2026" desde una fecha ISO (en inglés, "October 5, 2026") */
 export function fullDateFromIso(iso: string, tz = DEFAULT_TZ): string {
   const key = dateKey(iso, tz)
   const d = new Date(key + 'T12:00:00Z')
+  if (IS_EN) return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`
   return `${d.getUTCDate()} de ${MONTHS[d.getUTCMonth()]} de ${d.getUTCFullYear()}`
 }
 

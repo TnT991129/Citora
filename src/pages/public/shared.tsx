@@ -10,6 +10,8 @@ import { goToMarket } from '../../lib/market'
 import { supabase } from '../../lib/supabase'
 import type { PublicBusiness } from '../../lib/types'
 import { clientPath } from '../../lib/url'
+import { LangSwitch } from '../../components/LangSwitch'
+import { t, tn } from '../../lib/i18n'
 
 /** Carga los datos públicos de un negocio y aplica su color */
 export function usePublicBusiness(slug: string | undefined) {
@@ -49,7 +51,7 @@ export function PublicHeader({ business, back }: { business: Pick<PublicBusiness
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="mx-auto flex max-w-xl items-center gap-3 px-4 py-3">
         {back && (
-          <Link to={clientPath(business.slug)} className="-ml-2 rounded-full p-2 text-slate-600 hover:bg-slate-100" aria-label="Volver">
+          <Link to={clientPath(business.slug)} className="-ml-2 rounded-full p-2 text-slate-600 hover:bg-slate-100" aria-label={t('Volver')}>
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 6l-6 6 6 6" /></svg>
           </Link>
         )}
@@ -57,6 +59,7 @@ export function PublicHeader({ business, back }: { business: Pick<PublicBusiness
           <BusinessAvatar name={business.name} logo={business.logo_url} size={34} />
           <span className="truncate font-bold">{business.name}</span>
         </Link>
+        <LangSwitch />
         <ThemeToggle />
       </div>
     </header>
@@ -80,7 +83,7 @@ export function BusinessHero({ business, rating, preview, status, actions }: {
     a.instagram && { key: 'instagram', href: socialUrl.instagram(a.instagram), label: 'Instagram' },
     a.facebook && { key: 'facebook', href: socialUrl.facebook(a.facebook), label: 'Facebook' },
     a.tiktok && { key: 'tiktok', href: socialUrl.tiktok(a.tiktok), label: 'TikTok' },
-    a.maps_url && { key: 'maps', href: a.maps_url, label: 'Cómo llegar' },
+    a.maps_url && { key: 'maps', href: a.maps_url, label: t('Cómo llegar') },
   ].filter(Boolean) as { key: keyof typeof SOCIAL_ICONS; href: string; label: string }[]
 
   return (
@@ -101,7 +104,12 @@ export function BusinessHero({ business, rating, preview, status, actions }: {
           }}
         />
       )}
-      {!preview && <ThemeToggle onImage className="absolute right-3 top-3 z-10" />}
+      {!preview && (
+        <div className="absolute right-3 top-3 z-10 flex items-center gap-1">
+          <LangSwitch onImage />
+          <ThemeToggle onImage />
+        </div>
+      )}
       <div className="relative mx-auto max-w-xl px-4 text-center">
         <div className="flex justify-center">
           <div className={`rounded-[1.6rem] bg-white/15 p-1.5 shadow-2xl shadow-black/20 backdrop-blur ${preview ? '' : 'sm:p-2'}`}>
@@ -122,7 +130,7 @@ export function BusinessHero({ business, rating, preview, status, actions }: {
             {rating && rating.count > 0 && (
               <a href="#opiniones" className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-sm font-semibold backdrop-blur">
                 <span className="text-amber-300">★</span> {Number(rating.avg).toFixed(1)}
-                <span className="font-normal text-white/80">· {rating.count} {rating.count === 1 ? 'opinión' : 'opiniones'}</span>
+                <span className="font-normal text-white/80">· {tn(rating.count, '{n} opinión', '{n} opiniones')}</span>
               </a>
             )}
           </div>
@@ -185,11 +193,11 @@ export function Announcement({ text }: { text?: string }) {
 export function PoweredBy() {
   return (
     <p className="space-x-2 py-8 text-center text-xs text-slate-400">
-      <span>Reservas con <Link to="/" className="font-semibold text-slate-500">Citora</Link></span>
+      <span>{t('Reservas con')} <Link to="/" className="font-semibold text-slate-500">Citora</Link></span>
       <span>·</span>
-      <Link to="/terminos" className="underline hover:text-slate-600">Términos</Link>
+      <Link to="/terminos" className="underline hover:text-slate-600">{t('Términos')}</Link>
       <span>·</span>
-      <Link to="/privacidad" className="underline hover:text-slate-600">Privacidad</Link>
+      <Link to="/privacidad" className="underline hover:text-slate-600">{t('Privacidad')}</Link>
     </p>
   )
 }
@@ -201,7 +209,7 @@ export function Closed({ business }: { business: PublicBusiness }) {
       <main className="mx-auto max-w-xl px-4 py-16 text-center">
         <div className="flex justify-center"><BusinessAvatar name={business.name} logo={business.logo_url} size={72} /></div>
         <h1 className="mt-4 text-2xl font-bold">{business.name}</h1>
-        <p className="mt-2 text-slate-600">Este negocio no está recibiendo reservas en este momento.</p>
+        <p className="mt-2 text-slate-600">{t('Este negocio no está recibiendo reservas en este momento.')}</p>
       </main>
       <PoweredBy />
     </div>
@@ -211,7 +219,7 @@ export function Closed({ business }: { business: PublicBusiness }) {
 /** Estrellas de 1 a 5. Si se pasa onChange, se pueden pulsar. */
 export function Stars({ value, onChange, size = 20 }: { value: number; onChange?: (n: number) => void; size?: number }) {
   return (
-    <span className="inline-flex items-center gap-0.5" role={onChange ? 'radiogroup' : 'img'} aria-label={`${value} de 5 estrellas`}>
+    <span className="inline-flex items-center gap-0.5" role={onChange ? 'radiogroup' : 'img'} aria-label={t('{n} de 5 estrellas', { n: value })}>
       {[1, 2, 3, 4, 5].map((n) => {
         const star = (
           <svg viewBox="0 0 24 24" width={size} height={size} className={n <= Math.round(value) ? 'text-amber-400' : 'text-slate-300'} fill="currentColor" aria-hidden>
@@ -219,7 +227,7 @@ export function Stars({ value, onChange, size = 20 }: { value: number; onChange?
           </svg>
         )
         return onChange ? (
-          <button key={n} type="button" role="radio" aria-checked={n === value} aria-label={`${n} estrellas`} onClick={() => onChange(n)} className="p-1 active:scale-90">
+          <button key={n} type="button" role="radio" aria-checked={n === value} aria-label={t('{n} estrellas', { n })} onClick={() => onChange(n)} className="p-1 active:scale-90">
             {star}
           </button>
         ) : (
