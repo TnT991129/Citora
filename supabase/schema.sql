@@ -55,25 +55,6 @@ alter table public.platform_settings add column if not exists price_int_ultra nu
 alter table public.platform_settings add column if not exists paypal_client_id text not null default ''
   check (paypal_client_id ~ '^[A-Za-z0-9_-]*$');
 
--- Pagos en línea (versión internacional): cada intento de pago con PayPal. Los crea y los completa
--- solo la función paypal-checkout (con la clave de servicio): nadie más los lee ni los escribe.
---   status: 'creada' (abrió PayPal), 'pagada' (PayPal confirmó el cobro y se sumaron los meses)
-create table if not exists public.online_orders (
-  id uuid primary key default gen_random_uuid(),
-  business_id uuid references public.businesses(id) on delete set null,
-  provider text not null default 'paypal' check (provider in ('paypal')),
-  provider_order_id text not null unique,
-  plan text not null check (plan in ('basico', 'ultra')),
-  months int not null check (months between 1 and 24),
-  amount numeric(10, 2) not null check (amount > 0),
-  currency text not null default 'USD' check (currency in ('USD')),
-  status text not null default 'creada' check (status in ('creada', 'pagada')),
-  capture_id text,
-  created_at timestamptz not null default now(),
-  paid_at timestamptz
-);
-create index if not exists online_orders_business_idx on public.online_orders (business_id, created_at desc);
-alter table public.online_orders enable row level security;
 
 -- Enlace al grupo de WhatsApp de los dueños (lo ven en su panel, en "Más"). Vacío: no se muestra.
 alter table public.platform_settings add column if not exists community_url text not null default ''
@@ -577,6 +558,26 @@ alter table public.payments add column if not exists currency text not null defa
   check (currency in ('CUP', 'USD'));
 alter table public.payment_claims add column if not exists currency text not null default 'CUP'
   check (currency in ('CUP', 'USD'));
+
+-- Pagos en línea (versión internacional): cada intento de pago con PayPal. Los crea y los completa
+-- solo la función paypal-checkout (con la clave de servicio): nadie más los lee ni los escribe.
+--   status: 'creada' (abrió PayPal), 'pagada' (PayPal confirmó el cobro y se sumaron los meses)
+create table if not exists public.online_orders (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid references public.businesses(id) on delete set null,
+  provider text not null default 'paypal' check (provider in ('paypal')),
+  provider_order_id text not null unique,
+  plan text not null check (plan in ('basico', 'ultra')),
+  months int not null check (months between 1 and 24),
+  amount numeric(10, 2) not null check (amount > 0),
+  currency text not null default 'USD' check (currency in ('USD')),
+  status text not null default 'creada' check (status in ('creada', 'pagada')),
+  capture_id text,
+  created_at timestamptz not null default now(),
+  paid_at timestamptz
+);
+create index if not exists online_orders_business_idx on public.online_orders (business_id, created_at desc);
+alter table public.online_orders enable row level security;
 
 -- Horario propio de un profesional (si no tiene ninguna fila aquí, usa el horario del negocio:
 -- ver _staff_slot_valid). Misma forma que schedule_days, pero por profesional.
