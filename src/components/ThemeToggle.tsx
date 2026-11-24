@@ -1,4 +1,5 @@
 import { useTheme } from '../lib/theme'
+import { t } from '../lib/i18n'
 
 /** Botón para pasar de modo claro a oscuro y al revés. "onImage": sobre la portada de color. */
 export function ThemeToggle({ onImage, className = '' }: { onImage?: boolean; className?: string }) {
@@ -8,8 +9,8 @@ export function ThemeToggle({ onImage, className = '' }: { onImage?: boolean; cl
     <button
       type="button"
       onClick={toggle}
-      aria-label={dark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-      title={dark ? 'Modo claro' : 'Modo oscuro'}
+      aria-label={dark ? t('Cambiar a modo claro') : t('Cambiar a modo oscuro')}
+      title={dark ? t('Modo claro') : t('Modo oscuro')}
       className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${
         onImage ? 'bg-white/15 text-white hover:bg-white/25' : 'text-slate-600 hover:bg-slate-100'
       } ${className}`}

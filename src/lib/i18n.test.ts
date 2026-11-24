@@ -16,9 +16,10 @@ function files(dir: string): string[] {
 function keys(): Set<string> {
   const out = new Set<string>()
   const str = String.raw`'((?:[^'\\]|\\.)*)'`
-  const tRe = new RegExp(String.raw`\bt\(\s*` + str, 'g')
+  // "tx" es t() en los archivos que ya usan una variable "t" para otra cosa
+  const tRe = new RegExp(String.raw`\b(?:t|tx)\(\s*` + str, 'g')
   const tnRe = new RegExp(String.raw`\btn\([^,]+,\s*` + str + String.raw`\s*,\s*` + str, 'g')
-  const unescape = (s: string) => s.replace(/\\'/g, "'").replace(/\\\\/g, '\\')
+  const unescape = (s: string) => s.replace(/\\(['n\\])/g, (_, c) => (c === 'n' ? '\n' : c))
   for (const f of files(join(__dirname, '..'))) {
     const src = readFileSync(f, 'utf8')
     for (const m of src.matchAll(tRe)) out.add(unescape(m[1]))

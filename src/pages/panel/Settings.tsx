@@ -11,6 +11,7 @@ import { panelUrl, publicUrl } from '../../lib/url'
 import { InstallButton } from '../../components/InstallButton'
 import { usePanel } from './context'
 import { Icon } from './Panel'
+import { t as tx } from '../../lib/i18n'
 
 export default function Settings() {
   const { business, reloadBusiness, slugChanged, link } = usePanel()
@@ -32,16 +33,16 @@ export default function Settings() {
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }))
 
   const save = async () => {
-    if (form.name.trim().length < 2) return setError('Escribe el nombre del negocio.')
+    if (form.name.trim().length < 2) return setError(tx('Escribe el nombre del negocio.'))
     const rate = Number(form.usd_rate)
-    if (form.currency === 'AMBAS' && !(rate > 0)) return setError('Escribe la tasa del dólar: cuántos CUP vale 1 USD.')
+    if (form.currency === 'AMBAS' && !(rate > 0)) return setError(tx('Escribe la tasa del dólar: cuántos CUP vale 1 USD.'))
     setBusy(true)
     setError(null)
     if (form.slug !== business.slug) {
       const { data: ok } = await supabase.rpc('check_slug_available', { p_slug: form.slug })
       if (!ok) {
         setBusy(false)
-        return setError('Ese enlace ya está en uso o no es válido.')
+        return setError(tx('Ese enlace ya está en uso o no es válido.'))
       }
     }
     const { error } = await supabase.from('businesses').update({
@@ -56,7 +57,7 @@ export default function Settings() {
     }).eq('id', business.id)
     setBusy(false)
     if (error) return setError(errorMessage(error))
-    flash('Guardado')
+    flash(tx('Guardado'))
     if (form.slug !== business.slug) slugChanged(form.slug)
     reloadBusiness()
   }
@@ -72,7 +73,7 @@ export default function Settings() {
       const { data } = supabase.storage.from('logos').getPublicUrl(path)
       const { error } = await supabase.from('businesses').update({ logo_url: data.publicUrl }).eq('id', business.id)
       if (error) throw error
-      flash('Logo actualizado')
+      flash(tx('Logo actualizado'))
       reloadBusiness()
     } catch (e) {
       setError(errorMessage(e))
@@ -88,20 +89,20 @@ export default function Settings() {
 
   return (
     <div className="space-y-5 pb-10">
-      <h1 className="text-2xl font-extrabold">Ajustes</h1>
+      <h1 className="text-2xl font-extrabold">{tx('Ajustes')}</h1>
 
       <PushSection />
-      <InstallButton appName="tu panel" label="Instalar el panel en este móvil" block />
+      <InstallButton appName={tx('tu panel')} label={tx('Instalar el panel en este móvil')} block />
 
       <section className="card space-y-4">
-        <h2 className="font-bold">Logo</h2>
+        <h2 className="font-bold">{tx('Logo')}</h2>
         <div className="flex items-center gap-4">
           <BusinessAvatar name={form.name} logo={business.logo_url} size={72} />
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" onClick={() => fileRef.current?.click()} loading={uploading}>
-              {business.logo_url ? 'Cambiar logo' : 'Subir logo'}
+              {business.logo_url ? tx('Cambiar logo') : tx('Subir logo')}
             </Button>
-            {business.logo_url && <Button variant="ghost" size="sm" onClick={removeLogo}>Quitar</Button>}
+            {business.logo_url && <Button variant="ghost" size="sm" onClick={removeLogo}>{tx('Quitar')}</Button>}
           </div>
           <input
             ref={fileRef}
@@ -115,27 +116,27 @@ export default function Settings() {
             }}
           />
         </div>
-        <p className="text-xs text-slate-500">Se reduce en tu móvil antes de subirse, para gastar pocos datos.</p>
+        <p className="text-xs text-slate-500">{tx('Se reduce en tu móvil antes de subirse, para gastar pocos datos.')}</p>
       </section>
 
       <section className="card space-y-4">
-        <h2 className="font-bold">Tu negocio</h2>
-        <Field label="Nombre"><input className="input" value={form.name} maxLength={60} onChange={(e) => set({ name: e.target.value })} /></Field>
-        <Field label="Enlace" hint={<>Clientes: {publicUrl(form.slug).replace(/^https?:\/\//, '')}<br />Tu panel: {panelUrl(form.slug).replace(/^https?:\/\//, '')}</>}>
+        <h2 className="font-bold">{tx('Tu negocio')}</h2>
+        <Field label={tx('Nombre')}><input className="input" value={form.name} maxLength={60} onChange={(e) => set({ name: e.target.value })} /></Field>
+        <Field label={tx('Enlace')} hint={<>{tx('Clientes:')}{' '}{publicUrl(form.slug).replace(/^https?:\/\//, '')}<br />{tx('Tu panel:')}{' '}{panelUrl(form.slug).replace(/^https?:\/\//, '')}</>}>
           <input className="input" value={form.slug} maxLength={40} onChange={(e) => set({ slug: slugify(e.target.value) })} />
         </Field>
         {form.slug !== business.slug && (
-          <Alert kind="warning">Si cambias el enlace, el anterior dejará de funcionar. Tendrás que compartir el nuevo.</Alert>
+          <Alert kind="warning">{tx('Si cambias el enlace, el anterior dejará de funcionar. Tendrás que compartir el nuevo.')}</Alert>
         )}
-        <Field label="Tipo de negocio">
+        <Field label={tx('Tipo de negocio')}>
           <select className="input" value={form.business_type} onChange={(e) => set({ business_type: e.target.value })}>
             {BUSINESS_TYPES.map((t) => <option key={t.key} value={t.key}>{t.name}</option>)}
           </select>
         </Field>
-        <Field label="WhatsApp" hint={`Con código de país, ej. ${business.market === 'int' ? '1 305 555 1234' : '53 5555 5555'}.`}>
+        <Field label="WhatsApp" hint={tx('Con código de país, ej. {v}.', { v: business.market === 'int' ? '1 305 555 1234' : '53 5555 5555' })}>
           <input className="input" type="tel" inputMode="tel" value={form.whatsapp} onChange={(e) => set({ whatsapp: e.target.value })} />
         </Field>
-        <Field label="Moneda" hint="En la que pones los precios de tus servicios y descuentos.">
+        <Field label={tx('Moneda')} hint={tx('En la que pones los precios de tus servicios y descuentos.')}>
           {business.market === 'int' ? (
             <select className="input" value={form.currency} onChange={(e) => set({ currency: e.target.value as CurrencyMode })}>
               {currencyOptions(true).map((c) => <option key={c.key} value={c.key}>{c.name} · {c.hint}</option>)}
@@ -151,34 +152,33 @@ export default function Settings() {
           )}
         </Field>
         {form.currency === 'AMBAS' && (
-          <Field label="Tasa del dólar" hint="Tus precios van en USD y tus clientes ven también su cambio en CUP. Las citas ya hechas mantienen la tasa con la que se reservaron.">
+          <Field label={tx('Tasa del dólar')} hint={tx('Tus precios van en USD y tus clientes ven también su cambio en CUP. Las citas ya hechas mantienen la tasa con la que se reservaron.')}>
             <div className="flex items-center gap-2">
-              <span className="shrink-0 font-semibold text-slate-600">1 USD =</span>
-              <input className="input" type="number" min={1} step="any" inputMode="decimal" placeholder="Ej. 300" value={form.usd_rate} onChange={(e) => set({ usd_rate: e.target.value })} />
+              <span className="shrink-0 font-semibold text-slate-600">{tx('1 USD =')}</span>
+              <input className="input" type="number" min={1} step="any" inputMode="decimal" placeholder={tx('Ej. 300')} value={form.usd_rate} onChange={(e) => set({ usd_rate: e.target.value })} />
               <span className="shrink-0 font-semibold text-slate-600">CUP</span>
             </div>
           </Field>
         )}
         {currencyFields(form.currency).currency !== business.currency && (
-          <Alert kind="warning">Los precios no se convierten solos: revisa tus servicios y descuentos después de guardar. Las citas ya hechas se verán en la nueva moneda.</Alert>
+          <Alert kind="warning">{tx('Los precios no se convierten solos: revisa tus servicios y descuentos después de guardar. Las citas ya hechas se verán en la nueva moneda.')}</Alert>
         )}
-        <Field label="Dirección"><input className="input" value={form.address} maxLength={120} onChange={(e) => set({ address: e.target.value })} /></Field>
-        <Field label="Descripción corta" hint="Aparece debajo del nombre en tu web.">
-          <input className="input" value={form.description} maxLength={140} onChange={(e) => set({ description: e.target.value })} placeholder="Ej. Uñas con amor en el centro de Matanzas" />
+        <Field label={tx('Dirección')}><input className="input" value={form.address} maxLength={120} onChange={(e) => set({ address: e.target.value })} /></Field>
+        <Field label={tx('Descripción corta')} hint={tx('Aparece debajo del nombre en tu web.')}>
+          <input className="input" value={form.description} maxLength={140} onChange={(e) => set({ description: e.target.value })} placeholder={tx('Ej. Uñas con amor en el centro de Matanzas')} />
         </Field>
         <p className="text-sm text-slate-500">
-          El color, los degradados, la portada y la letra están en <Link to={link('apariencia')} className="font-semibold text-brand">Apariencia</Link>.
-          Las reglas de reserva y lo que leen tus clientas están en <Link to={link('politicas')} className="font-semibold text-brand">Políticas</Link>.
+          {tx('El color, los degradados, la portada y la letra están en')}{' '}<Link to={link('apariencia')} className="font-semibold text-brand">{tx('Apariencia')}</Link>{tx('. Las reglas de reserva y lo que leen tus clientas están en')}{' '}<Link to={link('politicas')} className="font-semibold text-brand">{tx('Políticas')}</Link>.
         </p>
       </section>
 
       {error && <Alert>{error}</Alert>}
-      <Button block size="lg" onClick={save} loading={busy}>Guardar cambios</Button>
+      <Button block size="lg" onClick={save} loading={busy}>{tx('Guardar cambios')}</Button>
 
       <section className="card">
-        <h2 className="font-bold">Cuenta</h2>
-        <p className="mt-1 text-sm text-slate-500">Código de tu negocio: <b>{business.code}</b> (úsalo al pagar).</p>
-        <Button variant="secondary" className="mt-3" onClick={() => supabase.auth.signOut()}>Cerrar sesión</Button>
+        <h2 className="font-bold">{tx('Cuenta')}</h2>
+        <p className="mt-1 text-sm text-slate-500">{tx('Código de tu negocio:')}{' '}<b>{business.code}</b> {tx('(úsalo al pagar).')}</p>
+        <Button variant="secondary" className="mt-3" onClick={() => supabase.auth.signOut()}>{tx('Cerrar sesión')}</Button>
       </section>
     </div>
   )
@@ -200,11 +200,11 @@ function PushSection() {
     setBusy(true)
     const ok = v ? await subscribeOwnerPush() : await unsubscribePush().then(() => true)
     setBusy(false)
-    if (!ok) return flash('No se pudo activar. Revisa los permisos de notificaciones del navegador.')
+    if (!ok) return flash(tx('No se pudo activar. Revisa los permisos de notificaciones del navegador.'))
     setOn(v)
     if (v) markStep('avisos')
     void refreshProgress()
-    flash(v ? 'Avisos activados en este móvil' : 'Avisos desactivados en este móvil')
+    flash(v ? tx('Avisos activados en este móvil') : tx('Avisos desactivados en este móvil'))
   }
 
   return (
@@ -214,17 +214,17 @@ function PushSection() {
           <Icon name="bell" className="h-6 w-6" />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="font-bold">Avisos en este móvil</h2>
+          <h2 className="font-bold">{tx('Avisos en este móvil')}</h2>
           <p className="text-sm text-slate-600">
             {on
-              ? 'Te avisaremos al momento cuando alguien reserve, cambie o cancele.'
-              : 'Ahora mismo no te enteras cuando un cliente reserva. Actívalos en cada móvil que uses.'}
+              ? tx('Te avisaremos al momento cuando alguien reserve, cambie o cancele.')
+              : tx('Ahora mismo no te enteras cuando un cliente reserva. Actívalos en cada móvil que uses.')}
           </p>
         </div>
-        {on !== null && <Toggle checked={on} onChange={toggle} label="Avisos en este móvil" />}
+        {on !== null && <Toggle checked={on} onChange={toggle} label={tx('Avisos en este móvil')} />}
       </div>
-      {on === false && <Button block className="mt-4" onClick={() => toggle(true)} loading={busy}><Icon name="bell" className="h-4 w-4" /> Activar avisos</Button>}
-      {busy && on !== false && <p className="mt-2 text-xs text-slate-400">Guardando…</p>}
+      {on === false && <Button block className="mt-4" onClick={() => toggle(true)} loading={busy}><Icon name="bell" className="h-4 w-4" /> {tx('Activar avisos')}</Button>}
+      {busy && on !== false && <p className="mt-2 text-xs text-slate-400">{tx('Guardando…')}</p>}
     </section>
   )
 }

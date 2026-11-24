@@ -3,6 +3,7 @@ import { money, timeOf } from '../../lib/format'
 import type { Appointment } from '../../lib/types'
 import { StatusBadge } from '../../components/ui'
 import { usePanel } from './context'
+import { t } from '../../lib/i18n'
 
 export function AppointmentRow({ a, onClick }: { a: Appointment; onClick: () => void }) {
   const { business, staff } = usePanel()
@@ -20,7 +21,7 @@ export function AppointmentRow({ a, onClick }: { a: Appointment; onClick: () => 
       <div className="min-w-0 flex-1 border-l border-slate-100 pl-3">
         <p className={`truncate font-semibold ${a.status === 'cancelada' ? 'line-through' : ''}`}>{a.customer_name}</p>
         <p className="truncate text-sm text-slate-500">{servicesText(a)}</p>
-        {who && <p className="truncate text-xs font-medium text-slate-500">con {who}</p>}
+        {who && <p className="truncate text-xs font-medium text-slate-500">{t('con')}{' '}{who}</p>}
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">
         <StatusBadge status={a.status} />

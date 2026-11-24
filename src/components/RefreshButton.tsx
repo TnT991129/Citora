@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { t } from '../lib/i18n'
 
 /**
  * Botón para recargar la página: en la app instalada no hay barra del navegador ni se puede
@@ -21,8 +22,8 @@ export function RefreshButton({ onImage, className = '' }: { onImage?: boolean; 
       type="button"
       onClick={refresh}
       disabled={busy}
-      aria-label="Actualizar la página"
-      title="Actualizar"
+      aria-label={t('Actualizar la página')}
+      title={t('Actualizar')}
       className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${
         onImage ? 'bg-white/15 text-white hover:bg-white/25' : 'text-slate-600 hover:bg-slate-100'
       } ${className}`}

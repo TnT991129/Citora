@@ -9,6 +9,7 @@ import { supabase } from '../../lib/supabase'
 import type { ClosedDay, ClosedSlot, ScheduleDay } from '../../lib/types'
 import { usePanel } from './context'
 import { useModule } from './Locked'
+import { t } from '../../lib/i18n'
 
 const ORDER = [1, 2, 3, 4, 5, 6, 0]
 
@@ -59,7 +60,7 @@ export default function Schedule() {
   const copyToAll = (from: ScheduleDay) => {
     setDirty(true)
     setDays((ds) => ds!.map((d) => (d.is_open ? { ...d, slots: [...from.slots] } : d)))
-    flash('Copiado a los días abiertos')
+    flash(t('Copiado a los días abiertos'))
   }
 
   const save = async () => {
@@ -70,7 +71,7 @@ export default function Schedule() {
     setBusy(false)
     if (e1 || e2) return setError(errorMessage(e1 || e2))
     setDirty(false)
-    flash('Horario guardado')
+    flash(t('Horario guardado'))
     reloadBusiness()
   }
 
@@ -89,7 +90,7 @@ export default function Schedule() {
   }
 
   const addSlot = async () => {
-    if (!slotDay || slotEnd <= slotStart) return setError('Elige un día y un rango de horas válido.')
+    if (!slotDay || slotEnd <= slotStart) return setError(t('Elige un día y un rango de horas válido.'))
     const { data, error } = await supabase.from('closed_slots')
       .insert({ business_id: business.id, day: slotDay, start_time: slotStart, end_time: slotEnd, reason: slotReason.trim() || null })
       .select().single()
@@ -107,10 +108,10 @@ export default function Schedule() {
 
   return (
     <div className="space-y-5 pb-16">
-      <h1 className="text-2xl font-extrabold">Horario</h1>
+      <h1 className="text-2xl font-extrabold">{t('Horario')}</h1>
 
 
-      <p className="text-sm text-slate-500">Para cada día, las horas a las que puede empezar una cita.</p>
+      <p className="text-sm text-slate-500">{t('Para cada día, las horas a las que puede empezar una cita.')}</p>
 
       <div className="space-y-3">
         {days.map((d) => (
@@ -119,101 +120,101 @@ export default function Schedule() {
               <span className="font-semibold">{WEEKDAYS[d.weekday]}</span>
               <div className="flex items-center gap-3">
                 {d.is_open && d.slots.length > 0 && (
-                  <button onClick={() => copyToAll(d)} className="text-xs font-semibold text-brand">Copiar a todos</button>
+                  <button onClick={() => copyToAll(d)} className="text-xs font-semibold text-brand">{t('Copiar a todos')}</button>
                 )}
-                <Toggle checked={d.is_open} onChange={(v) => updateDay(d.weekday, { is_open: v })} label={`Abrir ${WEEKDAYS[d.weekday]}`} />
+                <Toggle checked={d.is_open} onChange={(v) => updateDay(d.weekday, { is_open: v })} label={t('Abrir {v}', { v: WEEKDAYS[d.weekday] })} />
               </div>
             </div>
             {d.is_open ? (
               <div className="mt-3"><TimeChips value={d.slots} onChange={(slots) => updateDay(d.weekday, { slots })} /></div>
             ) : (
-              <p className="mt-1 text-sm text-slate-400">Cerrado</p>
+              <p className="mt-1 text-sm text-slate-400">{t('Cerrado')}</p>
             )}
           </div>
         ))}
       </div>
 
       <p className="text-sm text-slate-500">
-        La antelación mínima para reservar y los plazos para cancelar o cambiar están en <Link to={link('politicas')} className="font-semibold text-brand">Políticas</Link>.
+        {t('La antelación mínima para reservar y los plazos para cancelar o cambiar están en')}{' '}<Link to={link('politicas')} className="font-semibold text-brand">{t('Políticas')}</Link>.
       </p>
 
       <section className="card space-y-3">
-        <h2 className="font-bold">Días cerrados</h2>
-        <p className="text-sm text-slate-500">Vacaciones, feriados o días libres. Esos días no se podrá reservar.</p>
+        <h2 className="font-bold">{t('Días cerrados')}</h2>
+        <p className="text-sm text-slate-500">{t('Vacaciones, feriados o días libres. Esos días no se podrá reservar.')}</p>
         <div className="flex flex-wrap gap-2">
           <input type="date" className="input w-auto" min={todayKey(business.timezone)} value={newClosed} onChange={(e) => setNewClosed(e.target.value)} />
-          <input className="input w-auto flex-1" placeholder="Motivo (opcional)" value={reason} onChange={(e) => setReason(e.target.value)} />
-          <Button variant="secondary" onClick={addClosed} disabled={!newClosed}>Añadir</Button>
+          <input className="input w-auto flex-1" placeholder={t('Motivo (opcional)')} value={reason} onChange={(e) => setReason(e.target.value)} />
+          <Button variant="secondary" onClick={addClosed} disabled={!newClosed}>{t('Añadir')}</Button>
         </div>
         <ul className="divide-y divide-slate-100">
           {closed.map((c) => (
             <li key={c.day} className="flex items-center justify-between py-2">
               <span>{dayTitle(c.day)}{c.reason && <span className="normal-case text-slate-500"> · {c.reason}</span>}</span>
-              <button onClick={() => removeClosed(c.day)} className="text-sm font-semibold text-red-600">Quitar</button>
+              <button onClick={() => removeClosed(c.day)} className="text-sm font-semibold text-red-600">{t('Quitar')}</button>
             </li>
           ))}
-          {closed.length === 0 && <li className="py-2 text-sm text-slate-400">Ninguno</li>}
+          {closed.length === 0 && <li className="py-2 text-sm text-slate-400">{t('Ninguno')}</li>}
         </ul>
       </section>
 
       <section className="card space-y-3">
-        <h2 className="font-bold">Bloquear horas</h2>
+        <h2 className="font-bold">{t('Bloquear horas')}</h2>
         <p className="text-sm text-slate-500">
-          Para un rato dentro de un día abierto (ej. el almuerzo, o si sales antes). El resto del día sigue abierto.
+          {t('Para un rato dentro de un día abierto (ej. el almuerzo, o si sales antes). El resto del día sigue abierto.')}
         </p>
         <div className="flex flex-wrap gap-2">
           <input type="date" className="input w-auto" min={todayKey(business.timezone)} value={slotDay} onChange={(e) => setSlotDay(e.target.value)} />
           <input type="time" className="input w-auto" value={slotStart} onChange={(e) => setSlotStart(e.target.value)} />
-          <span className="self-center text-slate-500">a</span>
+          <span className="self-center text-slate-500">{t('a')}</span>
           <input type="time" className="input w-auto" value={slotEnd} onChange={(e) => setSlotEnd(e.target.value)} />
-          <input className="input w-auto flex-1" placeholder="Motivo (opcional)" value={slotReason} onChange={(e) => setSlotReason(e.target.value)} />
-          <Button variant="secondary" onClick={addSlot} disabled={!slotDay}>Añadir</Button>
+          <input className="input w-auto flex-1" placeholder={t('Motivo (opcional)')} value={slotReason} onChange={(e) => setSlotReason(e.target.value)} />
+          <Button variant="secondary" onClick={addSlot} disabled={!slotDay}>{t('Añadir')}</Button>
         </div>
         <ul className="divide-y divide-slate-100">
           {slots.map((s) => (
             <li key={s.id} className="flex items-center justify-between py-2">
               <span>{dayTitle(s.day)} · {time12(s.start_time.slice(0, 5))}-{time12(s.end_time.slice(0, 5))}{s.reason && <span className="normal-case text-slate-500"> · {s.reason}</span>}</span>
-              <button onClick={() => removeSlot(s.id)} className="text-sm font-semibold text-red-600">Quitar</button>
+              <button onClick={() => removeSlot(s.id)} className="text-sm font-semibold text-red-600">{t('Quitar')}</button>
             </li>
           ))}
-          {slots.length === 0 && <li className="py-2 text-sm text-slate-400">Ninguna</li>}
+          {slots.length === 0 && <li className="py-2 text-sm text-slate-400">{t('Ninguna')}</li>}
         </ul>
       </section>
 
       <details className="group" open={advancedOpen}>
         <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-bold text-slate-500">
           <svg viewBox="0 0 24 24" className="h-4 w-4 transition group-open:rotate-90" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M9 6l6 6-6 6" /></svg>
-          Opciones avanzadas
+          {t('Opciones avanzadas')}
         </summary>
         <section id="clientes-por-turno" className="card mt-3 scroll-mt-20 space-y-3">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold">Clientes por turno</h2>
+              <h2 className="text-lg font-bold">{t('Clientes por turno')}</h2>
               <p className="text-sm text-slate-500">
-                Cuántos clientes pueden reservar a la misma hora. Por ejemplo, si tienes 2 manicuras trabajando a la vez, pon 2.
+                {t('Cuántos clientes pueden reservar a la misma hora. Por ejemplo, si tienes 2 manicuras trabajando a la vez, pon 2.')}
               </p>
             </div>
-            {!canMany && <span className="chip shrink-0 bg-brand/10 font-semibold text-brand">Plan Equipo</span>}
+            {!canMany && <span className="chip shrink-0 bg-brand/10 font-semibold text-brand">{t('Plan Equipo')}</span>}
           </div>
           {canMany ? (
             <CapacityStepper value={capacity} onChange={(n) => { setDirty(true); setCapacity(n) }} />
           ) : (
             <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
               <p>
-                Con tu plan atiendes a <b>1 cliente a la vez</b>. Para recibir a varios a la misma hora, pásate a <b>Equipo</b>: además, cada persona tiene su agenda y tus clientes eligen con quién reservar.
+                {t('Con tu plan atiendes a')}{' '}<b>{t('1 cliente a la vez')}</b>{t('. Para recibir a varios a la misma hora, pásate a')}{' '}<b>{t('Equipo')}</b>{t(': además, cada persona tiene su agenda y tus clientes eligen con quién reservar.')}
               </p>
               {(business.slot_capacity || 1) > 1 && (
-                <p className="mt-1 text-slate-500">Tenías {business.slot_capacity} a la vez: vuelve a funcionar al pasar a Equipo.</p>
+                <p className="mt-1 text-slate-500">{t('Tenías')}{' '}{business.slot_capacity} {t('a la vez: vuelve a funcionar al pasar a Equipo.')}</p>
               )}
-              <Link to={link('plan')} className="mt-2 inline-block font-semibold text-brand">Pasarme a Equipo →</Link>
+              <Link to={link('plan')} className="mt-2 inline-block font-semibold text-brand">{t('Pasarme a Equipo →')}</Link>
             </div>
           )}
           {canMany && hasTeam && (
             <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              Tienes profesionales en Equipo: cada uno atiende a un cliente a la vez. Este número se aplica a las citas sin profesional asignado.
+              {t('Tienes profesionales en Equipo: cada uno atiende a un cliente a la vez. Este número se aplica a las citas sin profesional asignado.')}
             </p>
           )}
-          {dirty && <p className="text-sm font-semibold text-brand">Recuerda pulsar «Guardar cambios» abajo.</p>}
+          {dirty && <p className="text-sm font-semibold text-brand">{t('Recuerda pulsar «Guardar cambios» abajo.')}</p>}
         </section>
       </details>
 
@@ -222,7 +223,7 @@ export default function Schedule() {
       {dirty && (
         <div className="fixed inset-x-0 bottom-16 z-30 px-4 md:bottom-4">
           <div className="mx-auto max-w-4xl">
-            <Button block size="lg" onClick={save} loading={busy} className="shadow-xl">Guardar cambios</Button>
+            <Button block size="lg" onClick={save} loading={busy} className="shadow-xl">{t('Guardar cambios')}</Button>
           </div>
         </div>
       )}

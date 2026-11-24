@@ -2,6 +2,7 @@
 // se reserva solo, las tres pantallas de "Cómo funciona" y los dibujos del mosaico de funciones.
 import { useEffect, useState, type ReactNode } from 'react'
 import { prefersReducedMotion, useInView } from './motion'
+import { t as tx } from '../../lib/i18n'
 
 const ICONS: Record<string, string> = {
   check: 'M5 12l5 5 9-10',
@@ -46,7 +47,7 @@ export function Phone({ children, className = '' }: { children: ReactNode; class
   )
 }
 
-function MiniHeader({ name = 'Nails Studio', sub = 'Reserva tu cita', color = 'bg-pink-500' }: { name?: string; sub?: string; color?: string }) {
+function MiniHeader({ name = 'Nails Studio', sub = tx('Reserva tu cita'), color = 'bg-pink-500' }: { name?: string; sub?: string; color?: string }) {
   return (
     <div className="flex items-center gap-2.5 border-b border-slate-100 px-4 pb-3 pt-10">
       <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${color} text-sm font-extrabold text-white`}>{name.charAt(0)}</span>
@@ -59,11 +60,11 @@ function MiniHeader({ name = 'Nails Studio', sub = 'Reserva tu cita', color = 'b
 }
 
 const DEMO_SERVICES = [
-  ['Manicura', '1.500 CUP', '1 h'],
-  ['Pedicura', '1.800 CUP', '1 h'],
-  ['Uñas acrílicas', '3.500 CUP', '2 h'],
+  [tx('Manicura'), tx('1.500 CUP'), tx('1 h')],
+  [tx('Pedicura'), tx('1.800 CUP'), tx('1 h')],
+  [tx('Uñas acrílicas'), tx('3.500 CUP'), tx('2 h')],
 ]
-const DEMO_TIMES = ['9:00 a.m.', '10:30 a.m.', '1:00 p.m.', '3:00 p.m.', '4:30 p.m.', '6:00 p.m.']
+const DEMO_TIMES = [tx('9:00 a.m.'), tx('10:30 a.m.'), tx('1:00 p.m.'), tx('3:00 p.m.'), tx('4:30 p.m.'), tx('6:00 p.m.')]
 // Cuánto dura cada momento de la demostración (ms): lista, servicio elegido, hora, confirmando, reservada
 const STEP_MS = [1300, 1200, 1500, 900, 2800]
 
@@ -86,7 +87,7 @@ export function HeroPhone() {
         <MiniHeader />
         {!done ? (
           <div className="space-y-2.5 p-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-pink-500">{step < 2 ? 'Paso 1 · Servicio' : 'Paso 2 · Día y hora'}</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-pink-500">{step < 2 ? tx('Paso 1 · Servicio') : tx('Paso 2 · Día y hora')}</p>
             {step < 2 ? (
               DEMO_SERVICES.map(([n, p, d], i) => {
                 const on = step === 1 && i === 0
@@ -106,14 +107,14 @@ export function HeroPhone() {
             ) : (
               <>
                 <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold text-slate-400">
-                  {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((d, i) => (
+                  {[tx('L'), tx('M'), tx('X'), tx('J'), tx('V'), tx('S'), tx('D')].map((d, i) => (
                     <span key={i} className={`rounded-lg py-1.5 ${i === 3 ? 'bg-pink-500 text-white shadow' : i === 6 ? 'line-through opacity-50' : 'bg-slate-100 text-slate-600'}`}>
                       {d}
                       <span className="block text-[11px]">{12 + i}</span>
                     </span>
                   ))}
                 </div>
-                <p className="pt-1 text-xs font-semibold text-slate-500">Jueves 15 · horas libres</p>
+                <p className="pt-1 text-xs font-semibold text-slate-500">{tx('Jueves 15 · horas libres')}</p>
                 <div className="grid grid-cols-2 gap-2">
                   {DEMO_TIMES.map((t, i) => {
                     const on = step >= 2 && t === '3:00 p.m.'
@@ -127,7 +128,7 @@ export function HeroPhone() {
               </>
             )}
             <div className={`absolute inset-x-4 bottom-5 rounded-2xl py-3.5 text-center text-sm font-bold text-white shadow-lg shadow-pink-500/30 transition ${step === 3 ? 'lp-press bg-pink-600' : 'bg-pink-500'}`}>
-              {step === 3 ? 'Confirmando…' : step < 2 ? 'Continuar · 1.500 CUP' : 'Confirmar reserva'}
+              {step === 3 ? tx('Confirmando…') : step < 2 ? tx('Continuar · 1.500 CUP') : tx('Confirmar reserva')}
             </div>
           </div>
         ) : (
@@ -135,11 +136,11 @@ export function HeroPhone() {
             <span className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
               <Ico name="check" className="h-10 w-10" />
             </span>
-            <p className="mt-5 text-xl font-extrabold">¡Cita reservada!</p>
-            <p className="mt-1 text-sm text-slate-500">Manicura · Jueves 15 · 3:00 p.m.</p>
+            <p className="mt-5 text-xl font-extrabold">{tx('¡Cita reservada!')}</p>
+            <p className="mt-1 text-sm text-slate-500">{tx('Manicura · Jueves 15 · 3:00 p.m.')}</p>
             <div className="mt-6 w-full space-y-2 rounded-2xl bg-slate-50 p-3 text-left text-xs text-slate-600">
-              <p className="flex items-center gap-2"><Ico name="bell" className="h-4 w-4 text-pink-500" /> Te recordamos la cita el día antes</p>
-              <p className="flex items-center gap-2"><Ico name="link" className="h-4 w-4 text-pink-500" /> Cámbiala o cancélala con tu enlace</p>
+              <p className="flex items-center gap-2"><Ico name="bell" className="h-4 w-4 text-pink-500" /> {tx('Te recordamos la cita el día antes')}</p>
+              <p className="flex items-center gap-2"><Ico name="link" className="h-4 w-4 text-pink-500" /> {tx('Cámbiala o cancélala con tu enlace')}</p>
             </div>
           </div>
         )}
@@ -152,29 +153,29 @@ export function HeroPhone() {
             <div key={`n${step}`} className="lp-pop w-56 rounded-2xl bg-white/95 p-3 text-left text-slate-900 shadow-2xl ring-1 ring-black/5 backdrop-blur">
               <p className="flex items-center gap-2 text-[11px] font-semibold text-slate-500">
                 <span className="flex h-5 w-5 items-center justify-center rounded-md bg-gradient-to-br from-rose-400 to-orange-400 text-white"><Ico name="bell" className="h-3 w-3" /></span>
-                Citora · ahora
+                {tx('Citora · ahora')}
               </p>
-              <p className="mt-1.5 text-sm font-bold">Nueva cita: Carla M.</p>
-              <p className="text-xs text-slate-500">Manicura · Jue 15 · 3:00 p.m.</p>
+              <p className="mt-1.5 text-sm font-bold">{tx('Nueva cita: Carla M.')}</p>
+              <p className="text-xs text-slate-500">{tx('Manicura · Jue 15 · 3:00 p.m.')}</p>
             </div>
           )}
         </div>
         <div className="lp-float absolute -right-3 top-12 hidden sm:-right-24 sm:block" style={{ ['--d' as string]: '-2s', ['--r' as string]: '3deg' }}>
           <div className="rounded-2xl bg-white/95 px-4 py-3 text-slate-900 shadow-2xl ring-1 ring-black/5">
-            <p className="text-[11px] font-semibold text-slate-500">Ingresos de hoy</p>
-            <p className="flex items-center gap-1 text-lg font-extrabold">12.400 CUP <Ico name="up" className="h-4 w-4 text-emerald-500" /></p>
+            <p className="text-[11px] font-semibold text-slate-500">{tx('Ingresos de hoy')}</p>
+            <p className="flex items-center gap-1 text-lg font-extrabold">{tx('12.400 CUP')}{' '}<Ico name="up" className="h-4 w-4 text-emerald-500" /></p>
           </div>
         </div>
         <div className="lp-float absolute -right-2 bottom-24 sm:-right-20" style={{ ['--d' as string]: '-4s', ['--r' as string]: '-3deg' }}>
           <div className="flex items-center gap-2 rounded-full bg-white/95 px-3.5 py-2 text-xs font-bold text-slate-900 shadow-2xl ring-1 ring-black/5">
             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white"><Ico name="check" className="h-3 w-3" /></span>
-            Recordatorio enviado
+            {tx('Recordatorio enviado')}
           </div>
         </div>
         <div className="lp-float absolute -left-3 bottom-10 hidden sm:-left-24 sm:block" style={{ ['--d' as string]: '-1s', ['--r' as string]: '2deg' }}>
           <div className="rounded-2xl bg-white/95 px-3.5 py-2.5 text-slate-900 shadow-2xl ring-1 ring-black/5">
             <p className="flex gap-0.5 text-amber-400">{[0, 1, 2, 3, 4].map((i) => <Ico key={i} name="star" className="h-3.5 w-3.5" fill />)}</p>
-            <p className="mt-1 text-xs font-semibold">"¡Me encantó, vuelvo seguro!"</p>
+            <p className="mt-1 text-xs font-semibold">{tx('"¡Me encantó, vuelvo seguro!"')}</p>
           </div>
         </div>
       </div>
@@ -187,23 +188,23 @@ export function HeroPhone() {
 export function ScreenCreate() {
   return (
     <div className="h-full bg-slate-50 px-4 pt-10">
-      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-rose-500">Crea tu app</p>
-      <p className="mt-1 text-lg font-extrabold leading-tight">¿Qué tipo de negocio tienes?</p>
+      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-rose-500">{tx('Crea tu app')}</p>
+      <p className="mt-1 text-lg font-extrabold leading-tight">{tx('¿Qué tipo de negocio tienes?')}</p>
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-semibold">
-        {['Barbería', 'Uñas', 'Peluquería', 'Spa', 'Cejas', 'Tatuajes'].map((t, i) => (
+        {[tx('Barbería'), tx('Uñas'), tx('Peluquería'), tx('Spa'), tx('Cejas'), tx('Tatuajes')].map((t, i) => (
           <span key={t} className={`rounded-xl px-3 py-2.5 ${i === 0 ? 'bg-rose-500 text-white shadow-md shadow-rose-500/30' : 'bg-white ring-1 ring-slate-200'}`}>{t}</span>
         ))}
       </div>
       <div className="mt-4 space-y-2">
-        <div className="rounded-xl bg-white px-3 py-2.5 text-xs ring-1 ring-slate-200"><span className="block text-[10px] text-slate-400">Nombre</span><b>Barbería Leo</b></div>
-        <div className="rounded-xl bg-white px-3 py-2.5 text-xs ring-1 ring-slate-200"><span className="block text-[10px] text-slate-400">Tu enlace</span><b>…/barberia-leo</b></div>
+        <div className="rounded-xl bg-white px-3 py-2.5 text-xs ring-1 ring-slate-200"><span className="block text-[10px] text-slate-400">{tx('Nombre')}</span><b>{tx('Barbería Leo')}</b></div>
+        <div className="rounded-xl bg-white px-3 py-2.5 text-xs ring-1 ring-slate-200"><span className="block text-[10px] text-slate-400">{tx('Tu enlace')}</span><b>{tx('…/barberia-leo')}</b></div>
         <div className="flex gap-2 pt-1">
           {['bg-rose-500', 'bg-sky-500', 'bg-emerald-500', 'bg-violet-500', 'bg-amber-500'].map((c, i) => (
             <span key={c} className={`h-7 w-7 rounded-full ${c} ${i === 1 ? 'ring-2 ring-slate-900 ring-offset-2' : ''}`} />
           ))}
         </div>
       </div>
-      <div className="absolute inset-x-4 bottom-5 rounded-2xl bg-gradient-to-r from-rose-400 to-orange-400 py-3 text-center text-sm font-bold text-white">Crear mi app</div>
+      <div className="absolute inset-x-4 bottom-5 rounded-2xl bg-gradient-to-r from-rose-400 to-orange-400 py-3 text-center text-sm font-bold text-white">{tx('Crear mi app')}</div>
     </div>
   )
 }
@@ -213,41 +214,41 @@ export function ScreenShare() {
     <div className="flex h-full flex-col bg-[#efeae2] pt-10">
       <div className="flex items-center gap-2 bg-[#075e54] px-3 py-2.5 text-white">
         <span className="h-7 w-7 rounded-full bg-white/30" />
-        <span className="text-xs font-semibold">Mis estados</span>
+        <span className="text-xs font-semibold">{tx('Mis estados')}</span>
       </div>
       <div className="flex-1 space-y-2 p-3">
         <div className="ml-auto max-w-[85%] rounded-xl rounded-tr-sm bg-[#d9fdd3] p-2 text-xs shadow-sm">
           <div className="overflow-hidden rounded-lg bg-white">
             <div className="flex h-16 items-center justify-center bg-gradient-to-br from-sky-500 to-indigo-500 text-xl font-extrabold text-white">B</div>
-            <p className="px-2 pt-1.5 font-bold">Barbería Leo</p>
-            <p className="px-2 pb-2 text-[10px] text-slate-500">Reserva tu cita en segundos</p>
+            <p className="px-2 pt-1.5 font-bold">{tx('Barbería Leo')}</p>
+            <p className="px-2 pb-2 text-[10px] text-slate-500">{tx('Reserva tu cita en segundos')}</p>
           </div>
-          <p className="mt-1.5">¡Ya pueden reservar solos! 💈 Toca aquí para reservar</p>
+          <p className="mt-1.5">{tx('¡Ya pueden reservar solos! 💈 Toca aquí para reservar')}</p>
         </div>
         <div className="flex justify-center gap-3 pt-3">
           {[['whatsapp', 'bg-[#25d366]'], ['instagram', 'bg-gradient-to-br from-fuchsia-500 to-orange-400'], ['link', 'bg-slate-800']].map(([i, c]) => (
             <span key={i} className={`flex h-11 w-11 items-center justify-center rounded-full ${c} text-white shadow-lg`}><Ico name={i} /></span>
           ))}
         </div>
-        <p className="text-center text-[11px] font-semibold text-slate-600">Compártelo donde ya están tus clientes</p>
+        <p className="text-center text-[11px] font-semibold text-slate-600">{tx('Compártelo donde ya están tus clientes')}</p>
       </div>
     </div>
   )
 }
 
 const AGENDA = [
-  ['9:00', 'Carlos R.', 'Corte', 'confirmada'],
-  ['10:00', 'Miguel A.', 'Corte y barba', 'confirmada'],
-  ['11:30', 'Yoan P.', 'Barba', 'nueva'],
-  ['1:00', 'Raúl D.', 'Corte', 'confirmada'],
-  ['3:00', 'Ernesto L.', 'Corte', 'nueva'],
+  ['9:00', tx('Carlos R.'), tx('Corte'), 'confirmada'],
+  ['10:00', tx('Miguel A.'), tx('Corte y barba'), 'confirmada'],
+  ['11:30', tx('Yoan P.'), tx('Barba'), 'nueva'],
+  ['1:00', tx('Raúl D.'), tx('Corte'), 'confirmada'],
+  ['3:00', tx('Ernesto L.'), tx('Corte'), 'nueva'],
 ]
 export function ScreenAgenda() {
   return (
     <div className="h-full bg-slate-50 px-4 pt-10">
       <div className="flex items-baseline justify-between">
-        <p className="text-lg font-extrabold">Hoy</p>
-        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">5 citas · 3.900 CUP</span>
+        <p className="text-lg font-extrabold">{tx('Hoy')}</p>
+        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">{tx('5 citas · 3.900 CUP')}</span>
       </div>
       <div className="mt-3 space-y-2">
         {AGENDA.map(([h, n, s, st]) => (
@@ -257,7 +258,7 @@ export function ScreenAgenda() {
               <span className="block text-sm font-semibold">{n}</span>
               <span className="block text-[11px] text-slate-500">{s}</span>
             </span>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${st === 'nueva' ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-700'}`}>{st === 'nueva' ? 'Nueva' : '✓'}</span>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${st === 'nueva' ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-700'}`}>{st === 'nueva' ? tx('Nueva') : '✓'}</span>
           </div>
         ))}
       </div>
@@ -268,10 +269,10 @@ export function ScreenAgenda() {
 /* ---------------- Antes y después ---------------- */
 
 const CHAOS = [
-  ['¿Tienes hueco mañana?', '9:12 p.m.'],
-  ['¿Y a las 3?', '9:40 p.m.'],
-  ['Holaaa?? 🙏', '10:05 p.m.'],
-  ['Bueno, mejor busco en otro lado', '11:20 p.m.'],
+  [tx('¿Tienes hueco mañana?'), tx('9:12 p.m.')],
+  [tx('¿Y a las 3?'), tx('9:40 p.m.')],
+  [tx('Holaaa?? 🙏'), tx('10:05 p.m.')],
+  [tx('Bueno, mejor busco en otro lado'), tx('11:20 p.m.')],
 ]
 export function ChatChaos() {
   return (
@@ -284,7 +285,7 @@ export function ChatChaos() {
       ))}
       <p className="flex items-center gap-2 pt-1 text-xs font-semibold text-rose-600">
         <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] text-white">27</span>
-        mensajes sin contestar
+        {tx('mensajes sin contestar')}
       </p>
     </div>
   )
@@ -301,7 +302,7 @@ export function AgendaClean() {
         </div>
       ))}
       <p className="flex items-center gap-2 pt-1 text-xs font-semibold text-emerald-700">
-        <Ico name="moon" className="h-4 w-4" /> 3 citas se reservaron mientras dormías
+        <Ico name="moon" className="h-4 w-4" /> {tx('3 citas se reservaron mientras dormías')}
       </p>
     </div>
   )
@@ -337,8 +338,8 @@ export function NightArt() {
       <div className="mt-4 inline-flex items-center gap-3 rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/15 backdrop-blur">
         <span className="lp-ring flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-rose-400 to-orange-400 text-white"><Ico name="bell" /></span>
         <span className="text-left leading-tight">
-          <span className="block text-sm font-bold text-white">Nueva reserva</span>
-          <span className="block text-xs text-white/60">Mientras tú dormías</span>
+          <span className="block text-sm font-bold text-white">{tx('Nueva reserva')}</span>
+          <span className="block text-xs text-white/60">{tx('Mientras tú dormías')}</span>
         </span>
       </div>
     </div>

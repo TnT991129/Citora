@@ -7,6 +7,8 @@ import type { CustomerSummary } from '../../lib/types'
 import { ServicePicker } from '../public/ServicePicker'
 import { applyOptions, missingOption, optionsFor, type OptionChoice } from '../../lib/serviceOptions'
 import { usePanel } from './context'
+import { t as tx } from '../../lib/i18n'
+import { IS_INT } from '../../lib/market'
 
 /** Cita añadida por el dueño (por ejemplo, alguien que llamó). Puede ser a cualquier hora. */
 export function NewAppointment({ defaultDate, defaultTime = '', onClose, onCreated }: { defaultDate: string; defaultTime?: string; onClose: () => void; onCreated: () => void }) {
@@ -30,12 +32,12 @@ export function NewAppointment({ defaultDate, defaultTime = '', onClose, onCreat
   const rate = cupRate(business)
 
   const save = async () => {
-    if (name.trim().length < 2) return setError('Escribe el nombre del cliente.')
+    if (name.trim().length < 2) return setError(tx('Escribe el nombre del cliente.'))
     const noOption = missingOption(active, selected, choice)
-    if (noOption) return setError(`Elige una opción de «${noOption.name}».`)
-    if (team.length > 0 && !staffId) return setError('Elige con quién es la cita.')
-    if (!date) return setError('Elige el día.')
-    if (!/^\d{2}:\d{2}$/.test(time)) return setError('Elige la hora.')
+    if (noOption) return setError(tx('Elige una opción de «{name}».', { name: noOption.name }))
+    if (team.length > 0 && !staffId) return setError(tx('Elige con quién es la cita.'))
+    if (!date) return setError(tx('Elige el día.'))
+    if (!/^\d{2}:\d{2}$/.test(time)) return setError(tx('Elige la hora.'))
     setBusy(true)
     setError(null)
     const { error } = await supabase.rpc('owner_create_appointment', {
@@ -58,31 +60,31 @@ export function NewAppointment({ defaultDate, defaultTime = '', onClose, onCreat
     <Modal
       open
       onClose={onClose}
-      title="Nueva cita"
+      title={tx('Nueva cita')}
       footer={
         <div className="space-y-2">
           {error && <Alert>{error}</Alert>}
           <p className="truncate text-center text-sm text-slate-500">
-            {date ? dayTitle(date) : 'Sin día'} · {time ? time12(time) : 'sin hora'} · {duration(minutes)}
+            {date ? dayTitle(date) : tx('Sin día')} · {time ? time12(time) : tx('sin hora')} · {duration(minutes)}
           </p>
-          <Button block onClick={save} loading={busy}>Guardar cita · {price(total, business.currency, rate)}</Button>
+          <Button block onClick={save} loading={busy}>{tx('Guardar cita ·')}{' '}{price(total, business.currency, rate)}</Button>
         </div>
       }
     >
       <div className="divide-y divide-slate-100">
-        <Section n={++n} title="Cliente">
+        <Section n={++n} title={tx('Cliente')}>
           <CustomerFields name={name} phone={phone} onName={setName} onPhone={setPhone} />
         </Section>
 
-        <Section n={++n} title="Servicios" aside={chosen.length > 0 ? duration(minutes) : undefined}>
+        <Section n={++n} title={tx('Servicios')} aside={chosen.length > 0 ? duration(minutes) : undefined}>
           {active.length === 0
-            ? <p className="text-sm text-slate-500">Todavía no tienes servicios. La cita durará 1 hora.</p>
+            ? <p className="text-sm text-slate-500">{tx('Todavía no tienes servicios. La cita durará 1 hora.')}</p>
             : <ServicePicker services={active} selected={selected} onChange={setSelected} choice={choice} onChoice={setChoice} currency={business.currency} rate={rate} />}
-          {active.length > 0 && chosen.length === 0 && <p className="text-xs text-slate-500">Si no eliges ninguno, la cita durará 1 hora.</p>}
+          {active.length > 0 && chosen.length === 0 && <p className="text-xs text-slate-500">{tx('Si no eliges ninguno, la cita durará 1 hora.')}</p>}
         </Section>
 
         {team.length > 0 && (
-          <Section n={++n} title="Con quién">
+          <Section n={++n} title={tx('Con quién')}>
             <div className="flex flex-wrap gap-2">
               {team.map((s) => (
                 <Chip key={s.id} on={staffId === s.id} onClick={() => { setStaffId(s.id); if (time !== defaultTime) setTime('') }}>
@@ -94,10 +96,10 @@ export function NewAppointment({ defaultDate, defaultTime = '', onClose, onCreat
           </Section>
         )}
 
-        <Section n={++n} title="Día y hora">
+        <Section n={++n} title={tx('Día y hora')}>
           <DayStrip today={todayKey(business.timezone)} value={date} onChange={(d) => { setDate(d); setTime('') }} />
           <label className="flex items-center gap-2 text-sm text-slate-600">
-            Otro día:
+            {tx('Otro día:')}
             <input type="date" className="input flex-1 py-2" value={date} onChange={(e) => { setDate(e.target.value); setTime('') }} />
           </label>
           {date && (
@@ -112,13 +114,13 @@ export function NewAppointment({ defaultDate, defaultTime = '', onClose, onCreat
             />
           )}
           <label className="flex items-center gap-2 text-sm text-slate-600">
-            Otra hora:
+            {tx('Otra hora:')}
             <input type="time" className="input flex-1 py-2" value={time} step={300} onChange={(e) => setTime(e.target.value)} />
           </label>
         </Section>
 
-        <Section n={++n} title="Nota" aside="opcional">
-          <textarea className="input min-h-[72px]" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. Viene con su hija, prefiere corte bajo…" maxLength={500} />
+        <Section n={++n} title={tx('Nota')} aside="opcional">
+          <textarea className="input min-h-[72px]" value={note} onChange={(e) => setNote(e.target.value)} placeholder={tx('Ej. Viene con su hija, prefiere corte bajo…')} maxLength={500} />
         </Section>
       </div>
     </Modal>
@@ -172,9 +174,9 @@ function CustomerFields({ name, phone, onName, onPhone }: { name: string; phone:
           className="input"
           value={name}
           onChange={(e) => { onName(e.target.value); setPicked(false) }}
-          placeholder="Nombre del cliente"
+          placeholder={tx('Nombre del cliente')}
           autoComplete="off"
-          aria-label="Nombre del cliente"
+          aria-label={tx('Nombre del cliente')}
         />
         {matches.length > 0 && (
           <ul className="mt-1.5 overflow-hidden rounded-xl ring-1 ring-slate-200">
@@ -186,7 +188,7 @@ function CustomerFields({ name, phone, onName, onPhone }: { name: string; phone:
                   className="flex w-full items-center justify-between gap-3 border-b border-slate-100 bg-white px-3 py-2 text-left text-sm last:border-0 hover:bg-slate-50"
                 >
                   <span className="min-w-0 truncate font-semibold">{c.name}</span>
-                  <span className="shrink-0 text-xs text-slate-500">{c.phone} · {c.visits} {c.visits === 1 ? 'visita' : 'visitas'}</span>
+                  <span className="shrink-0 text-xs text-slate-500">{c.phone} · {c.visits} {c.visits === 1 ? tx('visita') : tx('visitas')}</span>
                 </button>
               </li>
             ))}
@@ -199,8 +201,8 @@ function CustomerFields({ name, phone, onName, onPhone }: { name: string; phone:
         inputMode="tel"
         value={phone}
         onChange={(e) => onPhone(e.target.value)}
-        placeholder="Teléfono (opcional) · 53 5555 5555"
-        aria-label="Teléfono del cliente"
+        placeholder={tx('Teléfono (opcional) · {example}', { example: IS_INT ? '1 305 555 1234' : '53 5555 5555' })}
+        aria-label={tx('Teléfono del cliente')}
       />
     </div>
   )
@@ -221,7 +223,7 @@ function DayStrip({ today, value, onChange }: { today: string; value: string; on
             onClick={() => onChange(d)}
             className={`flex w-16 shrink-0 flex-col items-center rounded-2xl py-2 text-xs font-semibold transition ${on ? 'bg-brand text-white shadow' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:ring-brand'}`}
           >
-            <span>{i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : wd}</span>
+            <span>{i === 0 ? tx('Hoy') : i === 1 ? tx('Mañana') : wd}</span>
             <span className="text-lg font-extrabold leading-tight">{num}</span>
             <span className={on ? 'text-white/80' : 'text-slate-400'}>{mon}</span>
           </button>
@@ -253,11 +255,11 @@ function FreeSlots({ slug, date, duration: mins, staff, serviceIds, value, onCha
 
   if (!slots) return <div className="flex justify-center py-3 text-slate-400"><Spinner /></div>
   if (slots.length === 0) {
-    return <p className="rounded-xl bg-slate-50 px-3 py-2.5 text-sm text-slate-600">No quedan turnos libres de tu horario este día. Si quieres, escribe la hora abajo.</p>
+    return <p className="rounded-xl bg-slate-50 px-3 py-2.5 text-sm text-slate-600">{tx('No quedan turnos libres de tu horario este día. Si quieres, escribe la hora abajo.')}</p>
   }
   return (
     <div>
-      <p className="mb-2 text-xs font-semibold text-slate-500">Libres en tu horario</p>
+      <p className="mb-2 text-xs font-semibold text-slate-500">{tx('Libres en tu horario')}</p>
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
         {slots.map((s) => (
           <button

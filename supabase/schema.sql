@@ -48,9 +48,9 @@ alter table public.platform_settings add column if not exists card_phone text no
 -- online_orders y supabase/functions/paypal-checkout). paypal_client_id es público (lo usan los botones
 -- de PayPal en el navegador); la clave secreta va solo en la función (PAYPAL_SECRET). Vacío: aún no
 -- se puede pagar desde la app.
-alter table public.platform_settings add column if not exists price_int_basico numeric(10, 2) not null default 10
+alter table public.platform_settings add column if not exists price_int_basico numeric(10, 2) not null default 12.50
   check (price_int_basico >= 0);
-alter table public.platform_settings add column if not exists price_int_ultra numeric(10, 2) not null default 20
+alter table public.platform_settings add column if not exists price_int_ultra numeric(10, 2) not null default 23.50
   check (price_int_ultra >= 0);
 alter table public.platform_settings add column if not exists paypal_client_id text not null default ''
   check (paypal_client_id ~ '^[A-Za-z0-9_-]*$');
@@ -147,6 +147,11 @@ alter table public.businesses add column if not exists appearance jsonb not null
 -- administrador (admin_set_market). Los negocios de antes son todos de Cuba.
 alter table public.businesses add column if not exists market text not null default 'cu'
   check (market in ('cu', 'int'));
+
+-- Idioma en el que el dueño usa su panel (versión internacional: 'es' o 'en'; en Cuba siempre 'es').
+-- Lo guarda el panel al abrirse y con él se escriben los avisos push del negocio y de sus clientes.
+alter table public.businesses add column if not exists lang text not null default 'es'
+  check (lang in ('es', 'en'));
 
 -- Servicios del negocio
 create table if not exists public.services (
@@ -874,6 +879,12 @@ $$;
 
 -- Manda un aviso push (si está configurada la función: ver platform_settings e instrucciones de
 -- despliegue). Nunca lanza error: un fallo al avisar no debe romper una reserva.
+-- Texto en el idioma del negocio (ver businesses.lang): _l(lang, 'en español', 'in English')
+create or replace function public._l(p_lang text, p_es text, p_en text)
+returns text language sql immutable as $$
+  select case when p_lang = 'en' then p_en else p_es end;
+$$;
+
 create or replace function public._notify_push(p_business uuid, p_kind text, p_appointment uuid, p_title text, p_body text)
 returns void language plpgsql security definer set search_path = public as $$
 declare
@@ -982,14 +993,15 @@ declare
   a record;
 begin
   for a in
-    select ap.id, ap.business_id, ap.customer_name, b.name, to_char(ap.starts_at at time zone b.timezone, 'HH12:MI AM') as hora
+    select ap.id, ap.business_id, ap.customer_name, b.name, b.lang, to_char(ap.starts_at at time zone b.timezone, 'HH12:MI AM') as hora
     from appointments ap join businesses b on b.id = ap.business_id
     where ap.status in ('pendiente', 'confirmada')
       and extract(hour from now() at time zone b.timezone) = 18
       and (ap.starts_at at time zone b.timezone)::date = ((now() at time zone b.timezone)::date + 1)
       and exists (select 1 from push_subscriptions ps where ps.kind = 'customer' and ps.appointment_id = ap.id)
   loop
-    perform _notify_push(a.business_id, 'customer', a.id, 'Recuerda tu cita mañana', a.name || ' te espera a las ' || a.hora);
+    perform _notify_push(a.business_id, 'customer', a.id, _l(a.lang, 'Recuerda tu cita mañana', 'Reminder: your appointment is tomorrow'),
+      _l(a.lang, a.name || ' te espera a las ' || a.hora, a.name || ' is expecting you at ' || a.hora));
   end loop;
 end;
 $$;
@@ -1028,6 +1040,30 @@ begin
 end;
 $$;
 
+-- El mismo aviso en inglés (negocios de la versión internacional que usan el panel en inglés)
+create or replace function public._expiry_push_text_en(p_status text, p_expires timestamptz, p_tz text, p_name text,
+                                                       p_now timestamptz default now())
+returns text[] language plpgsql stable set search_path = public as $$
+declare
+  v_days int := (p_expires at time zone p_tz)::date - (p_now at time zone p_tz)::date;
+  v_when text := case v_days when 0 then 'today' when 1 then 'tomorrow' else 'in ' || v_days || ' days' end;
+  v_day text := case when v_days <= 1 then v_when || ' at ' || to_char(p_expires at time zone p_tz, 'HH12:MI AM')
+                     else 'on ' || to_char(p_expires at time zone p_tz, 'MM/DD') end;
+begin
+  if p_status = 'prueba' then
+    return array[
+      case when v_days >= 2 then v_days || ' days left in your free trial'
+           else 'Your free trial ends ' || v_when end,
+      'Your free trial ends ' || v_day || '. Subscribe in More → Monthly fee so your clients can keep '
+        || 'booking at ' || p_name || '. Otherwise, your app will be deleted 5 days later.'];
+  end if;
+  return array[
+    case when v_days >= 2 then 'Your monthly fee expires in ' || v_days || ' days'
+         else 'Your monthly fee expires ' || v_when end,
+    'It expires ' || v_day || '. Pay in More → Monthly fee so your clients can keep booking at ' || p_name || '.'];
+end;
+$$;
+
 -- Avisa al dueño (push) cada día de los 3 últimos de su prueba gratis o de su mensualidad pagada,
 -- para que se suscriba a tiempo. Se llama cada hora y a cada negocio le toca a las 9:00 de su zona
 -- horaria. A quien no tiene los avisos puestos le escribe el administrador desde Estadísticas.
@@ -1038,14 +1074,15 @@ declare
   v_text text[];
 begin
   for r in
-    select b.id, b.name, b.timezone, business_status(b.plan, b.trial_ends_at, b.paid_until) as st,
+    select b.id, b.name, b.timezone, b.lang, business_status(b.plan, b.trial_ends_at, b.paid_until) as st,
       case when business_status(b.plan, b.trial_ends_at, b.paid_until) = 'activo' then b.paid_until else b.trial_ends_at end as expires_at
     from businesses b
     where business_effective_plan(b.plan, b.trial_ends_at, b.paid_until) is not null
       and extract(hour from now() at time zone b.timezone) = 9
   loop
     if r.expires_at between now() and now() + interval '3 days' then
-      v_text := _expiry_push_text(r.st, r.expires_at, r.timezone, r.name);
+      v_text := case when r.lang = 'en' then _expiry_push_text_en(r.st, r.expires_at, r.timezone, r.name)
+                     else _expiry_push_text(r.st, r.expires_at, r.timezone, r.name) end;
       perform _notify_push(r.id, 'owner', null, v_text[1], v_text[2]);
     end if;
   end loop;
@@ -1529,7 +1566,7 @@ declare
 begin
   select * into b from businesses where id = new.business_id;
   if not found then return new; end if;
-  v_when := to_char(new.starts_at at time zone b.timezone, 'DD/MM HH12:MI AM');
+  v_when := to_char(new.starts_at at time zone b.timezone, _l(b.lang, 'DD/MM HH12:MI AM', 'MM/DD HH12:MI AM'));
 
   -- Las citas nuevas se avisan desde create_booking (ahí sí hay a mano los servicios y el
   -- teléfono para mandar un aviso completo); aquí solo se ignoran para no avisar dos veces.
@@ -1544,25 +1581,32 @@ begin
 
   if new.status = 'cancelada' and old.status <> 'cancelada' then
     if new.cancelled_by = 'cliente' then
-      perform _notify_push(new.business_id, 'owner', null, 'Cita cancelada: ' || new.customer_name, v_when);
+      perform _notify_push(new.business_id, 'owner', null, _l(b.lang, 'Cita cancelada: ', 'Appointment cancelled: ') || new.customer_name, v_when);
       select count(*) into v_wait from waitlist
         where business_id = new.business_id and status = 'esperando'
           and day = (new.starts_at at time zone b.timezone)::date;
       if v_wait > 0 then
-        perform _notify_push(new.business_id, 'owner', null, 'Se liberó un hueco',
-          'El ' || to_char(new.starts_at at time zone b.timezone, 'DD/MM') || ': tienes ' || v_wait ||
-          case when v_wait = 1 then ' cliente' else ' clientes' end || ' en lista de espera.');
+        perform _notify_push(new.business_id, 'owner', null, _l(b.lang, 'Se liberó un hueco', 'A spot opened up'),
+          _l(b.lang,
+            'El ' || to_char(new.starts_at at time zone b.timezone, 'DD/MM') || ': tienes ' || v_wait ||
+              case when v_wait = 1 then ' cliente' else ' clientes' end || ' en lista de espera.',
+            to_char(new.starts_at at time zone b.timezone, 'MM/DD') || ': you have ' || v_wait ||
+              case when v_wait = 1 then ' client' else ' clients' end || ' on the waitlist.'));
       end if;
     else
-      perform _notify_push(new.business_id, 'customer', new.id, 'Tu cita fue cancelada', b.name || ' canceló tu cita del ' || v_when);
+      perform _notify_push(new.business_id, 'customer', new.id, _l(b.lang, 'Tu cita fue cancelada', 'Your appointment was cancelled'),
+        _l(b.lang, b.name || ' canceló tu cita del ' || v_when, b.name || ' cancelled your appointment on ' || v_when));
     end if;
   elsif new.status = 'confirmada' and old.status = 'pendiente' then
-    perform _notify_push(new.business_id, 'customer', new.id, 'Cita confirmada', b.name || ' confirmó tu cita del ' || v_when);
+    perform _notify_push(new.business_id, 'customer', new.id, _l(b.lang, 'Cita confirmada', 'Appointment confirmed'),
+      _l(b.lang, b.name || ' confirmó tu cita del ' || v_when, b.name || ' confirmed your appointment on ' || v_when));
   elsif new.starts_at <> old.starts_at then
     if new.reschedule_count <> old.reschedule_count then
-      perform _notify_push(new.business_id, 'owner', null, 'Cambio de cita: ' || new.customer_name, 'Nuevo horario: ' || v_when);
+      perform _notify_push(new.business_id, 'owner', null, _l(b.lang, 'Cambio de cita: ', 'Appointment changed: ') || new.customer_name,
+        _l(b.lang, 'Nuevo horario: ', 'New time: ') || v_when);
     else
-      perform _notify_push(new.business_id, 'customer', new.id, 'Tu cita cambió de horario', b.name || ' movió tu cita al ' || v_when);
+      perform _notify_push(new.business_id, 'customer', new.id, _l(b.lang, 'Tu cita cambió de horario', 'Your appointment time changed'),
+        _l(b.lang, b.name || ' movió tu cita al ' || v_when, b.name || ' moved your appointment to ' || v_when));
     end if;
   end if;
   return new;
@@ -2175,10 +2219,10 @@ begin
   -- Aviso al dueño con los datos de la reserva (aquí, y no en el disparador, porque aquí sí se
   -- tienen a mano los servicios y el teléfono)
   select string_agg(s.name, ', ') into v_services from appointment_services s where s.appointment_id = v_id;
-  perform _notify_push(b.id, 'owner', null, 'Nueva cita: ' || v_name,
-    to_char(v_start at time zone b.timezone, 'DD/MM HH12:MI AM') || chr(10) ||
+  perform _notify_push(b.id, 'owner', null, _l(b.lang, 'Nueva cita: ', 'New booking: ') || v_name,
+    to_char(v_start at time zone b.timezone, _l(b.lang, 'DD/MM HH12:MI AM', 'MM/DD HH12:MI AM')) || chr(10) ||
     v_services || ' · ' || trim(to_char(v_total - v_disc, 'FM999G999G990')) || ' ' || b.currency || chr(10) ||
-    'Tel: ' || v_phone);
+    _l(b.lang, 'Tel: ', 'Phone: ') || v_phone);
 
   return v_token;
 end;
@@ -2580,7 +2624,8 @@ begin
             coalesce((select max(position) + 1 from services where business_id = st.business_id), 0))
     returning id into v_id;
     insert into staff_services (staff_id, service_id) values (st.id, v_id);
-    perform _notify_push(st.business_id, 'owner', null, st.name || ' añadió un servicio',
+    perform _notify_push(st.business_id, 'owner', null,
+                         st.name || _l((select lang from businesses where id = st.business_id), ' añadió un servicio', ' added a service'),
                          v_name || ' · ' || round(p_price, 2)::text || ' · ' || p_duration || ' min');
     return v_id;
   end if;
@@ -2591,8 +2636,11 @@ begin
   end if;
   select price into v_old_price from services where id = p_id;
   if v_old_price is distinct from round(p_price, 2) then
-    perform _notify_push(st.business_id, 'owner', null, st.name || ' cambió un precio',
-                         v_name || ': de ' || v_old_price::text || ' a ' || round(p_price, 2)::text);
+    perform _notify_push(st.business_id, 'owner', null,
+                         st.name || _l((select lang from businesses where id = st.business_id), ' cambió un precio', ' changed a price'),
+                         v_name || _l((select lang from businesses where id = st.business_id),
+                           ': de ' || v_old_price::text || ' a ' || round(p_price, 2)::text,
+                           ': from ' || v_old_price::text || ' to ' || round(p_price, 2)::text));
   end if;
   update services set name = v_name, price = round(p_price, 2), duration_min = p_duration,
          description = nullif(btrim(coalesce(p_description, '')), ''), active = coalesce(p_active, true),
@@ -4127,6 +4175,7 @@ revoke execute on function public._send_daily_reminders() from anon, authenticat
 revoke execute on function public._auto_mark_no_shows() from anon, authenticated;
 revoke execute on function public._send_expiry_reminders() from anon, authenticated;
 revoke execute on function public._expiry_push_text(text, timestamptz, text, text, timestamptz) from anon, authenticated;
+revoke execute on function public._expiry_push_text_en(text, timestamptz, text, text, timestamptz) from anon, authenticated;
 revoke execute on function public._move_business_timezone(uuid, text, boolean) from anon, authenticated;
 revoke execute on function public._notify_moderation(uuid, text) from anon, authenticated;
 revoke execute on function public._notify_admin_push(text, text) from anon, authenticated;

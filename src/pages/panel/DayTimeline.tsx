@@ -12,6 +12,7 @@ import { shareLink } from '../../lib/whatsapp'
 import { AppointmentRow } from './AppointmentList'
 import { usePanel } from './context'
 import { Icon } from './Panel'
+import { t as tx } from '../../lib/i18n'
 
 /** Píxeles por minuto: una hora mide 96 px */
 const PX = 1.6
@@ -75,9 +76,9 @@ export function DayTimeline({ day, isToday, list, slots, onOpen, onPick }: {
   if (!bounds) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-4 py-8 text-center">
-        <p className="font-semibold text-slate-700">{isToday ? 'Hoy' : 'Este día'} no tienes horario abierto</p>
+        <p className="font-semibold text-slate-700">{isToday ? tx('Hoy') : tx('Este día')} {tx('no tienes horario abierto')}</p>
         <p className="mt-1 text-sm text-slate-500">
-          Puedes añadir una cita igualmente o <Link to={link('horario')} className="font-semibold text-brand">cambiar tu horario</Link>.
+          {tx('Puedes añadir una cita igualmente o')}{' '}<Link to={link('horario')} className="font-semibold text-brand">{tx('cambiar tu horario')}</Link>.
         </p>
       </div>
     )
@@ -130,7 +131,7 @@ export function DayTimeline({ day, isToday, list, slots, onOpen, onPick }: {
       {cancelled.length > 0 && (
         <div className="mt-2 text-center">
           <button onClick={() => setShowCancelled((v) => !v)} className="text-sm font-semibold text-slate-500">
-            {showCancelled ? 'Ocultar' : 'Ver'} {cancelled.length === 1 ? '1 cancelada' : `${cancelled.length} canceladas`}
+            {showCancelled ? tx('Ocultar') : tx('Ver')} {cancelled.length === 1 ? tx('1 cancelada') : tx('{n} canceladas', { n: cancelled.length })}
           </button>
           {showCancelled && (
             <div className="mt-2 space-y-2 text-left">
@@ -170,7 +171,7 @@ function Block({ b, top, onOpen }: { b: DayBlock; top: number; onOpen: (a: Appoi
       <span className={`block min-w-0 truncate text-xs opacity-80 ${tall ? 'w-full' : 'hidden'}`}>
         {time12(fromMin(b.start))} – {time12(fromMin(b.end % (24 * 60)))} · {servicesText(b.a)}
       </span>
-      {b.a.status === 'pendiente' && tall && <span className="mt-0.5 text-[11px] font-bold uppercase tracking-wide">Por confirmar</span>}
+      {b.a.status === 'pendiente' && tall && <span className="mt-0.5 text-[11px] font-bold uppercase tracking-wide">{tx('Por confirmar')}</span>}
     </button>
   )
 }
@@ -193,9 +194,9 @@ function FreeBlock({ start, end, times, top, onPick }: { start: number; end: num
       className={`absolute flex overflow-hidden rounded-xl border-2 border-dashed border-slate-200 px-2.5 ${tall ? 'flex-col justify-center gap-2 py-2' : 'items-center gap-2'}`}
       style={{ top: top + 1, height: h, left: GUTTER, right: 8 }}
     >
-      <button onClick={() => onPick(times[0])} className="flex shrink-0 items-center gap-1.5 text-sm font-bold text-emerald-700" aria-label={`Añadir cita a las ${time12(times[0])}`}>
+      <button onClick={() => onPick(times[0])} className="flex shrink-0 items-center gap-1.5 text-sm font-bold text-emerald-700" aria-label={tx('Añadir cita a las {time12}', { time12: time12(times[0]) })}>
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100"><Icon name="plus" className="h-3.5 w-3.5" /></span>
-        Libre
+        {tx('Libre')}
       </button>
       <span className={`flex min-w-0 gap-1.5 ${tall ? 'flex-wrap' : 'no-scrollbar scroll-fade-x flex-1 overflow-x-auto'}`}>
         {times.map((t) => (
@@ -210,7 +211,7 @@ function FreeBlock({ start, end, times, top, onPick }: { start: number; end: num
 
 function TimelineSkeleton() {
   return (
-    <div className="card space-y-3 p-4" aria-busy="true" aria-label="Cargando">
+    <div className="card space-y-3 p-4" aria-busy="true" aria-label={tx('Cargando')}>
       {[70, 40, 90, 55].map((w, i) => (
         <div key={i} className="flex items-center gap-3">
           <span className="h-3 w-9 animate-pulse rounded bg-slate-100" />
@@ -234,22 +235,22 @@ export function PublishFreeSlots({ when, slots, onClose }: { when: 'hoy' | 'mañ
     <Modal
       open
       onClose={onClose}
-      title="Publicar mis huecos"
+      title={tx('Publicar mis huecos')}
       footer={
         <div className="flex flex-wrap gap-2">
           <LinkButton href={shareLink(text)} variant="whatsapp" newTab className="flex-1">
-            <WhatsAppIcon className="h-4 w-4" /> Enviar por WhatsApp
+            <WhatsAppIcon className="h-4 w-4" /> {tx('Enviar por WhatsApp')}
           </LinkButton>
-          <CopyButton text={text} label="Copiar texto" />
+          <CopyButton text={text} label={tx('Copiar texto')} />
         </div>
       }
     >
       {all.length === 0 ? (
-        <p className="text-slate-600">{when === 'hoy' ? 'Hoy' : 'Mañana'} ya no te quedan huecos libres. ¡Día lleno! 🎉</p>
+        <p className="text-slate-600">{when === 'hoy' ? tx('Hoy') : tx('Mañana')} {tx('ya no te quedan huecos libres. ¡Día lleno! 🎉')}</p>
       ) : (
         <div className="space-y-4">
           <div>
-            <p className="mb-2 text-sm font-semibold text-slate-600">Horas que quieres anunciar</p>
+            <p className="mb-2 text-sm font-semibold text-slate-600">{tx('Horas que quieres anunciar')}</p>
             <div className="flex flex-wrap gap-2">
               {all.map((t) => (
                 <button
@@ -263,15 +264,15 @@ export function PublishFreeSlots({ when, slots, onClose }: { when: 'hoy' | 'mañ
             </div>
           </div>
           <div>
-            <p className="mb-2 text-sm font-semibold text-slate-600">Así queda el mensaje</p>
+            <p className="mb-2 text-sm font-semibold text-slate-600">{tx('Así queda el mensaje')}</p>
             <p className="whitespace-pre-line rounded-2xl rounded-tl-sm bg-emerald-50 p-3.5 text-sm text-emerald-900 ring-1 ring-emerald-200">{text}</p>
           </div>
           <p className="text-xs text-slate-500">
-            Cópialo y pégalo en tu estado de WhatsApp o en Instagram, o mándalo a tus clientes por WhatsApp.
+            {tx('Cópialo y pégalo en tu estado de WhatsApp o en Instagram, o mándalo a tus clientes por WhatsApp.')}
           </p>
         </div>
       )}
-      {all.length === 0 && <Button block variant="secondary" className="mt-4" onClick={onClose}>Cerrar</Button>}
+      {all.length === 0 && <Button block variant="secondary" className="mt-4" onClick={onClose}>{tx('Cerrar')}</Button>}
     </Modal>
   )
 }

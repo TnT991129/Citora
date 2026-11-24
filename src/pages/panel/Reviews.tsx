@@ -8,6 +8,7 @@ import { publicUrl } from '../../lib/url'
 import { Stars } from '../public/shared'
 import { usePanel } from './context'
 import { Locked, useModule } from './Locked'
+import { t } from '../../lib/i18n'
 
 export default function Reviews() {
   const allowed = useModule('opiniones')
@@ -36,20 +37,20 @@ export default function Reviews() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-extrabold">Opiniones</h1>
-        <p className="text-slate-600">Tus clientes pueden opinar desde el enlace de su cita, después de ir.</p>
+        <h1 className="text-2xl font-extrabold">{t('Opiniones')}</h1>
+        <p className="text-slate-600">{t('Tus clientes pueden opinar desde el enlace de su cita, después de ir.')}</p>
       </div>
 
       {list.length === 0 ? (
         <div className="card text-center text-slate-600">
-          Todavía no hay opiniones. Después de cada cita, envía el mensaje "Gracias por venir" con el enlace de la cita para que te dejen una.
+          {t('Todavía no hay opiniones. Después de cada cita, envía el mensaje "Gracias por venir" con el enlace de la cita para que te dejen una.')}
         </div>
       ) : (
         <section className="card flex flex-wrap items-center gap-6">
           <div className="text-center">
             <p className="text-4xl font-extrabold">{avg.toFixed(1)}</p>
             <Stars value={avg} size={18} />
-            <p className="text-sm text-slate-500">{visible.length} {visible.length === 1 ? 'opinión' : 'opiniones'} visibles</p>
+            <p className="text-sm text-slate-500">{visible.length} {visible.length === 1 ? t('opinión') : t('opiniones')} {t('visibles')}</p>
           </div>
           <div className="min-w-[180px] flex-1 space-y-1">
             {counts.map(({ n, c }) => (
@@ -71,7 +72,7 @@ export default function Reviews() {
 
       {list.length > 0 && (
         <a href={`${publicUrl(business.slug)}#opiniones`} target="_blank" rel="noreferrer" className="inline-block text-sm font-semibold text-brand">
-          Ver cómo se ven en tu web →
+          {t('Ver cómo se ven en tu web →')}
         </a>
       )}
     </div>
@@ -101,30 +102,30 @@ function ReviewItem({ review: r, tz, onChange }: { review: Review; tz: string; o
         <div>
           <span className="font-semibold">{r.customer_name}</span>
           <span className="ml-2 text-sm text-slate-400">{shortDate(dateKey(r.created_at, tz))}</span>
-          {r.hidden && <span className="chip ml-2 bg-slate-200 text-xs text-slate-700">Oculta</span>}
+          {r.hidden && <span className="chip ml-2 bg-slate-200 text-xs text-slate-700">{t('Oculta')}</span>}
         </div>
         <Stars value={r.rating} size={16} />
       </div>
-      {r.comment ? <p className="mt-2 text-slate-700">{r.comment}</p> : <p className="mt-2 text-sm italic text-slate-400">Sin comentario</p>}
+      {r.comment ? <p className="mt-2 text-slate-700">{r.comment}</p> : <p className="mt-2 text-sm italic text-slate-400">{t('Sin comentario')}</p>}
 
       {r.reply && !replying && (
-        <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600"><b>Tu respuesta:</b> {r.reply}</p>
+        <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600"><b>{t('Tu respuesta:')}</b> {r.reply}</p>
       )}
       {replying && (
         <div className="mt-2 space-y-2">
-          <textarea className="input min-h-[70px]" maxLength={500} value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Escribe una respuesta pública" />
+          <textarea className="input min-h-[70px]" maxLength={500} value={reply} onChange={(e) => setReply(e.target.value)} placeholder={t('Escribe una respuesta pública')} />
           <div className="flex gap-2">
-            <Button size="sm" onClick={() => update({ reply: reply.trim() || null }, 'Respuesta guardada')} loading={busy}>Publicar respuesta</Button>
-            <Button size="sm" variant="ghost" onClick={() => setReplying(false)}>Cancelar</Button>
+            <Button size="sm" onClick={() => update({ reply: reply.trim() || null }, t('Respuesta guardada'))} loading={busy}>{t('Publicar respuesta')}</Button>
+            <Button size="sm" variant="ghost" onClick={() => setReplying(false)}>{t('Cancelar')}</Button>
           </div>
         </div>
       )}
 
       {!replying && (
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button size="sm" variant="secondary" onClick={() => setReplying(true)}>{r.reply ? 'Editar respuesta' : 'Responder'}</Button>
-          <Button size="sm" variant="ghost" onClick={() => update({ hidden: !r.hidden }, r.hidden ? 'Visible en tu web' : 'Ocultada')} loading={busy}>
-            {r.hidden ? 'Mostrar en mi web' : 'Ocultar'}
+          <Button size="sm" variant="secondary" onClick={() => setReplying(true)}>{r.reply ? t('Editar respuesta') : t('Responder')}</Button>
+          <Button size="sm" variant="ghost" onClick={() => update({ hidden: !r.hidden }, r.hidden ? t('Visible en tu web') : t('Ocultada'))} loading={busy}>
+            {r.hidden ? t('Mostrar en mi web') : t('Ocultar')}
           </Button>
         </div>
       )}

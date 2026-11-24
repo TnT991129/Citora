@@ -10,8 +10,9 @@ import { shareLink } from '../../lib/whatsapp'
 import { usePanel } from './context'
 import { Icon } from './Panel'
 import { Chip, Row, RowList, SectionTitle } from './rows'
+import { t, tn } from '../../lib/i18n'
 
-const DAY_LETTER = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
+const DAY_LETTER = [t('D'), t('L'), t('M'), t('X'), t('J'), t('V'), t('S')]
 
 export default function MyBusiness() {
   const { business, status, services, staff, link, onboarding, progress, markStep, tutorial } = usePanel()
@@ -33,23 +34,23 @@ export default function MyBusiness() {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(url)
-      flash('Enlace copiado')
+      flash(t('Enlace copiado'))
     } catch {
-      flash('No se pudo copiar')
+      flash(t('No se pudo copiar'))
     }
   }
 
-  const days = openDays === null ? 'Cargando…'
-    : openDays.length === 0 ? 'Sin días abiertos'
-      : openDays.length === 7 ? 'Todos los días'
+  const days = openDays === null ? t('Cargando…')
+    : openDays.length === 0 ? t('Sin días abiertos')
+      : openDays.length === 7 ? t('Todos los días')
         : [1, 2, 3, 4, 5, 6, 0].filter((d) => openDays.includes(d)).map((d) => DAY_LETTER[d]).join(' · ')
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-extrabold tracking-tight">Mi negocio</h1>
+      <h1 className="text-2xl font-extrabold tracking-tight">{t('Mi negocio')}</h1>
 
       <section className="card">
-        <p className="text-sm font-semibold text-slate-500">Tu página de reservas</p>
+        <p className="text-sm font-semibold text-slate-500">{t('Tu página de reservas')}</p>
         <div className="mt-2 flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5">
           <Icon name="link" className="h-4 w-4 shrink-0 text-brand" />
           <span className="truncate font-mono text-[15px] font-semibold text-brand">{url.replace(/^https?:\/\//, '')}</span>
@@ -67,9 +68,9 @@ export default function MyBusiness() {
             }}
             className="inline-flex items-center justify-center gap-2 rounded-btn bg-[#25D366] px-4 py-2.5 font-semibold text-white shadow-sm transition active:scale-[0.98]"
           >
-            <WhatsAppIcon className="h-4 w-4" /> Compartir
+            <WhatsAppIcon className="h-4 w-4" /> {t('Compartir')}
           </a>
-          <button onClick={copy} className="rounded-xl px-3 text-slate-600 ring-1 ring-slate-200 transition hover:bg-slate-50" aria-label="Copiar enlace" title="Copiar enlace">
+          <button onClick={copy} className="rounded-xl px-3 text-slate-600 ring-1 ring-slate-200 transition hover:bg-slate-50" aria-label={t('Copiar enlace')} title={t('Copiar enlace')}>
             <Icon name="copy" className="h-[18px] w-[18px]" />
           </button>
           <a
@@ -78,46 +79,46 @@ export default function MyBusiness() {
             rel="noreferrer"
             onClick={() => markStep('ver')}
             className="flex items-center rounded-xl px-3 text-slate-600 ring-1 ring-slate-200 transition hover:bg-slate-50"
-            aria-label="Ver mi página"
-            title="Ver mi página"
+            aria-label={t('Ver mi página')}
+            title={t('Ver mi página')}
           >
             <Icon name="eye" className="h-[18px] w-[18px]" />
           </a>
         </div>
         <p className="mt-3 text-sm text-slate-500">
-          Ponlo en tu estado de WhatsApp y en tu Instagram.
+          {t('Ponlo en tu estado de WhatsApp y en tu Instagram.')}
           {typeof visits === 'number' && (
-            <> Esta semana {visits === 0 ? 'no lo ha abierto nadie todavía' : <>lo {visits === 1 ? 'abrió' : 'abrieron'} <b className="text-slate-700">{visits} {visits === 1 ? 'persona' : 'personas'}</b></>}.</>
+            <> {t('Esta semana')}{' '}{visits === 0 ? t('no lo ha abierto nadie todavía') : <>{t('lo')}{' '}{visits === 1 ? t('abrió') : 'abrieron'} <b className="text-slate-700">{visits} {visits === 1 ? t('persona') : t('personas')}</b></>}.</>
           )}
         </p>
       </section>
 
       <div>
-        <SectionTitle>Lo que ven tus clientes</SectionTitle>
+        <SectionTitle>{t('Lo que ven tus clientes')}</SectionTitle>
         <RowList>
           <Row
             icon="scissors"
-            title="Servicios"
-            sub={`${main} ${main === 1 ? 'servicio' : 'servicios'}${extras ? ` · ${extras} ${extras === 1 ? 'extra' : 'extras'}` : ''}`}
+            title={t('Servicios')}
+            sub={`${tn(main, '{n} servicio', '{n} servicios')}${extras ? ` · ${tn(extras, '{n} extra', '{n} extras')}` : ''}`}
             to={link('servicios')}
-            right={pricesUnreviewed(onboarding) ? <Chip>Revisar</Chip> : undefined}
+            right={pricesUnreviewed(onboarding) ? <Chip>{t('Revisar')}</Chip> : undefined}
           />
-          <Row icon="clock" title="Horario" sub={days} to={link('horario')} />
-          <Row icon="palette" title="Apariencia" sub="Color, logo, foto de portada y textos" to={link('apariencia')} />
+          <Row icon="clock" title={t('Horario')} sub={days} to={link('horario')} />
+          <Row icon="palette" title={t('Apariencia')} sub={t('Color, logo, foto de portada y textos')} to={link('apariencia')} />
         </RowList>
       </div>
 
       <div>
-        <SectionTitle>Cómo trabajas</SectionTitle>
+        <SectionTitle>{t('Cómo trabajas')}</SectionTitle>
         <RowList>
           <Row
             icon="users"
-            title="Equipo"
-            sub={!hasModule(status.effective_plan, 'empleados') ? 'Varias personas, cada una con sus servicios' : team ? `${team} ${team === 1 ? 'profesional' : 'profesionales'}` : 'Solo tú · añade a quien trabaje contigo'}
+            title={t('Equipo')}
+            sub={!hasModule(status.effective_plan, 'empleados') ? t('Varias personas, cada una con sus servicios') : team ? tn(team, '{n} profesional', '{n} profesionales') : t('Solo tú · añade a quien trabaje contigo')}
             to={link('equipo')}
-            right={!hasModule(status.effective_plan, 'empleados') ? <Chip tone="brand">Plan Equipo</Chip> : staff.some((s) => s.active && !s.own_services) ? <Chip>Reparte servicios</Chip> : undefined}
+            right={!hasModule(status.effective_plan, 'empleados') ? <Chip tone="brand">{t('Plan Equipo')}</Chip> : staff.some((s) => s.active && !s.own_services) ? <Chip>{t('Reparte servicios')}</Chip> : undefined}
           />
-          <Row icon="scroll" title="Reglas de reserva" sub="Cancelaciones, antelación, depósito y lo que leen tus clientes" to={link('politicas')} />
+          <Row icon="scroll" title={t('Reglas de reserva')} sub={t('Cancelaciones, antelación, depósito y lo que leen tus clientes')} to={link('politicas')} />
         </RowList>
       </div>
     </div>

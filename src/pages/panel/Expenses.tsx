@@ -7,8 +7,9 @@ import { supabase } from '../../lib/supabase'
 import type { Expense } from '../../lib/types'
 import { usePanel } from './context'
 import { Locked, useModule } from './Locked'
+import { t } from '../../lib/i18n'
 
-const CATEGORIES = ['Materiales', 'Alquiler', 'Electricidad y agua', 'Salarios', 'Transporte', 'Publicidad', 'Impuestos', 'Otros']
+const CATEGORIES = [t('Materiales'), t('Alquiler'), t('Electricidad y agua'), t('Salarios'), t('Transporte'), t('Publicidad'), t('Impuestos'), t('Otros')]
 
 type Editing = { id?: string; day: string; amount: string; category: string; note: string }
 
@@ -67,14 +68,14 @@ export default function Expenses() {
   const save = async () => {
     if (!editing) return
     const amount = Number(editing.amount)
-    if (!(amount > 0)) return setFormError('Escribe el importe del gasto.')
-    if (!editing.day) return setFormError('Elige la fecha.')
+    if (!(amount > 0)) return setFormError(t('Escribe el importe del gasto.'))
+    if (!editing.day) return setFormError(t('Elige la fecha.'))
     setBusy(true)
     setFormError(null)
     const payload = {
       day: editing.day,
       amount: Math.round(amount * 100) / 100,
-      category: editing.category.trim() || 'Otros',
+      category: editing.category.trim() || t('Otros'),
       note: editing.note.trim() || null,
     }
     const { error } = editing.id
@@ -100,19 +101,19 @@ export default function Expenses() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-extrabold">Gastos</h1>
-        <Button size="sm" onClick={() => open({ day: today, amount: '', category: CATEGORIES[0], note: '' })}>+ Gasto</Button>
+        <h1 className="text-2xl font-extrabold">{t('Gastos')}</h1>
+        <Button size="sm" onClick={() => open({ day: today, amount: '', category: CATEGORIES[0], note: '' })}>{t('+ Gasto')}</Button>
       </div>
       <p className="text-sm text-slate-500">
-        Apunta lo que gastas en tu negocio. En <Link to={link('estadisticas')} className="font-semibold text-brand">Estadísticas</Link> verás tu ganancia: ingresos menos gastos.
+        {t('Apunta lo que gastas en tu negocio. En')}{' '}<Link to={link('estadisticas')} className="font-semibold text-brand">{t('Estadísticas')}</Link> {t('verás tu ganancia: ingresos menos gastos.')}
       </p>
 
       <div className="flex items-center justify-between rounded-2xl bg-white p-2 shadow-sm ring-1 ring-slate-200">
-        <button onClick={() => setMonth(shiftMonth(month, -1))} className="rounded-full p-2 text-slate-600 hover:bg-slate-100" aria-label="Mes anterior">
+        <button onClick={() => setMonth(shiftMonth(month, -1))} className="rounded-full p-2 text-slate-600 hover:bg-slate-100" aria-label={t('Mes anterior')}>
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 6l-6 6 6 6" /></svg>
         </button>
         <span className="font-semibold capitalize">{MONTHS[m - 1]} {y}</span>
-        <button onClick={() => setMonth(shiftMonth(month, 1))} disabled={month >= today.slice(0, 7)} className="rounded-full p-2 text-slate-600 hover:bg-slate-100 disabled:opacity-30" aria-label="Mes siguiente">
+        <button onClick={() => setMonth(shiftMonth(month, 1))} disabled={month >= today.slice(0, 7)} className="rounded-full p-2 text-slate-600 hover:bg-slate-100 disabled:opacity-30" aria-label={t('Mes siguiente')}>
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 6l6 6-6 6" /></svg>
         </button>
       </div>
@@ -122,7 +123,7 @@ export default function Expenses() {
       {list && (
         <>
           <div className="card">
-            <p className="text-sm text-slate-500">Total del mes</p>
+            <p className="text-sm text-slate-500">{t('Total del mes')}</p>
             <p className="text-2xl font-extrabold">{money(total, business.currency)}</p>
             {byCategory.length > 0 && (
               <ul className="mt-3 space-y-1 text-sm">
@@ -136,7 +137,7 @@ export default function Expenses() {
             )}
           </div>
 
-          {list.length === 0 && <Empty title="Sin gastos este mes">Añade el primero con «+ Gasto».</Empty>}
+          {list.length === 0 && <Empty title={t('Sin gastos este mes')}>{t('Añade el primero con «+ Gasto».')}</Empty>}
           <div className="space-y-2">
             {list.map((e) => (
               <button
@@ -159,25 +160,25 @@ export default function Expenses() {
         <Modal
           open
           onClose={() => setEditing(null)}
-          title={editing.id ? 'Editar gasto' : 'Nuevo gasto'}
+          title={editing.id ? t('Editar gasto') : t('Nuevo gasto')}
           footer={
             <div className="flex gap-2">
-              {editing.id && <Button variant="danger" onClick={remove} disabled={busy}>Eliminar</Button>}
-              <Button block onClick={save} loading={busy}>Guardar</Button>
+              {editing.id && <Button variant="danger" onClick={remove} disabled={busy}>{t('Eliminar')}</Button>}
+              <Button block onClick={save} loading={busy}>{t('Guardar')}</Button>
             </div>
           }
         >
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <Field label={`Importe (${business.currency})`}>
+              <Field label={t('Importe ({currency})', { currency: business.currency })}>
                 <input className="input" type="number" min={0} step="any" inputMode="decimal" autoFocus value={editing.amount} onChange={(e) => setEditing({ ...editing, amount: e.target.value })} />
               </Field>
-              <Field label="Fecha">
+              <Field label={t('Fecha')}>
                 <input className="input" type="date" max={today} value={editing.day} onChange={(e) => setEditing({ ...editing, day: e.target.value })} />
               </Field>
             </div>
             <div>
-              <span className="label">Categoría</span>
+              <span className="label">{t('Categoría')}</span>
               <div className="flex flex-wrap gap-2">
                 {CATEGORIES.map((c) => (
                   <button
@@ -191,8 +192,8 @@ export default function Expenses() {
                 ))}
               </div>
             </div>
-            <Field label="Nota (opcional)">
-              <input className="input" maxLength={200} placeholder="Ej. Tintes y champú" value={editing.note} onChange={(e) => setEditing({ ...editing, note: e.target.value })} />
+            <Field label={t('Nota (opcional)')}>
+              <input className="input" maxLength={200} placeholder={t('Ej. Tintes y champú')} value={editing.note} onChange={(e) => setEditing({ ...editing, note: e.target.value })} />
             </Field>
             {formError && <Alert>{formError}</Alert>}
           </div>

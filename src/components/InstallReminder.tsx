@@ -29,16 +29,16 @@ export function InstallReminder({ appName, pushLink }: { appName: string; pushLi
       )}
       {needsPush && (
         <p className="text-sm text-slate-600">
-          Además, activa <b>"Avisos en este dispositivo"</b> en{' '}
-          <Link to={pushLink!} className="font-semibold text-brand">Más → Ajustes</Link>
-          {needsInstall ? ' (con los dos pasos)' : ''} — sin eso no te va a llegar ningún aviso cuando un cliente reserve.
+          {t('Además, activa')}{' '}<b>{t('"Avisos en este dispositivo"')}</b> {t('en')}{' '}
+          <Link to={pushLink!} className="font-semibold text-brand">{t('Más → Ajustes')}</Link>
+          {needsInstall ? t(' (con los dos pasos)') : ''} {t('— sin eso no te va a llegar ningún aviso cuando un cliente reserve.')}
         </p>
       )}
       <div className="flex flex-wrap gap-2">
         {needsInstall && <InstallButton appName={appName} label={t('Instalar ahora')} variant="primary" />}
         {needsPush && (
           <Link to={pushLink!} className="inline-flex items-center rounded-btn bg-white px-4 py-2.5 text-sm font-semibold text-brand ring-1 ring-brand/30">
-            Ir a Ajustes
+            {t('Ir a Ajustes')}
           </Link>
         )}
       </div>

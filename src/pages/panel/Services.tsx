@@ -9,6 +9,7 @@ import { pricesUnreviewed } from '../../lib/onboarding'
 import { usePanel } from './context'
 import { Icon } from './Panel'
 import { RateCard } from './RateCard'
+import { t } from '../../lib/i18n'
 
 // Las opciones nuevas no tienen id todavía: se lo pone la base de datos al guardar
 type EditingOption = Omit<ServiceOption, 'id'> & { id?: string }
@@ -56,10 +57,10 @@ export default function Services() {
 
   const save = async () => {
     if (!editing) return
-    if (!editing.name.trim()) return setError('Escribe el nombre del servicio.')
+    if (!editing.name.trim()) return setError(t('Escribe el nombre del servicio.'))
     const options = editing.options.map((o) => ({ ...o, name: o.name.trim(), price: Math.max(0, Number(o.price) || 0) }))
-    if (options.length === 1) return setError('Pon al menos 2 opciones, o quítalas y deja un solo precio.')
-    if (options.some((o) => !o.name)) return setError('Escribe el nombre de cada opción.')
+    if (options.length === 1) return setError(t('Pon al menos 2 opciones, o quítalas y deja un solo precio.'))
+    if (options.some((o) => !o.name)) return setError(t('Escribe el nombre de cada opción.'))
     setBusy(true)
     setError(null)
     const payload = {
@@ -88,7 +89,7 @@ export default function Services() {
   const remove = async () => {
     if (!editing?.id) return
     const who = ownerOf(editing.id)
-    if (who && !window.confirm(`Este servicio es de ${who.name}. ¿Seguro que quieres borrarlo? Dejará de salir en su lista.`)) return
+    if (who && !window.confirm(t('Este servicio es de {name}. ¿Seguro que quieres borrarlo? Dejará de salir en su lista.', { name: who.name }))) return
     setBusy(true)
     const { error } = await supabase.from('services').delete().eq('id', editing.id)
     setBusy(false)
@@ -144,10 +145,10 @@ export default function Services() {
   const row = (list: Service[]) => (s: Service, i: number) => (
     <div key={s.id} className={`flex items-center gap-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200 ${s.active ? '' : 'opacity-60'}`}>
       <div className="flex flex-col">
-        <button onClick={() => moveItem(list, i, -1)} disabled={i === 0} className="rounded p-0.5 text-slate-400 hover:text-slate-700 disabled:opacity-20" aria-label="Subir">
+        <button onClick={() => moveItem(list, i, -1)} disabled={i === 0} className="rounded p-0.5 text-slate-400 hover:text-slate-700 disabled:opacity-20" aria-label={t('Subir')}>
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 15l6-6 6 6" /></svg>
         </button>
-        <button onClick={() => moveItem(list, i, 1)} disabled={i === list.length - 1} className="rounded p-0.5 text-slate-400 hover:text-slate-700 disabled:opacity-20" aria-label="Bajar">
+        <button onClick={() => moveItem(list, i, 1)} disabled={i === list.length - 1} className="rounded p-0.5 text-slate-400 hover:text-slate-700 disabled:opacity-20" aria-label={t('Bajar')}>
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6" /></svg>
         </button>
       </div>
@@ -155,51 +156,51 @@ export default function Services() {
       <button className="min-w-0 flex-1 text-left" onClick={() => open({ ...s, options: s.options || [], multi_options: Boolean(s.multi_options) })}>
         <p className="flex min-w-0 items-center gap-2">
           <span className="truncate font-semibold">{s.is_extra ? '+ ' : ''}{s.name}</span>
-          {ownerOf(s.id) && <span className="shrink-0 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-bold text-brand">de {ownerOf(s.id)!.name.split(' ')[0]}</span>}
-          {s.hidden_with_staff && !s.active && <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">oculto: ya no está en el equipo</span>}
+          {ownerOf(s.id) && <span className="shrink-0 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-bold text-brand">{t('de')}{' '}{ownerOf(s.id)!.name.split(' ')[0]}</span>}
+          {s.hidden_with_staff && !s.active && <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">{t('oculto: ya no está en el equipo')}</span>}
         </p>
         <p className="text-sm text-slate-500">
           {s.options?.length
-            ? `${s.options.length} opciones${s.multi_options ? ' (puede elegir varias)' : ''} · desde ${price(s.price, business.currency, rate)}`
+            ? t('{length} opciones{v} · desde {price}', { length: s.options.length, v: s.multi_options ? t(' (puede elegir varias)') : '', price: price(s.price, business.currency, rate) })
             : price(s.price, business.currency, rate)} · {duration(s.duration_min)}
         </p>
       </button>
-      <Toggle checked={s.active} onChange={(v) => toggle(s, v)} label={s.active ? 'Visible' : 'Oculto'} />
+      <Toggle checked={s.active} onChange={(v) => toggle(s, v)} label={s.active ? t('Visible') : t('Oculto')} />
     </div>
   )
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-extrabold">Servicios</h1>
-        <Button size="sm" onClick={() => open({ name: '', price: 0, duration_min: 60, is_extra: false, options: [], multi_options: false })}>+ Servicio</Button>
+        <h1 className="text-2xl font-extrabold">{t('Servicios')}</h1>
+        <Button size="sm" onClick={() => open({ name: '', price: 0, duration_min: 60, is_extra: false, options: [], multi_options: false })}>{t('+ Servicio')}</Button>
       </div>
-      <p className="text-sm text-slate-500">Los servicios ocultos no aparecen en tu web, pero se guardan. Las citas ya hechas mantienen su precio.</p>
+      <p className="text-sm text-slate-500">{t('Los servicios ocultos no aparecen en tu web, pero se guardan. Las citas ya hechas mantienen su precio.')}</p>
 
       {example && (
         <div className="flex items-start gap-3 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900 ring-1 ring-amber-200">
           <Icon name="alert" className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
           <div>
-            <b>Estos son de ejemplo.</b> Toca cada uno y cambia los precios y duraciones por los tuyos: tus clientes los ven tal cual.
-            <button onClick={() => markStep('precios')} className="mt-2 block font-bold text-amber-900 underline">Ya los revisé, están bien</button>
+            <b>{t('Estos son de ejemplo.')}</b> {t('Toca cada uno y cambia los precios y duraciones por los tuyos: tus clientes los ven tal cual.')}
+            <button onClick={() => markStep('precios')} className="mt-2 block font-bold text-amber-900 underline">{t('Ya los revisé, están bien')}</button>
           </div>
         </div>
       )}
 
       <RateCard />
 
-      {main.length === 0 && <Empty title="No tienes servicios">Añade el primero para que puedan reservar.</Empty>}
+      {main.length === 0 && <Empty title={t('No tienes servicios')}>{t('Añade el primero para que puedan reservar.')}</Empty>}
       <div className="space-y-2">{main.map(row(main))}</div>
 
       <section className="space-y-2 pt-2">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-bold">Complementos</h2>
-            <p className="text-sm text-slate-500">Extras opcionales que el cliente añade a un servicio, como un lavado o un diseño.</p>
+            <h2 className="text-lg font-bold">{t('Complementos')}</h2>
+            <p className="text-sm text-slate-500">{t('Extras opcionales que el cliente añade a un servicio, como un lavado o un diseño.')}</p>
           </div>
-          <Button size="sm" variant="secondary" onClick={() => open({ name: '', price: 0, duration_min: 15, is_extra: true, options: [], multi_options: false })}>+ Complemento</Button>
+          <Button size="sm" variant="secondary" onClick={() => open({ name: '', price: 0, duration_min: 15, is_extra: true, options: [], multi_options: false })}>{t('+ Complemento')}</Button>
         </div>
-        {extras.length === 0 && <p className="rounded-2xl bg-white/60 px-4 py-3 text-sm text-slate-500 ring-1 ring-slate-200">Todavía no tienes complementos.</p>}
+        {extras.length === 0 && <p className="rounded-2xl bg-white/60 px-4 py-3 text-sm text-slate-500 ring-1 ring-slate-200">{t('Todavía no tienes complementos.')}</p>}
         <div className="space-y-2">{extras.map(row(extras))}</div>
       </section>
 
@@ -207,11 +208,11 @@ export default function Services() {
         <Modal
           open
           onClose={() => setEditing(null)}
-          title={editing.id ? (editing.is_extra ? 'Editar complemento' : 'Editar servicio') : editing.is_extra ? 'Nuevo complemento' : 'Nuevo servicio'}
+          title={editing.id ? (editing.is_extra ? t('Editar complemento') : t('Editar servicio')) : editing.is_extra ? t('Nuevo complemento') : t('Nuevo servicio')}
           footer={
             <div className="flex gap-2">
-              {editing.id && <Button variant="danger" onClick={remove} disabled={busy}>Eliminar</Button>}
-              <Button block onClick={save} loading={busy}>Guardar</Button>
+              {editing.id && <Button variant="danger" onClick={remove} disabled={busy}>{t('Eliminar')}</Button>}
+              <Button block onClick={save} loading={busy}>{t('Guardar')}</Button>
             </div>
           }
         >
@@ -227,9 +228,9 @@ export default function Services() {
                 )}
                 <div className="flex gap-2">
                   <Button variant="secondary" size="sm" onClick={() => fileRef.current?.click()} loading={uploading}>
-                    {editing.photo_url ? 'Cambiar foto' : 'Subir foto'}
+                    {editing.photo_url ? t('Cambiar foto') : t('Subir foto')}
                   </Button>
-                  {editing.photo_url && <Button variant="ghost" size="sm" onClick={removePhoto}>Quitar</Button>}
+                  {editing.photo_url && <Button variant="ghost" size="sm" onClick={removePhoto}>{t('Quitar')}</Button>}
                 </div>
                 <input
                   ref={fileRef}
@@ -244,21 +245,21 @@ export default function Services() {
                 />
               </div>
             ) : (
-              <p className="text-xs text-slate-400">Guarda el servicio para poder añadirle una foto.</p>
+              <p className="text-xs text-slate-400">{t('Guarda el servicio para poder añadirle una foto.')}</p>
             )}
-            <Field label="Nombre"><input className="input" value={editing.name} maxLength={80} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></Field>
-            <Field label="Descripción (opcional)"><input className="input" value={editing.description || ''} maxLength={160} onChange={(e) => setEditing({ ...editing, description: e.target.value })} /></Field>
+            <Field label={t('Nombre')}><input className="input" value={editing.name} maxLength={80} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></Field>
+            <Field label={t('Descripción (opcional)')}><input className="input" value={editing.description || ''} maxLength={160} onChange={(e) => setEditing({ ...editing, description: e.target.value })} /></Field>
             <div className="grid grid-cols-2 gap-3">
               {editing.options.length === 0 ? (
-                <Field label={`Precio (${business.currency})`} hint={rate && editing.price > 0 ? `≈ ${money(Math.round(editing.price * rate), 'CUP')}` : undefined}>
+                <Field label={t('Precio ({currency})', { currency: business.currency })} hint={rate && editing.price > 0 ? `≈ ${money(Math.round(editing.price * rate), 'CUP')}` : undefined}>
                   <input className="input" type="number" min={0} step="any" inputMode="decimal" value={editing.price} onChange={(e) => setEditing({ ...editing, price: Number(e.target.value) })} />
                 </Field>
               ) : (
-                <Field label="Precio">
-                  <p className="input flex items-center text-slate-500">Según la opción</p>
+                <Field label={t('Precio')}>
+                  <p className="input flex items-center text-slate-500">{t('Según la opción')}</p>
                 </Field>
               )}
-              <Field label={editing.is_extra ? 'Tiempo que añade' : 'Duración'}>
+              <Field label={editing.is_extra ? t('Tiempo que añade') : t('Duración')}>
                 <select className="input" value={editing.duration_min} onChange={(e) => setEditing({ ...editing, duration_min: Number(e.target.value) })}>
                   {[5, 10, 15, 20, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300].map((m) => <option key={m} value={m}>{duration(m)}</option>)}
                 </select>
@@ -268,7 +269,7 @@ export default function Services() {
             <Toggle
               checked={editing.is_extra}
               onChange={(v) => setEditing({ ...editing, is_extra: v })}
-              label="Es un complemento (extra opcional que se añade a un servicio)"
+              label={t('Es un complemento (extra opcional que se añade a un servicio)')}
             />
             {error && <Alert>{error}</Alert>}
           </div>
@@ -289,15 +290,15 @@ function PriceOptions({ editing, setEditing, currency }: {
   if (opts.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-3">
-        <p className="text-sm font-semibold">¿El precio cambia según el caso?</p>
-        <p className="text-xs text-slate-500">Pon cada variante con su nombre y su precio. El cliente elige al reservar.</p>
+        <p className="text-sm font-semibold">{t('¿El precio cambia según el caso?')}</p>
+        <p className="text-xs text-slate-500">{t('Pon cada variante con su nombre y su precio. El cliente elige al reservar.')}</p>
         <Button
           size="sm"
           variant="secondary"
           className="mt-2"
           onClick={() => set([{ name: '', price: Number(editing.price) || 0 }, { name: '', price: Number(editing.price) || 0 }])}
         >
-          + Añadir opciones de precio
+          {t('+ Añadir opciones de precio')}
         </Button>
       </div>
     )
@@ -305,15 +306,15 @@ function PriceOptions({ editing, setEditing, currency }: {
   return (
     <div className="space-y-2 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold">Opciones de precio</p>
-        <button type="button" onClick={() => set([])} className="text-xs font-semibold text-slate-500 underline">Quitar opciones</button>
+        <p className="text-sm font-semibold">{t('Opciones de precio')}</p>
+        <button type="button" onClick={() => set([])} className="text-xs font-semibold text-slate-500 underline">{t('Quitar opciones')}</button>
       </div>
       {opts.map((o, i) => (
         <div key={o.id || `nueva-${i}`} className="flex items-center gap-2">
           <input
             className="input min-w-0 flex-1"
-            placeholder="Nombre del servicio"
-            aria-label={`Nombre de la opción ${i + 1}`}
+            placeholder={t('Nombre del servicio')}
+            aria-label={t('Nombre de la opción {v}', { v: i + 1 })}
             value={o.name}
             maxLength={40}
             onChange={(e) => set(opts.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
@@ -324,14 +325,14 @@ function PriceOptions({ editing, setEditing, currency }: {
             min={0}
             step="any"
             inputMode="decimal"
-            aria-label={`Precio de la opción ${i + 1} (${currency})`}
+            aria-label={t('Precio de la opción {v} ({currency})', { v: i + 1, currency: currency })}
             value={o.price}
             onChange={(e) => set(opts.map((x, j) => (j === i ? { ...x, price: Number(e.target.value) } : x)))}
           />
           <button
             type="button"
             onClick={() => set(opts.filter((_, j) => j !== i))}
-            aria-label={`Quitar la opción ${i + 1}`}
+            aria-label={t('Quitar la opción {v}', { v: i + 1 })}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-700"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 6l12 12M18 6L6 18" /></svg>
@@ -339,7 +340,7 @@ function PriceOptions({ editing, setEditing, currency }: {
         </div>
       ))}
       {opts.length < MAX_OPTIONS && (
-        <Button size="sm" variant="ghost" onClick={() => set([...opts, { name: '', price: 0 }])}>+ Otra opción</Button>
+        <Button size="sm" variant="ghost" onClick={() => set([...opts, { name: '', price: 0 }])}>{t('+ Otra opción')}</Button>
       )}
       <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-white px-3 py-2.5 ring-1 ring-slate-200">
         <input
@@ -349,11 +350,11 @@ function PriceOptions({ editing, setEditing, currency }: {
           onChange={(e) => setEditing({ ...editing, multi_options: e.target.checked })}
         />
         <span>
-          <span className="block text-sm font-semibold">El cliente puede elegir varias</span>
-          <span className="block text-xs text-slate-500">Se suman los precios de las que elija. Si no, elige solo una.</span>
+          <span className="block text-sm font-semibold">{t('El cliente puede elegir varias')}</span>
+          <span className="block text-xs text-slate-500">{t('Se suman los precios de las que elija. Si no, elige solo una.')}</span>
         </span>
       </label>
-      <p className="text-xs text-slate-500">Precios en {currency}. Todas duran lo mismo. Las citas ya hechas mantienen su precio.</p>
+      <p className="text-xs text-slate-500">{t('Precios en')}{' '}{currency}{t('. Todas duran lo mismo. Las citas ya hechas mantienen su precio.')}</p>
     </div>
   )
 }

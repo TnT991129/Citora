@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ThemeToggle } from '../../components/ThemeToggle'
+import { LangSwitch } from '../../components/LangSwitch'
 import { WhatsNew } from '../../components/WhatsNew'
 import { Alert, BusinessAvatar, Button, CitoraLogo, PageLoader } from '../../components/ui'
 import { useSession } from '../../lib/auth'
@@ -9,7 +10,7 @@ import { setAppManifest } from '../../lib/pwa'
 import { createBusinessFromDraft, loadDraft } from '../../lib/draft'
 import { stopTracking } from '../../lib/analytics'
 import { errorMessage } from '../../lib/errors'
-import { goToMarket } from '../../lib/market'
+import { goToMarket, IS_INT } from '../../lib/market'
 import { fetchProgress, mergeOnboarding, readOnboarding, saveOnboarding, type Onboarding, type Progress } from '../../lib/onboarding'
 import { load, save } from '../../lib/storage'
 import { APP_VERSION } from '../../lib/version'
@@ -41,6 +42,7 @@ import Team from './Team'
 import Waitlist from './Waitlist'
 import Today from './Today'
 import { GuidedTour, isMobileScreen, tourSteps, DEMO_PENDING_NAME } from './tutorial'
+import { LANG, t, tn } from '../../lib/i18n'
 
 export default function Panel() {
   const session = useSession()
@@ -72,12 +74,16 @@ export default function Panel() {
     }
     // Negocio de la otra versión (Cuba o /int/): su panel está allí
     if (b && goToMarket((b as Business).market)) return
+    // Versión internacional: los avisos push salen en el idioma en que el dueño usa su panel
+    if (b && IS_INT && (b as Business).lang !== LANG) {
+      supabase.from('businesses').update({ lang: LANG }).eq('id', (b as Business).id).then(() => {}, () => {})
+    }
     setBusiness(b as Business | null)
     setStatus(st as MyStatus | null)
     if (b) {
       const biz = b as Business
       setBrandColor(biz.color_primary)
-      setAppManifest({ name: `${biz.name} · Panel`, shortName: biz.name, path: panelPath(biz.slug).slice(1), color: biz.color_primary, logo: biz.logo_url })
+      setAppManifest({ name: t('{name} · Panel', { name: biz.name }), shortName: biz.name, path: panelPath(biz.slug).slice(1), color: biz.color_primary, logo: biz.logo_url })
     }
   }, [])
 
@@ -96,7 +102,7 @@ export default function Panel() {
   }, [])
 
   useEffect(() => {
-    document.title = 'Mi panel · Citora'
+    document.title = t('Mi panel · Citora')
   }, [])
 
   useEffect(() => {
@@ -183,7 +189,8 @@ export default function Panel() {
     if (!business || !status || status.status === 'vencido') return
     if (load<string>(NEWS_KEY, '') === APP_VERSION) return
     const isNew = Date.now() - new Date(business.created_at).getTime() < 2 * 86400000
-    if (isNew) save(NEWS_KEY, APP_VERSION)
+    // Las novedades hablan de cambios de la versión de Cuba: en la internacional no se enseñan
+    if (isNew || IS_INT) save(NEWS_KEY, APP_VERSION)
     else setNewsOpen(true)
   }, [business, status])
   // Los dueños no cuentan como visitas cuando miran la portada o su propia web
@@ -206,7 +213,7 @@ export default function Panel() {
     return (
       <div className="mx-auto max-w-md p-6">
         <Alert>{error}</Alert>
-        <Button className="mt-4" variant="secondary" onClick={() => window.location.reload()}>Reintentar</Button>
+        <Button className="mt-4" variant="secondary" onClick={() => window.location.reload()}>{t('Reintentar')}</Button>
       </div>
     )
   }
@@ -215,9 +222,9 @@ export default function Panel() {
     return (
       <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 p-6 text-center">
         <CitoraLogo className="text-xl" />
-        <h1 className="text-xl font-bold">Todavía no tienes una app</h1>
-        <Link to="/crear" className="rounded-xl bg-citora-600 px-5 py-3 font-semibold text-white">Crear mi app</Link>
-        <button onClick={() => supabase.auth.signOut()} className="text-sm text-slate-500">Salir</button>
+        <h1 className="text-xl font-bold">{t('Todavía no tienes una app')}</h1>
+        <Link to="/crear" className="rounded-xl bg-citora-600 px-5 py-3 font-semibold text-white">{t('Crear mi app')}</Link>
+        <button onClick={() => supabase.auth.signOut()} className="text-sm text-slate-500">{t('Salir')}</button>
       </div>
     )
   }
@@ -229,12 +236,12 @@ export default function Panel() {
     return (
       <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 p-6 text-center">
         <CitoraLogo className="text-xl" />
-        <h1 className="text-xl font-bold">Este panel es de otro negocio</h1>
+        <h1 className="text-xl font-bold">{t('Este panel es de otro negocio')}</h1>
         <p className="text-slate-600">
-          Estás conectado como <b>{session.user.email}</b>, dueño de <b>{business.name}</b>.
+          {t('Estás conectado como')}{' '}<b>{session.user.email}</b>{t(', dueño de')}{' '}<b>{business.name}</b>.
         </p>
         <Link to={panelPath(business.slug)} className="w-full rounded-xl bg-citora-600 px-5 py-3 font-semibold text-white">
-          Ir al panel de {business.name}
+          {t('Ir al panel de')}{' '}{business.name}
         </Link>
         <button
           onClick={async () => {
@@ -243,7 +250,7 @@ export default function Panel() {
           }}
           className="w-full rounded-xl px-5 py-3 font-semibold text-slate-700 ring-1 ring-slate-300"
         >
-          Entrar con la cuenta de este negocio
+          {t('Entrar con la cuenta de este negocio')}
         </button>
       </div>
     )
@@ -272,13 +279,14 @@ export default function Panel() {
             <BusinessAvatar name={business.name} logo={business.logo_url} size={36} />
             <div className="min-w-0 flex-1">
               <p className="truncate font-bold leading-tight">{business.name}</p>
-              <p className="truncate text-xs text-slate-500">Código {business.code}</p>
+              <p className="truncate text-xs text-slate-500">{t('Código')}{' '}{business.code}</p>
             </div>
             <nav className="hidden gap-1 md:flex">
               {!blocked && NAV.map((n) => <TopLink key={n.sub} base={base} to={link(n.sub)} label={n.label} />)}
-              {blocked && <TopLink base={base} to={link('plan')} label="Plan" />}
+              {blocked && <TopLink base={base} to={link('plan')} label={t('Plan')} />}
             </nav>
             {!blocked && <PlanChip status={status} to={link('plan')} />}
+            <LangSwitch />
             <ThemeToggle />
           </div>
         </header>
@@ -339,11 +347,11 @@ export default function Panel() {
 const NEWS_KEY = 'citora:novedades-vistas'
 
 const NAV = [
-  { sub: '', label: 'Hoy', icon: 'home', tour: 'nav-hoy' },
-  { sub: 'agenda', label: 'Agenda', icon: 'calendar', tour: 'nav-agenda' },
-  { sub: 'clientes', label: 'Clientes', icon: 'users', tour: 'nav-clientes' },
-  { sub: 'negocio', label: 'Mi negocio', icon: 'store', tour: 'nav-negocio' },
-  { sub: 'mas', label: 'Más', icon: 'grid', tour: 'nav-mas' },
+  { sub: '', label: t('Hoy'), icon: 'home', tour: 'nav-hoy' },
+  { sub: 'agenda', label: t('Agenda'), icon: 'calendar', tour: 'nav-agenda' },
+  { sub: t('clientes'), label: t('Clientes'), icon: 'users', tour: 'nav-clientes' },
+  { sub: t('negocio'), label: t('Mi negocio'), icon: 'store', tour: 'nav-negocio' },
+  { sub: 'mas', label: t('Más'), icon: 'grid', tour: 'nav-mas' },
 ] as const
 
 // Pantallas que cuelgan de "Mi negocio" y de "Más": su pestaña queda marcada en ellas
@@ -390,10 +398,10 @@ function PlanChip({ status, to }: { status: MyStatus; to: string }) {
   let text: string | null = null
   if (status.status === 'prueba') {
     const d = daysLeft(status.trial_ends_at)
-    text = d <= 0 ? 'Prueba · último día' : `Prueba · ${d} ${d === 1 ? 'día' : 'días'}`
+    text = d <= 0 ? t('Prueba · último día') : tn(d, 'Prueba · {n} día', 'Prueba · {n} días')
   } else if (status.status === 'activo' && status.paid_until && daysLeft(status.paid_until) <= 5) {
     const d = daysLeft(status.paid_until)
-    text = d <= 0 ? 'Vence hoy' : `Vence en ${d} ${d === 1 ? 'día' : 'días'}`
+    text = d <= 0 ? t('Vence hoy') : tn(d, 'Vence en {n} día', 'Vence en {n} días')
   }
   if (!text) return null
   return <Link to={to} className="shrink-0 whitespace-nowrap rounded-full bg-brand/10 px-2.5 py-1 text-xs font-bold text-brand">{text}</Link>
@@ -407,7 +415,7 @@ function Sidebar({ business, status, base, link }: { business: Business; status:
         <BusinessAvatar name={business.name} logo={business.logo_url} size={40} />
         <div className="min-w-0">
           <p className="truncate font-extrabold leading-tight">{business.name}</p>
-          <p className="truncate text-xs text-slate-500">Código {business.code}</p>
+          <p className="truncate text-xs text-slate-500">{t('Código')}{' '}{business.code}</p>
         </div>
       </div>
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-4">
@@ -415,17 +423,18 @@ function Sidebar({ business, status, base, link }: { business: Business; status:
       </nav>
       <div className="space-y-3 px-4 pb-3">
         <Link to={`${base}?nueva=1`} className="flex w-full items-center justify-center gap-2 rounded-btn bg-brand bg-btn-grad px-4 py-2.5 font-semibold text-white shadow-md shadow-brand/25 transition hover:brightness-110">
-          <Icon name="plus" className="h-4 w-4" /> Nueva cita
+          <Icon name="plus" className="h-4 w-4" /> {t('Nueva cita')}
         </Link>
         <div className="text-center"><PlanChip status={status} to={link('plan')} /></div>
       </div>
       <div className="flex items-center gap-1 border-t border-slate-100 p-3">
         <a href={publicUrl(business.slug)} target="_blank" rel="noreferrer" className="flex flex-1 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
-          <Icon name="globe" className="h-5 w-5" /> Ver mi web
+          <Icon name="globe" className="h-5 w-5" /> {t('Ver mi web')}
         </a>
+        <LangSwitch />
         <ThemeToggle />
       </div>
-      <p className="px-6 pb-3 text-[11px] font-medium text-slate-400">Citora v{APP_VERSION}</p>
+      <p className="px-6 pb-3 text-[11px] font-medium text-slate-400">{t('Citora v')}{APP_VERSION}</p>
     </aside>
   )
 }
@@ -459,27 +468,27 @@ function StatusBanner({ status, planLink }: { status: MyStatus; planLink: string
   if (status.status === 'prueba') {
     const h = hoursLeft(status.trial_ends_at)
     if (h > 72) return null
-    const left = h > 24 ? `${daysLeft(status.trial_ends_at)} días` : `${h} horas`
+    const left = h > 24 ? t('{n} días', { n: daysLeft(status.trial_ends_at) }) : t('{n} horas', { n: h })
     return box(
       'border-amber-200 bg-amber-50 text-amber-900',
       'clock',
-      <>Tu prueba gratis termina en <b>{left}</b>. Suscríbete para que tus clientes sigan reservando.</>,
-      <Link to={planLink} className="rounded-full bg-amber-500 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-amber-600">Suscribirme</Link>,
+      <>{t('Tu prueba gratis termina en')}{' '}<b>{left}</b>{t('. Suscríbete para que tus clientes sigan reservando.')}</>,
+      <Link to={planLink} className="rounded-full bg-amber-500 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-amber-600">{t('Suscribirme')}</Link>,
     )
   }
   if (status.status === 'activo' && status.paid_until && daysLeft(status.paid_until) <= 5) {
     return box(
       'border-amber-200 bg-amber-50 text-amber-900',
       'clock',
-      <>Tu plan vence en <b>{daysLeft(status.paid_until)} días</b>. Renueva para no perder reservas.</>,
-      <Link to={planLink} className="rounded-full bg-amber-500 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-amber-600">Renovar</Link>,
+      <>{t('Tu plan vence en')}{' '}<b>{daysLeft(status.paid_until)} {t('días')}</b>{t('. Renueva para no perder reservas.')}</>,
+      <Link to={planLink} className="rounded-full bg-amber-500 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-amber-600">{t('Renovar')}</Link>,
     )
   }
   if (status.status === 'vencido') {
     return box(
       'border-red-200 bg-red-50 text-red-800',
       'lock',
-      <>Tu app está <b>inhabilitada</b>: tus clientes no pueden reservar. Paga la mensualidad para activarla. Tus datos están guardados.</>,
+      <>{t('Tu app está')}{' '}<b>{t('inhabilitada')}</b>{t(': tus clientes no pueden reservar. Paga la mensualidad para activarla. Tus datos están guardados.')}</>,
     )
   }
   return null

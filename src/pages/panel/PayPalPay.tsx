@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Alert, PageLoader } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { supabase } from '../../lib/supabase'
+import { t } from '../../lib/i18n'
 
 interface PayPalButtonsApi {
   Buttons: (opts: {
@@ -116,7 +117,7 @@ export function PayPalPay({ clientId, plan, months, onPaid }: {
   return (
     <div className="space-y-3">
       {!ready && !error && <PageLoader />}
-      {busy && <Alert kind="info">Confirmando tu pago con PayPal… no cierres esta pantalla.</Alert>}
+      {busy && <Alert kind="info">{t('Confirmando tu pago con PayPal… no cierres esta pantalla.')}</Alert>}
       {/* PayPal pinta aquí sus botones (fondo blanco también en modo oscuro: así lo exige PayPal) */}
       <div ref={box} className={busy ? 'pointer-events-none opacity-50' : ''} />
       {error && <Alert>{error}</Alert>}

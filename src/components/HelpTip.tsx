@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { t } from '../lib/i18n'
 
 /**
  * Icono de ayuda (?). Al tocarlo muestra una explicación corta. Funciona con toque (no solo con
@@ -25,7 +26,7 @@ export function HelpTip({ text, align = 'left' }: { text: string; align?: 'left'
           e.stopPropagation()
           setOpen((o) => !o)
         }}
-        aria-label="Más información"
+        aria-label={t('Más información')}
         aria-expanded={open}
         className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-600 hover:bg-slate-300"
       >

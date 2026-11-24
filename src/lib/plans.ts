@@ -1,21 +1,22 @@
 import type { PlanKey } from './types'
+import { t } from './i18n'
 
 // Cada módulo de la plataforma. "ready" = ya construido en esta versión.
 export const MODULES = {
-  reservas: { name: 'Reservas online', ready: true },
-  agenda: { name: 'Agenda del dueño', ready: true },
-  whatsapp: { name: 'Mensajes de WhatsApp', ready: true },
-  clientes: { name: 'Ficha de clientes', ready: true },
-  galeria: { name: 'Galería de trabajos', ready: true },
-  opiniones: { name: 'Opiniones', ready: true },
-  complementos: { name: 'Complementos o extras', ready: true },
-  espera: { name: 'Lista de espera', ready: true },
-  finanzas: { name: 'Cobros y estadísticas', ready: true },
-  descuentos: { name: 'Cupones de descuento', ready: true },
-  empleados: { name: 'Varios profesionales', ready: true },
-  sucursales: { name: 'Sucursales', ready: false },
-  recordatorios: { name: 'Recordatorios por WhatsApp', ready: true },
-  respaldo: { name: 'Respaldo de datos (Excel)', ready: true },
+  reservas: { name: t('Reservas online'), ready: true },
+  agenda: { name: t('Agenda del dueño'), ready: true },
+  whatsapp: { name: t('Mensajes de WhatsApp'), ready: true },
+  clientes: { name: t('Ficha de clientes'), ready: true },
+  galeria: { name: t('Galería de trabajos'), ready: true },
+  opiniones: { name: t('Opiniones'), ready: true },
+  complementos: { name: t('Complementos o extras'), ready: true },
+  espera: { name: t('Lista de espera'), ready: true },
+  finanzas: { name: t('Cobros y estadísticas'), ready: true },
+  descuentos: { name: t('Cupones de descuento'), ready: true },
+  empleados: { name: t('Varios profesionales'), ready: true },
+  sucursales: { name: t('Sucursales'), ready: false },
+  recordatorios: { name: t('Recordatorios por WhatsApp'), ready: true },
+  respaldo: { name: t('Respaldo de datos (Excel)'), ready: true },
 } as const
 
 export type ModuleKey = keyof typeof MODULES
@@ -24,10 +25,10 @@ export type ModuleKey = keyof typeof MODULES
 // ('plus' es de pagos antiguos y cuenta como Solo). La prueba gratis es con Equipo.
 export type PaidPlan = 'basico' | 'ultra'
 export const PLANS: Record<PaidPlan, { name: string; short: string; desc: string }> = {
-  basico: { name: 'Citora Solo', short: 'Solo', desc: 'Para quien atiende solo: todo incluido, menos el equipo.' },
-  ultra: { name: 'Citora Equipo', short: 'Equipo', desc: 'Para salones con varias personas: todo, más tu equipo con sus servicios y su agenda.' },
+  basico: { name: t('Citora Solo'), short: t('Solo'), desc: t('Para quien atiende solo: todo incluido, menos el equipo.') },
+  ultra: { name: t('Citora Equipo'), short: t('Equipo'), desc: t('Para salones con varias personas: todo, más tu equipo con sus servicios y su agenda.') },
 }
-export const PLAN_LABEL = 'Plan Citora'
+export const PLAN_LABEL = t('Plan Citora')
 export const DEFAULT_PRICE = 1500
 export const DEFAULT_TEAM_PRICE = 3000
 

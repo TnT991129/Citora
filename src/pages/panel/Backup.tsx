@@ -6,9 +6,10 @@ import { supabase } from '../../lib/supabase'
 import type { Appointment, Business, CustomerSummary, Service } from '../../lib/types'
 import { usePanel } from './context'
 import { Locked, useModule } from './Locked'
+import { t } from '../../lib/i18n'
 
 const STATUS: Record<string, string> = {
-  pendiente: 'Pendiente', confirmada: 'Confirmada', completada: 'Completada', no_asistio: 'No vino', cancelada: 'Cancelada',
+  pendiente: t('Pendiente'), confirmada: t('Confirmada'), completada: t('Completada'), no_asistio: t('No vino'), cancelada: t('Cancelada'),
 }
 
 /** CSV con ";" y BOM: Excel en español lo abre bien, con acentos */
@@ -49,7 +50,7 @@ async function allAppointments(): Promise<Appointment[]> {
 
 function appointmentsCsv(list: Appointment[], b: Business): string {
   return toCsv([
-    ['Fecha', 'Hora', 'Cliente', 'Teléfono', 'Servicios', 'Total', 'Descuento', 'Cupón', 'Estado', 'Origen', 'Nota del cliente', 'Nota interna', 'Reservada el'],
+    [t('Fecha'), t('Hora'), t('Cliente'), t('Teléfono'), t('Servicios'), t('Total'), t('Descuento'), t('Cupón'), t('Estado'), t('Origen'), t('Nota del cliente'), t('Nota interna'), t('Reservada el')],
     ...list.map((a) => [
       dateKey(a.starts_at, b.timezone), timeOf(a.starts_at, b.timezone), a.customer_name, a.customer_phone,
       (a.appointment_services || []).map((s) => s.name).join(', '), num(a.total), num(a.discount), a.discount_code,
@@ -79,7 +80,7 @@ function customersCsv(list: Appointment[], notes: CustomerSummary[] | null, tz: 
   }
   const extra = new Map((notes || []).map((n) => [n.phone, n]))
   return toCsv([
-    ['Nombre', 'Teléfono', 'Visitas', 'Reservas', 'Gastado', 'Primera cita', 'Última cita', 'Etiquetas', 'Notas'],
+    [t('Nombre'), t('Teléfono'), t('Visitas'), t('Reservas'), t('Gastado'), t('Primera cita'), t('Última cita'), t('Etiquetas'), t('Notas')],
     ...[...map.entries()].map(([phone, c]) => [
       c.name, phone, c.visits, c.bookings, num(c.spent), dateKey(c.first, tz), dateKey(c.last, tz),
       extra.get(phone)?.tags.join(', '), extra.get(phone)?.note,
@@ -89,8 +90,8 @@ function customersCsv(list: Appointment[], notes: CustomerSummary[] | null, tz: 
 
 function servicesCsv(list: Service[]): string {
   return toCsv([
-    ['Servicio', 'Descripción', 'Precio', 'Duración (min)', 'Activo'],
-    ...list.map((s) => [s.name, s.description, num(s.price), s.duration_min, s.active ? 'Sí' : 'No']),
+    [t('Servicio'), t('Descripción'), t('Precio'), t('Duración (min)'), t('Activo')],
+    ...list.map((s) => [s.name, s.description, num(s.price), s.duration_min, s.active ? t('Sí') : t('No')]),
   ])
 }
 
@@ -121,7 +122,7 @@ export default function Backup() {
       if (what === 'citas' || what === 'todo') download(`citas-${stamp}.csv`, appointmentsCsv(appts, business))
       if (what === 'clientes' || what === 'todo') download(`clientes-${stamp}.csv`, customersCsv(appts, notes, business.timezone))
       if (what === 'servicios' || what === 'todo') download(`servicios-${stamp}.csv`, servicesCsv(services))
-      setDone(what === 'todo' ? 'Se descargaron 3 archivos.' : 'Archivo descargado.')
+      setDone(what === 'todo' ? t('Se descargaron 3 archivos.') : t('Archivo descargado.'))
     } catch (e) {
       setError(errorMessage(e))
     } finally {
@@ -132,18 +133,18 @@ export default function Backup() {
   return (
     <div className="max-w-lg space-y-4">
       <div>
-        <h1 className="text-2xl font-extrabold">Respaldo</h1>
-        <p className="text-slate-600">Descarga una copia de tus datos. Los archivos se abren con Excel o Google Sheets.</p>
+        <h1 className="text-2xl font-extrabold">{t('Respaldo')}</h1>
+        <p className="text-slate-600">{t('Descarga una copia de tus datos. Los archivos se abren con Excel o Google Sheets.')}</p>
       </div>
       <section className="card space-y-3">
-        <Item title="Citas" desc="Todas tus citas, con servicios, importes y estado." onClick={() => run('citas')} loading={busy === 'citas'} />
-        <Item title="Clientes" desc="Cada cliente con sus visitas y lo que ha gastado." onClick={() => run('clientes')} loading={busy === 'clientes'} />
-        <Item title="Servicios" desc="Tu lista de servicios y precios." onClick={() => run('servicios')} loading={busy === 'servicios'} />
+        <Item title={t('Citas')} desc={t('Todas tus citas, con servicios, importes y estado.')} onClick={() => run('citas')} loading={busy === 'citas'} />
+        <Item title={t('Clientes')} desc={t('Cada cliente con sus visitas y lo que ha gastado.')} onClick={() => run('clientes')} loading={busy === 'clientes'} />
+        <Item title={t('Servicios')} desc={t('Tu lista de servicios y precios.')} onClick={() => run('servicios')} loading={busy === 'servicios'} />
       </section>
-      <Button block size="lg" onClick={() => run('todo')} loading={busy === 'todo'}>Descargar todo</Button>
+      <Button block size="lg" onClick={() => run('todo')} loading={busy === 'todo'}>{t('Descargar todo')}</Button>
       {done && <Alert kind="success">{done}</Alert>}
       {error && <Alert>{error}</Alert>}
-      <p className="text-sm text-slate-500">Consejo: haz un respaldo una vez al mes y guárdalo en tu correo o en la nube.</p>
+      <p className="text-sm text-slate-500">{t('Consejo: haz un respaldo una vez al mes y guárdalo en tu correo o en la nube.')}</p>
     </div>
   )
 }
@@ -155,7 +156,7 @@ function Item({ title, desc, onClick, loading }: { title: string; desc: string; 
         <p className="font-semibold">{title}</p>
         <p className="text-sm text-slate-500">{desc}</p>
       </div>
-      <Button size="sm" variant="secondary" onClick={onClick} loading={loading}>Descargar</Button>
+      <Button size="sm" variant="secondary" onClick={onClick} loading={loading}>{t('Descargar')}</Button>
     </div>
   )
 }

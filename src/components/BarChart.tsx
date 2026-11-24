@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { t } from '../lib/i18n'
 
 export interface Bar {
   label: string // etiqueta corta del eje (ej. "oct")
@@ -24,7 +25,7 @@ export function BarChart({ bars, barClass = 'bg-brand', height = 140, format = S
   return (
     <div>
       <div className="mb-1 h-5 text-sm font-semibold text-slate-700" aria-live="polite">
-        {active ? active.tip || `${active.label}: ${format(active.value)}` : <span className="font-normal text-slate-400">Máximo {format(max)}</span>}
+        {active ? active.tip || `${active.label}: ${format(active.value)}` : <span className="font-normal text-slate-400">{t('Máximo')}{' '}{format(max)}</span>}
       </div>
       <div
         className="relative flex items-end gap-[2px] border-b border-slate-200"

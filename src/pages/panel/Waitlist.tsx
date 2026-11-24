@@ -8,6 +8,7 @@ import { publicUrl } from '../../lib/url'
 import { waLink } from '../../lib/whatsapp'
 import { usePanel } from './context'
 import { Locked, useModule } from './Locked'
+import { t } from '../../lib/i18n'
 
 export default function Waitlist() {
   const allowed = useModule('espera')
@@ -47,13 +48,13 @@ export default function Waitlist() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-extrabold">Lista de espera</h1>
-        <p className="text-slate-600">Clientes que quieren un hueco en un día que estaba lleno. Si alguien cancela, avísales.</p>
+        <h1 className="text-2xl font-extrabold">{t('Lista de espera')}</h1>
+        <p className="text-slate-600">{t('Clientes que quieren un hueco en un día que estaba lleno. Si alguien cancela, avísales.')}</p>
       </div>
       {error && <Alert>{error}</Alert>}
       {list.length === 0 && (
         <div className="card text-center text-slate-600">
-          Nadie en espera. Cuando un día se llene, tus clientes podrán apuntarse desde tu web.
+          {t('Nadie en espera. Cuando un día se llene, tus clientes podrán apuntarse desde tu web.')}
         </div>
       )}
 
@@ -63,7 +64,7 @@ export default function Waitlist() {
           <ul className="space-y-2">
             {list.filter((e) => e.day === day).map((e) => {
               const first = e.customer_name.split(' ')[0]
-              const msg = `Hola ${first}, te escribo de ${business.name}. Se liberó un hueco el ${dayTitle(day).toLowerCase()}. Si lo quieres, resérvalo aquí antes de que lo coja otra persona: ${publicUrl(business.slug, 'reservar')}`
+              const msg = t('Hola {first}, te escribo de {name}. Se liberó un hueco el {toLowerCase}. Si lo quieres, resérvalo aquí antes de que lo coja otra persona: {publicUrl}', { first: first, name: business.name, toLowerCase: dayTitle(day).toLowerCase(), publicUrl: publicUrl(business.slug, 'reservar') })
               return (
                 <li key={e.id} className="card">
                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -72,14 +73,14 @@ export default function Waitlist() {
                       <p className="font-mono text-sm text-slate-500">+{e.customer_phone}</p>
                       {e.note && <p className="mt-1 text-sm text-slate-700">“{e.note}”</p>}
                     </div>
-                    {e.status === 'avisado' && <span className="chip bg-emerald-100 text-xs text-emerald-800">Avisado</span>}
+                    {e.status === 'avisado' && <span className="chip bg-emerald-100 text-xs text-emerald-800">{t('Avisado')}</span>}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <LinkButton href={waLink(e.customer_phone, msg)} variant="whatsapp" size="sm" newTab>
-                      <WhatsAppIcon className="h-4 w-4" /> Avisar
+                      <WhatsAppIcon className="h-4 w-4" /> {t('Avisar')}
                     </LinkButton>
-                    {e.status !== 'avisado' && <Button size="sm" variant="secondary" onClick={() => setStatus(e, 'avisado')}>Marcar avisado</Button>}
-                    <Button size="sm" variant="ghost" onClick={() => setStatus(e, 'descartado')}>Quitar</Button>
+                    {e.status !== 'avisado' && <Button size="sm" variant="secondary" onClick={() => setStatus(e, 'avisado')}>{t('Marcar avisado')}</Button>}
+                    <Button size="sm" variant="ghost" onClick={() => setStatus(e, 'descartado')}>{t('Quitar')}</Button>
                   </div>
                 </li>
               )

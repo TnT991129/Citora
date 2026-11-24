@@ -18,6 +18,8 @@ import { NewAppointment } from './NewAppointment'
 import { RateCard } from './RateCard'
 import { demoDay, demoSlots } from './tutorial'
 import { serverNow } from '../../lib/clockSkew'
+import { t as tx } from '../../lib/i18n'
+import { IS_INT } from '../../lib/market'
 
 export default function Today() {
   const { business, status, services, link, tutorial } = usePanel()
@@ -111,13 +113,13 @@ export default function Today() {
           <p className="text-sm font-medium text-slate-500">{greeting(tz)}</p>
           <h1 className="text-2xl font-extrabold leading-tight tracking-tight sm:text-3xl">{dayTitle(today)}</h1>
           <p className="mt-1 text-[15px] text-slate-500">
-            <b className="text-slate-900">{activeToday.length === 1 ? '1 cita' : `${activeToday.length} citas`}</b>
-            {pending.length > 0 && <> · <b className="text-amber-700">{pending.length} por confirmar</b></>}
-            {expected > 0 && <> · {money(expected, business.currency)} previstos</>}
+            <b className="text-slate-900">{activeToday.length === 1 ? tx('1 cita') : tx('{length} citas', { length: activeToday.length })}</b>
+            {pending.length > 0 && <> · <b className="text-amber-700">{pending.length} {tx('por confirmar')}</b></>}
+            {expected > 0 && <> · {money(expected, business.currency)} {tx('previstos')}</>}
           </p>
         </div>
         <Button onClick={() => newAppt()} className="hidden shrink-0 lg:inline-flex" data-tour="fab">
-          <Icon name="plus" className="h-4 w-4" /> Nueva cita
+          <Icon name="plus" className="h-4 w-4" /> {tx('Nueva cita')}
         </Button>
       </div>
 
@@ -135,7 +137,7 @@ export default function Today() {
             <Icon name="clock" className="h-6 w-6" />
           </span>
           <span className="relative min-w-0 flex-1">
-            <span className="block text-xs font-bold uppercase tracking-[0.14em] text-white/75">Próxima cita · {untilText(next.starts_at, now)}</span>
+            <span className="block text-xs font-bold uppercase tracking-[0.14em] text-white/75">{tx('Próxima cita ·')}{' '}{untilText(next.starts_at, now)}</span>
             <span className="mt-0.5 block truncate text-lg font-extrabold sm:text-xl">{timeOf(next.starts_at, tz, true)} · {next.customer_name}</span>
           </span>
           <Icon name="chevron" className="relative h-5 w-5 shrink-0 text-white/80" />
@@ -144,7 +146,7 @@ export default function Today() {
 
       {pending.length > 0 && (
         <section>
-          <h2 className="mb-2.5 font-extrabold tracking-tight">Por confirmar</h2>
+          <h2 className="mb-2.5 font-extrabold tracking-tight">{tx('Por confirmar')}</h2>
           <div className="space-y-2">
             {pending.map((a, i) => (
               <div key={a.id} className="card flex items-center gap-3 p-3 sm:p-3.5">
@@ -153,12 +155,12 @@ export default function Today() {
                   <span className="min-w-0">
                     <span className="block truncate font-semibold">{a.customer_name}</span>
                     <span className="block truncate text-sm text-slate-500">
-                      {dateKey(a.starts_at, tz) === today ? 'Hoy' : dayTitle(dateKey(a.starts_at, tz))}, {timeOf(a.starts_at, tz, true)} · {servicesText(a)}
+                      {dateKey(a.starts_at, tz) === today ? tx('Hoy') : dayTitle(dateKey(a.starts_at, tz))}, {timeOf(a.starts_at, tz, true)} · {servicesText(a)}
                     </span>
                   </span>
                 </button>
                 <Button size="sm" onClick={() => confirm(a)} loading={confirming === a.id} data-tour={i === 0 ? 'confirm' : undefined}>
-                  Confirmar
+                  {tx('Confirmar')}
                 </Button>
               </div>
             ))}
@@ -168,7 +170,7 @@ export default function Today() {
 
       <section>
         <div className="mb-2.5 flex items-center justify-between gap-2">
-          <div className="inline-flex rounded-full bg-slate-100 p-1" role="tablist" aria-label="Día">
+          <div className="inline-flex rounded-full bg-slate-100 p-1" role="tablist" aria-label={tx('Día')}>
             {(['hoy', 'mañana'] as const).map((t) => (
               <button
                 key={t}
@@ -182,13 +184,13 @@ export default function Today() {
             ))}
           </div>
           <Button size="sm" variant="ghost" onClick={() => !demo && setPublishing(true)} disabled={!slots} className="shrink-0 text-brand">
-            <Icon name="sparkles" className="h-4 w-4" /> Publicar huecos
+            <Icon name="sparkles" className="h-4 w-4" /> {tx('Publicar huecos')}
           </Button>
         </div>
         <p className="mb-2.5 text-sm text-slate-500">
-          {dayCount === 1 ? '1 cita' : `${dayCount} citas`}
-          {slots && slots.length > 0 && <> · <b className="text-emerald-700">{freeCount === 1 ? '1 hueco libre' : `${freeCount} huecos libres`}</b></>}
-          {slots && freeCount > 0 && ' · toca uno para añadir una cita'}
+          {dayCount === 1 ? tx('1 cita') : tx('{dayCount} citas', { dayCount: dayCount })}
+          {slots && slots.length > 0 && <> · <b className="text-emerald-700">{freeCount === 1 ? tx('1 hueco libre') : tx('{freeCount} huecos libres', { freeCount: freeCount })}</b></>}
+          {slots && freeCount > 0 && tx(' · toca uno para añadir una cita')}
         </p>
         <div data-tour="dia">
           <DayTimeline
@@ -207,10 +209,10 @@ export default function Today() {
           <button onClick={() => setRemind(true)} className="card flex w-full items-center gap-3 text-left transition hover:bg-slate-50">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#25D366]/15 text-[#128C7E]"><WhatsAppIcon className="h-5 w-5" /></span>
             <span className="min-w-0 flex-1">
-              <span className="block font-semibold">Mañana tienes {tomorrows.length === 1 ? '1 cita' : `${tomorrows.length} citas`}</span>
-              <span className="block truncate text-sm text-slate-500">Recuérdaselas por WhatsApp, una detrás de otra</span>
+              <span className="block font-semibold">{tx('Mañana tienes')}{' '}{tomorrows.length === 1 ? tx('1 cita') : tx('{length} citas', { length: tomorrows.length })}</span>
+              <span className="block truncate text-sm text-slate-500">{tx('Recuérdaselas por WhatsApp, una detrás de otra')}</span>
             </span>
-            <span className="shrink-0 rounded-lg bg-[#25D366] px-3 py-1.5 text-sm font-semibold text-white">Avisar</span>
+            <span className="shrink-0 rounded-lg bg-[#25D366] px-3 py-1.5 text-sm font-semibold text-white">{tx('Avisar')}</span>
           </button>
         )
       )}
@@ -220,7 +222,7 @@ export default function Today() {
         onClick={() => newAppt()}
         data-tour="fab"
         className="fixed bottom-[calc(76px+env(safe-area-inset-bottom))] right-4 z-20 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand bg-btn-grad text-white shadow-lg shadow-brand/40 transition active:scale-95 md:bottom-6 lg:hidden"
-        aria-label="Nueva cita"
+        aria-label={tx('Nueva cita')}
       >
         <Icon name="plus" className="h-6 w-6" />
       </button>
@@ -247,14 +249,14 @@ function DemoNewSheet() {
     <Modal
       open
       onClose={() => {}}
-      title="Nueva cita"
-      footer={<Button block size="lg" data-tour="guardar">Guardar cita</Button>}
+      title={tx('Nueva cita')}
+      footer={<Button block size="lg" data-tour="guardar">{tx('Guardar cita')}</Button>}
     >
       <div className="space-y-4">
-        {field('Quién viene', 'Juana Gómez · 53 5555 0000')}
-        {field('Qué se va a hacer', s ? s.name : 'Tu servicio')}
-        {field('Qué día y a qué hora', 'Hoy, 1:00 p. m.')}
-        <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-500">Es una cita de ejemplo: no se guarda.</p>
+        {field(tx('Quién viene'), IS_INT ? 'Jane Smith · 1 305 555 0000' : 'Juana Gómez · 53 5555 0000')}
+        {field(tx('Qué se va a hacer'), s ? s.name : tx('Tu servicio'))}
+        {field(tx('Qué día y a qué hora'), tx('Hoy, 1:00 p. m.'))}
+        <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-500">{tx('Es una cita de ejemplo: no se guarda.')}</p>
       </div>
     </Modal>
   )
@@ -286,11 +288,11 @@ function TomorrowReminders({ list, onClose }: { list: Appointment[]; onClose: ()
   return (
     <section className="card">
       <div className="flex items-start justify-between gap-3">
-        <h2 className="flex items-center gap-2 font-extrabold tracking-tight"><Icon name="bell" className="h-5 w-5 text-brand" /> Recordatorios para mañana</h2>
-        <button onClick={onClose} className="-mr-1 -mt-1 rounded-full p-1.5 text-slate-400 hover:bg-slate-100" aria-label="Cerrar"><Icon name="x" className="h-4 w-4" /></button>
+        <h2 className="flex items-center gap-2 font-extrabold tracking-tight"><Icon name="bell" className="h-5 w-5 text-brand" /> {tx('Recordatorios para mañana')}</h2>
+        <button onClick={onClose} className="-mr-1 -mt-1 rounded-full p-1.5 text-slate-400 hover:bg-slate-100" aria-label={tx('Cerrar')}><Icon name="x" className="h-4 w-4" /></button>
       </div>
       <p className="text-sm text-slate-500">
-        {withPhone.length === 0 ? 'Ninguna cita de mañana tiene teléfono.' : toSend.length === 0 ? '¡Todos avisados! ✅' : `${done} de ${withPhone.length} avisados`}
+        {withPhone.length === 0 ? tx('Ninguna cita de mañana tiene teléfono.') : toSend.length === 0 ? tx('¡Todos avisados! ✅') : tx('{done} de {length} avisados', { done: done, length: withPhone.length })}
       </p>
 
       {withPhone.length > 0 && (
@@ -301,7 +303,7 @@ function TomorrowReminders({ list, onClose }: { list: Appointment[]; onClose: ()
 
       {!chain && toSend.length > 1 && (
         <Button block variant="whatsapp" onClick={() => { setSkipped(new Set()); setChain(true) }} className="mt-3">
-          <WhatsAppIcon className="h-4 w-4" /> Avisar a todos ({toSend.length})
+          <WhatsAppIcon className="h-4 w-4" /> {tx('Avisar a todos (')}{toSend.length})
         </Button>
       )}
 
@@ -310,7 +312,7 @@ function TomorrowReminders({ list, onClose }: { list: Appointment[]; onClose: ()
       {chain && next && (
         <div className="ui-fade mt-4 rounded-2xl bg-emerald-50 p-4 ring-1 ring-emerald-200">
           <p className="text-xs font-bold uppercase tracking-[0.12em] text-emerald-700">
-            Siguiente · {withPhone.indexOf(next) + 1} de {withPhone.length}
+            {tx('Siguiente ·')}{' '}{withPhone.indexOf(next) + 1} {tx('de')}{' '}{withPhone.length}
           </p>
           <p className="mt-1 truncate text-lg font-extrabold text-emerald-900">{timeOf(next.starts_at, tz, true)} · {next.customer_name}</p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -321,15 +323,15 @@ function TomorrowReminders({ list, onClose }: { list: Appointment[]; onClose: ()
               onClick={() => markSent(next)}
               className="inline-flex basis-full items-center justify-center gap-2 rounded-btn bg-[#25D366] px-4 py-3 font-semibold text-white shadow-sm active:scale-[0.98]"
             >
-              <WhatsAppIcon className="h-4 w-4" /> Enviar a {next.customer_name.split(' ')[0]}
+              <WhatsAppIcon className="h-4 w-4" /> {tx('Enviar a')}{' '}{next.customer_name.split(' ')[0]}
             </a>
-            <Button size="sm" variant="secondary" className="flex-1" onClick={() => setSkipped((s) => new Set(s).add(next.id))}>Saltar este</Button>
-            <Button size="sm" variant="ghost" className="flex-1" onClick={() => setChain(false)}>Parar</Button>
+            <Button size="sm" variant="secondary" className="flex-1" onClick={() => setSkipped((s) => new Set(s).add(next.id))}>{tx('Saltar este')}</Button>
+            <Button size="sm" variant="ghost" className="flex-1" onClick={() => setChain(false)}>{tx('Parar')}</Button>
           </div>
         </div>
       )}
       {chain && !next && toSend.length > 0 && (
-        <p className="mt-4 text-sm text-slate-500">Saltaste {toSend.length === 1 ? 'una' : toSend.length}. Puedes enviarlas abajo.</p>
+        <p className="mt-4 text-sm text-slate-500">{tx('Saltaste')}{' '}{toSend.length === 1 ? tx('una') : toSend.length}{tx('. Puedes enviarlas abajo.')}</p>
       )}
 
       <ul className="mt-3 divide-y divide-slate-100">
@@ -349,10 +351,10 @@ function TomorrowReminders({ list, onClose }: { list: Appointment[]; onClose: ()
                   onClick={() => markSent(a)}
                   className="inline-flex shrink-0 items-center gap-1.5 rounded-btn bg-[#25D366] px-3 py-1.5 text-sm font-semibold text-white"
                 >
-                  <WhatsAppIcon className="h-4 w-4" /> {isSent ? 'Otra vez' : 'Recordar'}
+                  <WhatsAppIcon className="h-4 w-4" /> {isSent ? tx('Otra vez') : tx('Recordar')}
                 </a>
               ) : (
-                <span className="text-xs text-slate-400">Sin teléfono</span>
+                <span className="text-xs text-slate-400">{tx('Sin teléfono')}</span>
               )}
             </li>
           )
@@ -366,7 +368,7 @@ function TomorrowReminders({ list, onClose }: { list: Appointment[]; onClose: ()
 function TodaySkeleton() {
   const bar = 'animate-pulse rounded-xl bg-slate-200'
   return (
-    <div className="space-y-5" aria-busy="true" aria-label="Cargando">
+    <div className="space-y-5" aria-busy="true" aria-label={tx('Cargando')}>
       <div className="space-y-2">
         <div className={`h-4 w-28 ${bar}`} />
         <div className={`h-8 w-56 ${bar}`} />
@@ -389,15 +391,15 @@ function TodaySkeleton() {
 /** "Buenos días", "Buenas tardes" o "Buenas noches" según la hora del negocio */
 function greeting(tz: string): string {
   const h = Number(new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', hour12: false }).format(new Date(serverNow())))
-  return h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches'
+  return h < 12 ? tx('Buenos días') : h < 19 ? tx('Buenas tardes') : tx('Buenas noches')
 }
 
 /** "en 45 min", "en 2 h", "ahora" */
 function untilText(iso: string, now: number): string {
   const min = Math.round((new Date(iso).getTime() - now) / 60000)
   if (min <= 0) return 'ahora'
-  if (min < 60) return `en ${min} min`
+  if (min < 60) return tx('en {min} min', { min: min })
   const h = Math.floor(min / 60)
   const m = min % 60
-  return m ? `en ${h} h ${m} min` : `en ${h} h`
+  return m ? tx('en {h} h {m} min', { h: h, m: m }) : tx('en {h} h', { h: h })
 }

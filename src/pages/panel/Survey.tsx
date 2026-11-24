@@ -6,6 +6,7 @@ import { load, save } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
 import type { OwnerSurvey, SurveyAnswers, SurveyQuestion } from '../../lib/types'
 import { Icon } from './Panel'
+import { t } from '../../lib/i18n'
 
 // "Ahora no": la encuesta se vuelve a ofrecer a los 3 días
 const LATER_MS = 3 * 24 * 3600 * 1000
@@ -41,10 +42,10 @@ export function SurveyBanner() {
       <div className="mx-auto max-w-4xl px-4 pt-4 lg:px-8 lg:pt-6">
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
           <Icon name="star" className="h-5 w-5 shrink-0" />
-          <span className="min-w-0 flex-1"><b>Citora quiere saber tu opinión.</b> {survey.title} · menos de 2 minutos.</span>
+          <span className="min-w-0 flex-1"><b>{t('Citora quiere saber tu opinión.')}</b> {survey.title} {t('· menos de 2 minutos.')}</span>
           <div className="flex items-center gap-1">
-            <button onClick={later} className="rounded-full px-3 py-1.5 text-xs font-semibold text-sky-800 hover:bg-sky-100">Ahora no</button>
-            <button onClick={() => setOpen(true)} className="rounded-full bg-sky-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-sky-700">Responder</button>
+            <button onClick={later} className="rounded-full px-3 py-1.5 text-xs font-semibold text-sky-800 hover:bg-sky-100">{t('Ahora no')}</button>
+            <button onClick={() => setOpen(true)} className="rounded-full bg-sky-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-sky-700">{t('Responder')}</button>
           </div>
         </div>
       </div>
@@ -55,7 +56,7 @@ export function SurveyBanner() {
           onDone={() => {
             setOpen(false)
             setSurvey(null)
-            flash('¡Gracias por tu opinión!')
+            flash(t('¡Gracias por tu opinión!'))
           }}
         />
       )}
@@ -71,7 +72,7 @@ function SurveyModal({ survey, onClose, onDone }: { survey: OwnerSurvey; onClose
   const missing = survey.questions.filter((q) => q.type !== 'texto' && answers[q.id] === undefined).length
 
   const send = async () => {
-    if (missing > 0) return setError(missing === 1 ? 'Te falta 1 pregunta por responder.' : `Te faltan ${missing} preguntas por responder.`)
+    if (missing > 0) return setError(missing === 1 ? t('Te falta 1 pregunta por responder.') : t('Te faltan {missing} preguntas por responder.', { missing: missing }))
     setBusy(true)
     setError(null)
     const { error } = await supabase.rpc('submit_survey_answer', { p_survey: survey.id, p_answers: answers })
@@ -88,12 +89,12 @@ function SurveyModal({ survey, onClose, onDone }: { survey: OwnerSurvey; onClose
       footer={
         <div className="space-y-2">
           {error && <Alert>{error}</Alert>}
-          <Button block onClick={send} loading={busy}>Enviar mi opinión</Button>
+          <Button block onClick={send} loading={busy}>{t('Enviar mi opinión')}</Button>
         </div>
       }
     >
       <div className="space-y-6">
-        <p className="text-sm text-slate-600">{survey.intro || 'Tu opinión nos ayuda a mejorar Citora para tu negocio.'} Solo la ve el equipo de Citora.</p>
+        <p className="text-sm text-slate-600">{survey.intro || t('Tu opinión nos ayuda a mejorar Citora para tu negocio.')} {t('Solo la ve el equipo de Citora.')}</p>
         {survey.questions.map((q, i) => (
           <Question key={q.id} n={i + 1} q={q} value={answers[q.id]} onChange={(v) => set(q.id, v)} />
         ))}
@@ -107,7 +108,7 @@ function Question({ n, q, value, onChange }: { n: number; q: SurveyQuestion; val
     <fieldset className="space-y-2.5">
       <legend className="mb-2.5 font-bold">
         {n}. {q.text}
-        {q.type === 'texto' && <span className="font-normal text-slate-500"> (opcional)</span>}
+        {q.type === 'texto' && <span className="font-normal text-slate-500"> {t('(opcional)')}</span>}
       </legend>
       {q.type === 'estrellas' && <Stars value={typeof value === 'number' ? value : 0} onChange={onChange} />}
       {q.type === 'si_no' && (
@@ -120,7 +121,7 @@ function Question({ n, q, value, onChange }: { n: number; q: SurveyQuestion; val
               aria-pressed={value === v}
               className={`rounded-xl py-3 font-semibold transition ${value === v ? 'bg-brand text-white shadow' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-brand'}`}
             >
-              {v ? 'Sí' : 'No'}
+              {v ? t('Sí') : t('No')}
             </button>
           ))}
         </div>
@@ -131,7 +132,7 @@ function Question({ n, q, value, onChange }: { n: number; q: SurveyQuestion; val
           maxLength={1000}
           value={typeof value === 'string' ? value : ''}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="Escribe lo que quieras…"
+          placeholder={t('Escribe lo que quieras…')}
         />
       )}
     </fieldset>
@@ -145,7 +146,7 @@ function Stars({ value, onChange }: { value: number; onChange: (v: number) => vo
     <div>
       <div className="flex gap-1.5">
         {[1, 2, 3, 4, 5].map((v) => (
-          <button key={v} type="button" onClick={() => onChange(v)} aria-label={`${v} de 5`} aria-pressed={value === v} className="rounded-lg p-1 transition active:scale-90">
+          <button key={v} type="button" onClick={() => onChange(v)} aria-label={t('{v} de 5', { v: v })} aria-pressed={value === v} className="rounded-lg p-1 transition active:scale-90">
             <svg viewBox="0 0 24 24" className={`h-9 w-9 ${v <= value ? 'fill-amber-400 text-amber-400' : 'fill-none text-slate-300'}`} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round">
               <path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z" />
             </svg>

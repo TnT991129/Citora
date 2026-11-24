@@ -12,6 +12,7 @@ import { goToMarket, type Market } from '../../lib/market'
 import { duration, money, WEEKDAYS } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import { StaffAgenda, StaffStats } from './StaffPortalAgenda'
+import { t } from '../../lib/i18n'
 
 interface PortalService {
   id: string
@@ -79,7 +80,7 @@ export default function StaffPortal() {
     return (
       <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 p-6 text-center">
         <CitoraLogo className="text-xl" />
-        <h1 className="text-xl font-bold">No se puede abrir</h1>
+        <h1 className="text-xl font-bold">{t('No se puede abrir')}</h1>
         <p className="text-slate-600">{error}</p>
       </div>
     )
@@ -103,8 +104,8 @@ export default function StaffPortal() {
   const saveService = async () => {
     if (!editing) return
     const price = Number(editing.price.replace(',', '.'))
-    if (!editing.name.trim()) return setFormError('Escribe el nombre del servicio.')
-    if (editing.price.trim() === '' || !(price >= 0)) return setFormError('Escribe el precio (puede ser 0).')
+    if (!editing.name.trim()) return setFormError(t('Escribe el nombre del servicio.'))
+    if (editing.price.trim() === '' || !(price >= 0)) return setFormError(t('Escribe el precio (puede ser 0).'))
     setBusy(true)
     setFormError(null)
     const { error } = await supabase.rpc('staff_portal_save_service', {
@@ -114,7 +115,7 @@ export default function StaffPortal() {
     setBusy(false)
     if (error) return setFormError(errorMessage(error))
     setEditing(null)
-    flash('Guardado. Tus clientes ya lo ven así.')
+    flash(t('Guardado. Tus clientes ya lo ven así.'))
     load()
   }
 
@@ -124,7 +125,7 @@ export default function StaffPortal() {
     const { error } = await supabase.rpc('staff_portal_save_schedule', { p_token: token, p_days: custom ? days : [] })
     setBusy(false)
     if (error) return setError(errorMessage(error))
-    flash(custom ? 'Horario guardado' : 'Ahora usas el horario del negocio')
+    flash(custom ? t('Horario guardado') : t('Ahora usas el horario del negocio'))
     load()
   }
 
@@ -133,7 +134,7 @@ export default function StaffPortal() {
     if (v === (data.staff.specialty || '')) return
     const { error } = await supabase.rpc('staff_portal_save_profile', { p_token: token, p_specialty: v })
     if (error) return setError(errorMessage(error))
-    flash('Especialidad guardada')
+    flash(t('Especialidad guardada'))
     load()
   }
 
@@ -149,7 +150,7 @@ export default function StaffPortal() {
           <BusinessAvatar name={b.name} logo={b.logo_url} size={36} />
           <div className="min-w-0 flex-1">
             <p className="truncate font-bold leading-tight">{b.name}</p>
-            <p className="truncate text-xs text-slate-500">Equipo · {data.staff.name}</p>
+            <p className="truncate text-xs text-slate-500">{t('Equipo ·')}{' '}{data.staff.name}</p>
           </div>
           <BusinessAvatar name={data.staff.name} logo={data.staff.photo_url} size={36} />
         </div>
@@ -157,7 +158,7 @@ export default function StaffPortal() {
 
       <nav className="sticky top-[57px] z-10 border-b border-slate-200 bg-white/90 backdrop-blur-lg">
         <div className="no-scrollbar scroll-fade-x mx-auto flex max-w-xl gap-1 overflow-x-auto px-3 py-2">
-          {([['agenda', 'Agenda'], ['numeros', 'Números'], ['servicios', 'Servicios'], ['horario', 'Horario']] as const).map(([k, l]) => (
+          {([['agenda', t('Agenda')], ['numeros', t('Números')], ['servicios', t('Servicios')], ['horario', t('Horario')]] as const).map(([k, l]) => (
             <button
               key={k}
               onClick={() => setTab(k)}
@@ -172,13 +173,13 @@ export default function StaffPortal() {
 
       <main className="ui-page mx-auto max-w-xl space-y-6 px-4 py-6">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">Hola, {first} 👋</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight">{t('Hola,')}{' '}{first} 👋</h1>
           <p className="mt-1 text-slate-600">
-            {tab === 'agenda' && 'Tus citas de la semana. Apunta aquí también las que te piden por WhatsApp.'}
-            {tab === 'numeros' && 'Cómo te va: tus citas, tus clientes y lo que más te piden.'}
-            {tab === 'servicios' && `Lo que guardes lo ven al momento los clientes de ${b.name}.`}
-            {tab === 'horario' && 'Tus clientes solo pueden reservar contigo en estas horas.'}
-            {' '}Este enlace es solo para ti: no lo compartas.
+            {tab === 'agenda' && t('Tus citas de la semana. Apunta aquí también las que te piden por WhatsApp.')}
+            {tab === 'numeros' && t('Cómo te va: tus citas, tus clientes y lo que más te piden.')}
+            {tab === 'servicios' && t('Lo que guardes lo ven al momento los clientes de {name}.', { name: b.name })}
+            {tab === 'horario' && t('Tus clientes solo pueden reservar contigo en estas horas.')}
+            {' '}{t('Este enlace es solo para ti: no lo compartas.')}
           </p>
         </div>
 
@@ -195,19 +196,19 @@ export default function StaffPortal() {
 
         {tab === 'servicios' && (<>
         <section className="card">
-          <Field label="Tu especialidad" hint={`En la página de ${b.name}, tus servicios salen agrupados con este título.`}>
-            <input className="input" value={specialty} maxLength={40} placeholder="Ej. Uñas, Pestañas, Peluquería" onChange={(e) => setSpecialty(e.target.value)} onBlur={saveSpecialty} />
+          <Field label={t('Tu especialidad')} hint={t('En la página de {name}, tus servicios salen agrupados con este título.', { name: b.name })}>
+            <input className="input" value={specialty} maxLength={40} placeholder={t('Ej. Uñas, Pestañas, Peluquería')} onChange={(e) => setSpecialty(e.target.value)} onBlur={saveSpecialty} />
           </Field>
         </section>
 
         <section>
           <div className="mb-2 flex items-end justify-between gap-3 px-1">
-            <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Tus servicios</h2>
-            {!data.all_services && <Button size="sm" onClick={() => openNew()}>+ Añadir</Button>}
+            <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{t('Tus servicios')}</h2>
+            {!data.all_services && <Button size="sm" onClick={() => openNew()}>{t('+ Añadir')}</Button>}
           </div>
           {data.all_services ? (
             <div className="card text-sm text-slate-600">
-              Ahora mismo haces <b>todos los servicios</b> del negocio. Para tener tus propios servicios y precios, pídele al dueño que marque en <b>Equipo</b> cuáles haces tú.
+              {t('Ahora mismo haces')}{' '}<b>{t('todos los servicios')}</b> {t('del negocio. Para tener tus propios servicios y precios, pídele al dueño que marque en')}{' '}<b>{t('Equipo')}</b> {t('cuáles haces tú.')}
             </div>
           ) : (
             <div className="card divide-y divide-slate-100 overflow-hidden p-0 sm:p-0">
@@ -224,22 +225,22 @@ export default function StaffPortal() {
                       <span className={`block truncate font-semibold ${s.active ? '' : 'text-slate-400 line-through'}`}>{s.is_extra ? '+ ' : ''}{s.name}</span>
                       <span className="block truncate text-sm text-slate-500">
                         {duration(s.duration_min)}
-                        {!s.active && ' · oculto'}
-                        {locked && (s.shared ? ' · compartido, lo cambia el dueño' : ' · con opciones, lo cambia el dueño')}
+                        {!s.active && t(' · oculto')}
+                        {locked && (s.shared ? t(' · compartido, lo cambia el dueño') : t(' · con opciones, lo cambia el dueño'))}
                       </span>
                     </span>
                     <span className="shrink-0 font-bold">{money(s.price, currency)}</span>
                   </button>
                 )
               })}
-              {data.services.length === 0 && <p className="px-4 py-3.5 text-sm text-slate-500">Todavía no tienes servicios.</p>}
+              {data.services.length === 0 && <p className="px-4 py-3.5 text-sm text-slate-500">{t('Todavía no tienes servicios.')}</p>}
             </div>
           )}
           {!data.all_services && own.length === 0 && data.services.length > 0 && (
-            <p className="mt-2 px-1 text-sm text-slate-500">Todos tus servicios los compartes con otras personas del equipo. Puedes añadir los tuyos con "+ Añadir".</p>
+            <p className="mt-2 px-1 text-sm text-slate-500">{t('Todos tus servicios los compartes con otras personas del equipo. Puedes añadir los tuyos con "+ Añadir".')}</p>
           )}
           {!data.all_services && (
-            <button onClick={() => openNew(true)} className="mt-2 px-1 text-sm font-semibold text-brand">+ Añadir un extra (algo que se suma a un servicio)</button>
+            <button onClick={() => openNew(true)} className="mt-2 px-1 text-sm font-semibold text-brand">{t('+ Añadir un extra (algo que se suma a un servicio)')}</button>
           )}
         </section>
 
@@ -247,25 +248,25 @@ export default function StaffPortal() {
 
         {tab === 'horario' && (
         <section>
-          <h2 className="mb-2 px-1 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Tu horario</h2>
+          <h2 className="mb-2 px-1 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{t('Tu horario')}</h2>
           <div className="card space-y-3">
             <label className="flex items-center justify-between gap-3">
               <span className="text-sm">
-                <b>Horario propio</b>
-                <br /><span className="text-slate-500">{custom ? 'Tus clientes solo pueden reservar contigo en estas horas.' : `Ahora usas el mismo horario que ${b.name}.`}</span>
+                <b>{t('Horario propio')}</b>
+                <br /><span className="text-slate-500">{custom ? t('Tus clientes solo pueden reservar contigo en estas horas.') : t('Ahora usas el mismo horario que {name}.', { name: b.name })}</span>
               </span>
-              <Toggle checked={custom} onChange={(v) => { setCustom(v); setScheduleDirty(true) }} label="Horario propio" />
+              <Toggle checked={custom} onChange={(v) => { setCustom(v); setScheduleDirty(true) }} label={t('Horario propio')} />
             </label>
             {custom && days.map((d) => (
               <div key={d.weekday} className="rounded-xl bg-slate-50 p-3">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold">{WEEKDAYS[d.weekday]}</span>
-                  <Toggle checked={d.is_open} onChange={(v) => setDay(d.weekday, { is_open: v })} label={`Trabajo el ${WEEKDAYS[d.weekday]}`} />
+                  <Toggle checked={d.is_open} onChange={(v) => setDay(d.weekday, { is_open: v })} label={t('Trabajo el {v}', { v: WEEKDAYS[d.weekday] })} />
                 </div>
                 {d.is_open ? (
                   <div className="mt-2"><TimeChips value={d.slots} onChange={(slots) => setDay(d.weekday, { slots })} /></div>
                 ) : (
-                  <p className="mt-1 text-sm text-slate-400">No trabajo este día</p>
+                  <p className="mt-1 text-sm text-slate-400">{t('No trabajo este día')}</p>
                 )}
               </div>
             ))}
@@ -278,7 +279,7 @@ export default function StaffPortal() {
       {scheduleDirty && tab === 'horario' && (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur safe-bottom">
           <div className="mx-auto max-w-xl">
-            <Button block size="lg" onClick={saveSchedule} loading={busy}>Guardar horario</Button>
+            <Button block size="lg" onClick={saveSchedule} loading={busy}>{t('Guardar horario')}</Button>
           </div>
         </div>
       )}
@@ -287,29 +288,29 @@ export default function StaffPortal() {
         <Modal
           open
           onClose={() => setEditing(null)}
-          title={editing.id ? 'Cambiar servicio' : editing.is_extra ? 'Nuevo extra' : 'Nuevo servicio'}
-          footer={<Button block size="lg" onClick={saveService} loading={busy}>Guardar</Button>}
+          title={editing.id ? t('Cambiar servicio') : editing.is_extra ? t('Nuevo extra') : t('Nuevo servicio')}
+          footer={<Button block size="lg" onClick={saveService} loading={busy}>{t('Guardar')}</Button>}
         >
           <div className="space-y-4">
-            <Field label="Nombre">
-              <input className="input" value={editing.name} maxLength={80} placeholder="Ej. Pestañas pelo a pelo" onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
+            <Field label={t('Nombre')}>
+              <input className="input" value={editing.name} maxLength={80} placeholder={t('Ej. Pestañas pelo a pelo')} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label={`Precio (${currency})`}>
+              <Field label={t('Precio ({currency})', { currency: currency })}>
                 <input className="input" inputMode="decimal" value={editing.price} placeholder="0" onChange={(e) => setEditing({ ...editing, price: e.target.value })} />
               </Field>
-              <Field label="Duración">
+              <Field label={t('Duración')}>
                 <select className="input" value={editing.duration_min} onChange={(e) => setEditing({ ...editing, duration_min: Number(e.target.value) })}>
                   {Array.from(new Set([...DURATIONS, editing.duration_min])).sort((x, y) => x - y).map((m) => <option key={m} value={m}>{duration(m)}</option>)}
                 </select>
               </Field>
             </div>
-            <Field label="Descripción (opcional)">
+            <Field label={t('Descripción (opcional)')}>
               <textarea className="input min-h-[70px]" value={editing.description} maxLength={300} onChange={(e) => setEditing({ ...editing, description: e.target.value })} />
             </Field>
             <label className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
-              <span className="text-sm"><b>Se ve en la página</b><br /><span className="text-slate-500">Si lo apagas, los clientes no pueden reservarlo.</span></span>
-              <Toggle checked={editing.active} onChange={(v) => setEditing({ ...editing, active: v })} label="Se ve en la página" />
+              <span className="text-sm"><b>{t('Se ve en la página')}</b><br /><span className="text-slate-500">{t('Si lo apagas, los clientes no pueden reservarlo.')}</span></span>
+              <Toggle checked={editing.active} onChange={(v) => setEditing({ ...editing, active: v })} label={t('Se ve en la página')} />
             </label>
             {formError && <Alert>{formError}</Alert>}
           </div>

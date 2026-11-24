@@ -18,20 +18,22 @@ import { DEFAULT_PRICE, DEFAULT_TEAM_PRICE } from '../lib/plans'
 import type { Prices } from '../lib/types'
 import { IS_INT, isCubanPhone, marketBase } from '../lib/market'
 import { panelPath, publicUrl, siteUrl } from '../lib/url'
+import { t as tx } from '../lib/i18n'
+import { LangSwitch } from '../components/LangSwitch'
 
-const STEPS = ['Tipo', 'Negocio', 'Moneda', 'Servicios', 'Horario', 'Cuenta']
+const STEPS = [tx('Tipo'), tx('Negocio'), tx('Moneda'), tx('Servicios'), tx('Horario'), tx('Cuenta')]
 /** Cuánto le falta, según el paso */
-const TIME_LEFT = ['Unos 3 minutos', 'Unos 3 minutos', 'Unos 2 minutos', 'Menos de 2 minutos', 'Un minuto', 'Último paso']
+const TIME_LEFT = [tx('Unos 3 minutos'), tx('Unos 3 minutos'), tx('Unos 2 minutos'), tx('Menos de 2 minutos'), tx('Un minuto'), tx('Último paso')]
 /** Los pasos que se pueden saltar (se cambian después en el panel) y el texto del botón */
 const SKIP: Partial<Record<number, { key: SkipKey; label: string }>> = {
-  2: { key: 'moneda', label: 'Saltar, uso CUP' },
-  3: { key: 'servicios', label: 'Saltar, los reviso después' },
-  4: { key: 'horario', label: 'Saltar, de lunes a sábado de 9:00 a 18:00' },
+  2: { key: 'moneda', label: tx('Saltar, uso CUP') },
+  3: { key: 'servicios', label: tx('Saltar, los reviso después') },
+  4: { key: 'horario', label: tx('Saltar, de lunes a sábado de 9:00 a 18:00') },
 }
 const SKIP_NAMES: Record<SkipKey, string> = {
-  moneda: 'la moneda (CUP)',
-  servicios: 'los servicios (de ejemplo)',
-  horario: 'el horario (de lunes a sábado, de 9:00 a 18:00)',
+  moneda: IS_INT ? tx('la moneda (USD)') : tx('la moneda (CUP)'),
+  servicios: tx('los servicios (de ejemplo)'),
+  horario: tx('el horario (de lunes a sábado, de 9:00 a 18:00)'),
 }
 
 export default function Create() {
@@ -67,7 +69,7 @@ export default function Create() {
   const [needsConfirm, setNeedsConfirm] = useState(false)
 
   useEffect(() => {
-    document.title = 'Crear mi app · Citora'
+    document.title = tx('Crear mi app · Citora')
   }, [])
 
   // Vista previa del color elegido
@@ -134,21 +136,21 @@ export default function Create() {
 
   const stepValid = (): string | null => {
     if (step === 1) {
-      if (draft.name.trim().length < 2) return 'Escribe el nombre de tu negocio.'
-      if (draft.slug.length < 3) return 'Elige el enlace de tu app (mínimo 3 caracteres).'
-      if (slugState === 'taken') return 'Ese enlace ya está en uso. Prueba otro.'
-      if (cleanPhone(draft.whatsapp).length < 8) return `Escribe tu número de WhatsApp con el código del país (ej. ${IS_INT ? '1 305 555 1234' : '53 5555 5555'}).`
+      if (draft.name.trim().length < 2) return tx('Escribe el nombre de tu negocio.')
+      if (draft.slug.length < 3) return tx('Elige el enlace de tu app (mínimo 3 caracteres).')
+      if (slugState === 'taken') return tx('Ese enlace ya está en uso. Prueba otro.')
+      if (cleanPhone(draft.whatsapp).length < 8) return tx('Escribe tu número de WhatsApp con el código del país (ej. {v}).', { v: IS_INT ? '1 305 555 1234' : '53 5555 5555' })
       // La versión de Cuba es para negocios con WhatsApp de Cuba (ver market.ts)
-      if (!IS_INT && !isCubanPhone(draft.whatsapp)) return 'Ese número no es de Cuba. Si tu negocio está fuera de Cuba, créalo en la versión internacional (enlace debajo del WhatsApp).'
+      if (!IS_INT && !isCubanPhone(draft.whatsapp)) return tx('Ese número no es de Cuba. Si tu negocio está fuera de Cuba, créalo en la versión internacional (enlace debajo del WhatsApp).')
     }
-    if (step === 2 && mode === 'AMBAS' && !(rate > 0)) return 'Escribe la tasa del dólar: cuántos CUP vale 1 USD.'
+    if (step === 2 && mode === 'AMBAS' && !(rate > 0)) return tx('Escribe la tasa del dólar: cuántos CUP vale 1 USD.')
     if (step === 3) {
       const valid = draft.services.filter((s) => s.name.trim())
-      if (valid.length === 0) return 'Añade al menos un servicio.'
+      if (valid.length === 0) return tx('Añade al menos un servicio.')
     }
     if (step === 4) {
-      if (draft.days.length === 0) return 'Elige al menos un día de trabajo.'
-      if (slots.length === 0) return 'Añade al menos un turno.'
+      if (draft.days.length === 0) return tx('Elige al menos un día de trabajo.')
+      if (slots.length === 0) return tx('Añade al menos un turno.')
     }
     return null
   }
@@ -210,8 +212,8 @@ export default function Create() {
   }
 
   const signUpAndCreate = async () => {
-    if (!/^\S+@\S+\.\S+$/.test(email)) return setError('Escribe un correo válido.')
-    if (password.length < 6) return setError('La contraseña debe tener al menos 6 caracteres.')
+    if (!/^\S+@\S+\.\S+$/.test(email)) return setError(tx('Escribe un correo válido.'))
+    if (password.length < 6) return setError(tx('La contraseña debe tener al menos 6 caracteres.'))
     setBusy(true)
     setError(null)
     try {
@@ -241,15 +243,14 @@ export default function Create() {
     return (
       <Shell>
         <div className="card space-y-4 text-center">
-          <h1 className="text-2xl font-bold">Ya tienes la sesión abierta</h1>
+          <h1 className="text-2xl font-bold">{tx('Ya tienes la sesión abierta')}</h1>
           <p className="text-slate-600">
-            Estás conectado como <b>{session.user.email}</b>
-            {existing.name ? <>, que ya tiene la app <b>{existing.name}</b></> : existing.admin ? <> (administrador)</> : null}.
-            Cada cuenta tiene una sola app: para crear otra, usa otro correo.
+            {tx('Estás conectado como')}{' '}<b>{session.user.email}</b>
+            {existing.name ? <>{tx(', que ya tiene la app')}{' '}<b>{existing.name}</b></> : existing.admin ? <> {tx('(administrador)')}</> : null}{tx('. Cada cuenta tiene una sola app: para crear otra, usa otro correo.')}
           </p>
-          <Button block size="lg" onClick={signOutForNew}>Cerrar sesión y crear otra cuenta</Button>
+          <Button block size="lg" onClick={signOutForNew}>{tx('Cerrar sesión y crear otra cuenta')}</Button>
           <Button block variant="secondary" onClick={() => navigate(existing.admin && !existing.name ? '/admin' : '/panel')}>
-            {existing.admin && !existing.name ? 'Ir al panel de administrador' : 'Ir a mi panel'}
+            {existing.admin && !existing.name ? tx('Ir al panel de administrador') : tx('Ir a mi panel')}
           </Button>
         </div>
       </Shell>
@@ -260,11 +261,11 @@ export default function Create() {
     return (
       <Shell>
         <div className="card text-center">
-          <h1 className="text-2xl font-bold">Revisa tu correo</h1>
+          <h1 className="text-2xl font-bold">{tx('Revisa tu correo')}</h1>
           <p className="mt-2 text-slate-600">
-            Te enviamos un enlace a <b>{email}</b> para confirmar tu cuenta. Al confirmarlo, entra y tu app se creará con todo lo que pusiste.
+            {tx('Te enviamos un enlace a')}{' '}<b>{email}</b> {tx('para confirmar tu cuenta. Al confirmarlo, entra y tu app se creará con todo lo que pusiste.')}
           </p>
-          <Link to="/entrar" className="mt-5 inline-block font-semibold text-brand">Ir a entrar</Link>
+          <Link to="/entrar" className="mt-5 inline-block font-semibold text-brand">{tx('Ir a entrar')}</Link>
         </div>
       </Shell>
     )
@@ -277,8 +278,8 @@ export default function Create() {
     <Shell>
       <div className="mb-5">
         <div className="flex items-center justify-between gap-3 text-sm">
-          <span className="text-xs font-bold uppercase tracking-[0.16em] text-brand">Paso {step + 1} de {totalSteps} · {STEPS[step]}</span>
-          <span className="shrink-0 text-xs font-semibold text-slate-500">{step === totalSteps - 1 ? 'Último paso' : TIME_LEFT[step]}</span>
+          <span className="text-xs font-bold uppercase tracking-[0.16em] text-brand">{tx('Paso')}{' '}{step + 1} {tx('de')}{' '}{totalSteps} · {STEPS[step]}</span>
+          <span className="shrink-0 text-xs font-semibold text-slate-500">{step === totalSteps - 1 ? tx('Último paso') : TIME_LEFT[step]}</span>
         </div>
         {/* Un tramo por paso: se ve cuánto falta de un vistazo */}
         <div className="mt-2.5 flex gap-1.5">
@@ -290,8 +291,8 @@ export default function Create() {
 
       {step === 0 && (
         <section>
-          <h1 className="text-2xl font-bold">¿Qué tipo de negocio tienes?</h1>
-          <p className="mt-1 text-slate-600">Te preparamos servicios, precios y horario típicos para empezar. Podrás cambiarlo todo.</p>
+          <h1 className="text-2xl font-bold">{tx('¿Qué tipo de negocio tienes?')}</h1>
+          <p className="mt-1 text-slate-600">{tx('Te preparamos servicios, precios y horario típicos para empezar. Podrás cambiarlo todo.')}</p>
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {BUSINESS_TYPES.map((t) => (
               <button
@@ -314,15 +315,15 @@ export default function Create() {
       {step === 1 && (
         <section className="space-y-4">
           <div>
-            <h1 className="text-2xl font-bold">Tu negocio</h1>
-            <p className="mt-1 text-slate-600">Así te verán tus clientes cuando abran tu enlace.</p>
+            <h1 className="text-2xl font-bold">{tx('Tu negocio')}</h1>
+            <p className="mt-1 text-slate-600">{tx('Así te verán tus clientes cuando abran tu enlace.')}</p>
           </div>
-          <Field label="Nombre del negocio">
+          <Field label={tx('Nombre del negocio')}>
             <input
               className="input"
               value={draft.name}
               maxLength={60}
-              placeholder="Ej. Barbería Leo"
+              placeholder={tx('Ej. Barbería Leo')}
               onChange={(e) => {
                 const name = e.target.value
                 update(slugTouched ? { name } : { name, slug: slugify(name) })
@@ -330,12 +331,12 @@ export default function Create() {
             />
           </Field>
           <Field
-            label="Enlace de tu app"
-            error={slugState === 'taken' ? 'Ese enlace ya está en uso o no es válido.' : null}
+            label={tx('Enlace de tu app')}
+            error={slugState === 'taken' ? tx('Ese enlace ya está en uso o no es válido.') : null}
             hint={
-              slugState === 'ok' ? <span className="font-medium text-emerald-700">✓ Disponible</span>
-                : slugState === 'checking' ? 'Comprobando…'
-                  : 'Solo letras, números y guiones.'
+              slugState === 'ok' ? <span className="font-medium text-emerald-700">{tx('✓ Disponible')}</span>
+                : slugState === 'checking' ? tx('Comprobando…')
+                  : tx('Solo letras, números y guiones.')
             }
           >
             <div className="flex items-center overflow-hidden rounded-xl border border-slate-300 bg-white focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20">
@@ -351,41 +352,41 @@ export default function Create() {
               />
             </div>
           </Field>
-          <Field label="WhatsApp del negocio" hint={`Con el código del país. Ej: ${IS_INT ? '1 305 555 1234' : '53 5555 5555'}. Tus clientes te escribirán aquí.`}>
+          <Field label={tx('WhatsApp del negocio')} hint={tx('Con el código del país. Ej: {v}. Tus clientes te escribirán aquí.', { v: IS_INT ? '1 305 555 1234' : '53 5555 5555' })}>
             <input className="input" inputMode="tel" value={draft.whatsapp} placeholder={IS_INT ? '1 305 555 1234' : '53 5555 5555'} onChange={(e) => update({ whatsapp: e.target.value })} />
           </Field>
           {!IS_INT && cleanPhone(draft.whatsapp).length >= 8 && !isCubanPhone(draft.whatsapp) && (
             <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">
-              <p><b>Ese número no es de Cuba.</b> Esta versión de Citora es para negocios en Cuba.</p>
+              <p><b>{tx('Ese número no es de Cuba.')}</b> {tx('Esta versión de Citora es para negocios en Cuba.')}</p>
               {/* Recarga: la otra versión arranca con lo suyo. El borrador se guarda en el móvil y sigue allí. */}
               <a href={`${marketBase('int')}crear`} className="mt-1 inline-block font-semibold text-amber-900 underline">
-                ¿Tu negocio está fuera de Cuba? Créalo en la versión internacional →
+                {tx('¿Tu negocio está fuera de Cuba? Créalo en la versión internacional →')}
               </a>
             </div>
           )}
-          <Field label="Dirección (opcional)">
-            <input className="input" value={draft.address} maxLength={120} placeholder="Calle, número, municipio" onChange={(e) => update({ address: e.target.value })} />
+          <Field label={tx('Dirección (opcional)')}>
+            <input className="input" value={draft.address} maxLength={120} placeholder={tx('Calle, número, municipio')} onChange={(e) => update({ address: e.target.value })} />
           </Field>
           <div>
-            <span className="label">Color de tu app</span>
+            <span className="label">{tx('Color de tu app')}</span>
             <ColorPicker value={draft.color} onChange={(c) => update({ color: c })} />
-            <p className="mt-2 text-xs text-slate-500">Después podrás añadir degradados, foto de portada y más desde tu panel.</p>
+            <p className="mt-2 text-xs text-slate-500">{tx('Después podrás añadir degradados, foto de portada y más desde tu panel.')}</p>
           </div>
           <div className="card flex items-center gap-3">
-            <BusinessAvatar name={draft.name || 'Tu negocio'} size={48} />
+            <BusinessAvatar name={draft.name || tx('Tu negocio')} size={48} />
             <div className="min-w-0">
-              <p className="truncate font-bold">{draft.name || 'Tu negocio'}</p>
-              <p className="text-sm text-slate-500">Vista previa</p>
+              <p className="truncate font-bold">{draft.name || tx('Tu negocio')}</p>
+              <p className="text-sm text-slate-500">{tx('Vista previa')}</p>
             </div>
-            <span className="ml-auto rounded-xl bg-brand px-3 py-2 text-sm font-semibold text-white">Reservar</span>
+            <span className="ml-auto rounded-xl bg-brand px-3 py-2 text-sm font-semibold text-white">{tx('Reservar')}</span>
           </div>
         </section>
       )}
 
       {step === 2 && (
         <section>
-          <h1 className="text-2xl font-bold">¿En qué moneda cobras?</h1>
-          <p className="mt-1 text-slate-600">Es la moneda en la que tus clientes verán tus precios.</p>
+          <h1 className="text-2xl font-bold">{tx('¿En qué moneda cobras?')}</h1>
+          <p className="mt-1 text-slate-600">{tx('Es la moneda en la que tus clientes verán tus precios.')}</p>
           <div className={IS_INT ? 'mt-5 grid gap-3 sm:grid-cols-2' : 'mt-5 space-y-3'}>
             {currencyOptions(IS_INT).map((c) => (
               <button
@@ -412,16 +413,16 @@ export default function Create() {
           </div>
           {mode === 'AMBAS' && (
             <div className="card mt-4">
-              <Field label="Tasa del dólar de hoy" hint="Pondrás tus precios en USD y tus clientes verán también su cambio en CUP. Podrás actualizar la tasa cuando quieras desde tu panel.">
+              <Field label={tx('Tasa del dólar de hoy')} hint={tx('Pondrás tus precios en USD y tus clientes verán también su cambio en CUP. Podrás actualizar la tasa cuando quieras desde tu panel.')}>
                 <div className="flex items-center gap-2">
-                  <span className="shrink-0 font-semibold text-slate-600">1 USD =</span>
+                  <span className="shrink-0 font-semibold text-slate-600">{tx('1 USD =')}</span>
                   <input
                     className="input"
                     type="number"
                     min={1}
                     step="any"
                     inputMode="decimal"
-                    placeholder="Ej. 300"
+                    placeholder={tx('Ej. 300')}
                     value={draft.usd_rate ?? ''}
                     onChange={(e) => update({ usd_rate: e.target.value === '' ? null : Number(e.target.value) })}
                   />
@@ -435,10 +436,10 @@ export default function Create() {
 
       {step === 3 && (
         <section>
-          <h1 className="text-2xl font-bold">Tus servicios</h1>
+          <h1 className="text-2xl font-bold">{tx('Tus servicios')}</h1>
           <p className="mt-1 text-slate-600">
-            Te dejamos estos de ejemplo. Cambia lo que no sea igual que en tu negocio (precios en {main}).
-            {rate > 0 && ` Tus clientes verán también el cambio en CUP (1 USD = ${money(rate, 'CUP')}).`}
+            {tx('Te dejamos estos de ejemplo. Cambia lo que no sea igual que en tu negocio (precios en')}{' '}{main}).
+            {rate > 0 && tx(' Tus clientes verán también el cambio en CUP (1 USD = {money}).', { money: money(rate, 'CUP') })}
           </p>
           <div className="mt-5 space-y-3">
             {draft.services.map((s, i) => (
@@ -447,7 +448,7 @@ export default function Create() {
                   <input
                     className="input"
                     value={s.name}
-                    placeholder="Nombre del servicio"
+                    placeholder={tx('Nombre del servicio')}
                     maxLength={80}
                     onChange={(e) => update({ services: draft.services.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })}
                   />
@@ -455,13 +456,13 @@ export default function Create() {
                     type="button"
                     onClick={() => update({ services: draft.services.filter((_, j) => j !== i) })}
                     className="shrink-0 rounded-xl px-3 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                    aria-label="Quitar servicio"
+                    aria-label={tx('Quitar servicio')}
                   >
                     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>
                   </button>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <label className="text-xs font-medium text-slate-600">Precio ({main})
+                  <label className="text-xs font-medium text-slate-600">{tx('Precio (')}{main})
                     <input
                       className="input mt-1"
                       type="number"
@@ -474,7 +475,7 @@ export default function Create() {
                     />
                     {rate > 0 && s.price > 0 && <span className="mt-1 block text-slate-400">≈ {money(Math.round(s.price * rate), 'CUP')}</span>}
                   </label>
-                  <label className="text-xs font-medium text-slate-600">Duración
+                  <label className="text-xs font-medium text-slate-600">{tx('Duración')}
                     <select
                       className="input mt-1"
                       value={s.duration_min}
@@ -492,7 +493,7 @@ export default function Create() {
               block
               onClick={() => update({ services: [...draft.services, { name: '', price: 0, duration_min: 60 }] })}
             >
-              + Añadir servicio
+              {tx('+ Añadir servicio')}
             </Button>
           </div>
         </section>
@@ -501,11 +502,11 @@ export default function Create() {
       {step === 4 && (
         <section className="space-y-5">
           <div>
-            <h1 className="text-2xl font-bold">¿Cuándo trabajas?</h1>
-            <p className="mt-1 text-slate-600">Tus clientes solo podrán reservar en estos días y horas.</p>
+            <h1 className="text-2xl font-bold">{tx('¿Cuándo trabajas?')}</h1>
+            <p className="mt-1 text-slate-600">{tx('Tus clientes solo podrán reservar en estos días y horas.')}</p>
           </div>
           <div>
-            <span className="label">Días de trabajo</span>
+            <span className="label">{tx('Días de trabajo')}</span>
             <div className="grid grid-cols-7 gap-1.5">
               {[1, 2, 3, 4, 5, 6, 0].map((w) => {
                 const on = draft.days.includes(w)
@@ -523,11 +524,11 @@ export default function Create() {
             </div>
           </div>
           <div>
-            <span className="label">¿Cómo das las citas?</span>
+            <span className="label">{tx('¿Cómo das las citas?')}</span>
             <div className="grid grid-cols-2 gap-2">
               {([
-                ['turnos', 'Turnos fijos', 'Ej. 10:00 y 13:00'],
-                ['intervalo', 'Cada cierto tiempo', 'Ej. cada 30 min'],
+                ['turnos', tx('Turnos fijos'), tx('Ej. 10:00 y 13:00')],
+                ['intervalo', tx('Cada cierto tiempo'), tx('Ej. cada 30 min')],
               ] as const).map(([k, t, d]) => (
                 <button
                   key={k}
@@ -543,38 +544,38 @@ export default function Create() {
           </div>
           {draft.mode === 'turnos' ? (
             <div className="card">
-              <span className="label">Horas de los turnos</span>
+              <span className="label">{tx('Horas de los turnos')}</span>
               <TimeChips value={draft.turnos} onChange={(turnos) => update({ turnos })} />
             </div>
           ) : (
             <div className="card">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                <label className="text-xs font-medium text-slate-600">Abres
+                <label className="text-xs font-medium text-slate-600">{tx('Abres')}
                   <input type="time" className="input mt-1" value={draft.open} onChange={(e) => update({ open: e.target.value })} />
                 </label>
-                <label className="text-xs font-medium text-slate-600">Cierras
+                <label className="text-xs font-medium text-slate-600">{tx('Cierras')}
                   <input type="time" className="input mt-1" value={draft.close} onChange={(e) => update({ close: e.target.value })} />
                 </label>
-                <label className="col-span-2 text-xs font-medium text-slate-600 sm:col-span-1">Una cita cada
+                <label className="col-span-2 text-xs font-medium text-slate-600 sm:col-span-1">{tx('Una cita cada')}
                   <select className="input mt-1" value={draft.every} onChange={(e) => update({ every: Number(e.target.value) })}>
-                    {[15, 20, 30, 45, 60, 90, 120].map((m) => <option key={m} value={m}>{m} min</option>)}
+                    {[15, 20, 30, 45, 60, 90, 120].map((m) => <option key={m} value={m}>{m} {tx('min')}</option>)}
                   </select>
                 </label>
               </div>
               <p className="mt-3 text-sm text-slate-600">
-                Turnos: <span className="font-medium">{slots.length ? slots.join(' · ') : 'ninguno'}</span>
+                {tx('Turnos:')}{' '}<span className="font-medium">{slots.length ? slots.join(' · ') : 'ninguno'}</span>
               </p>
             </div>
           )}
           <div className="card space-y-3">
             <div>
-              <span className="label">Clientes por turno</span>
-              <p className="text-sm text-slate-500">¿Cuántos clientes puedes atender a la misma hora? Por ejemplo, si trabajan 2 manicuras a la vez, pon 2.</p>
+              <span className="label">{tx('Clientes por turno')}</span>
+              <p className="text-sm text-slate-500">{tx('¿Cuántos clientes puedes atender a la misma hora? Por ejemplo, si trabajan 2 manicuras a la vez, pon 2.')}</p>
             </div>
             <CapacityStepper value={draft.capacity || 1} onChange={(n) => update({ capacity: n })} />
           </div>
           <p className="text-sm text-slate-500">
-            Si un servicio dura más que un turno, el sistema bloquea solo los turnos que se solapan. Podrás poner horarios distintos por día y días cerrados desde tu panel.
+            {tx('Si un servicio dura más que un turno, el sistema bloquea solo los turnos que se solapan. Podrás poner horarios distintos por día y días cerrados desde tu panel.')}
           </p>
         </section>
       )}
@@ -582,28 +583,28 @@ export default function Create() {
       {step === 5 && !session && (
         <section className="space-y-4">
           <div>
-            <h1 className="text-2xl font-bold">Crea tu cuenta</h1>
-            <p className="mt-1 text-slate-600">Con este correo y contraseña entrarás a tu panel.</p>
+            <h1 className="text-2xl font-bold">{tx('Crea tu cuenta')}</h1>
+            <p className="mt-1 text-slate-600">{tx('Con este correo y contraseña entrarás a tu panel.')}</p>
           </div>
-          <Field label="Correo electrónico">
+          <Field label={tx('Correo electrónico')}>
             <input className="input" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tucorreo@ejemplo.com" />
           </Field>
-          <Field label="Contraseña" hint="Mínimo 6 caracteres.">
+          <Field label={tx('Contraseña')} hint={tx('Mínimo 6 caracteres.')}>
             <input className="input" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </Field>
           {(draft.skipped || []).length > 0 && (
             <div className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900 ring-1 ring-amber-200">
-              <b>Dejaste para después:</b> {(draft.skipped || []).map((k) => SKIP_NAMES[k]).join(', ')}. Te lo recordaremos en tu panel.
+              <b>{tx('Dejaste para después:')}</b> {(draft.skipped || []).map((k) => SKIP_NAMES[k]).join(', ')}{tx('. Te lo recordaremos en tu panel.')}
             </div>
           )}
           <div className="card bg-slate-50">
             <p className="text-sm text-slate-700">
-              <b>{businessType(draft.type).emoji} {draft.name}</b> · {draft.services.filter((s) => s.name.trim()).length} servicios · desde {money(Math.min(...draft.services.filter((s) => s.name.trim()).map((s) => s.price)), main)}
+              <b>{businessType(draft.type).emoji} {draft.name}</b> · {draft.services.filter((s) => s.name.trim()).length} {tx('servicios · desde')}{' '}{money(Math.min(...draft.services.filter((s) => s.name.trim()).map((s) => s.price)), main)}
             </p>
-            <p className="mt-1 text-sm text-slate-600">{prices.trial_days ? `Tendrás ${prices.trial_days} días gratis con todo incluido.` : 'Empiezas con una prueba gratis con todo incluido.'} Después eliges: Solo ({IS_INT ? money(prices.int_basico ?? 10, 'USD') : money(prices.basico, 'CUP')}/mes) o Equipo, si trabajas con más personas ({IS_INT ? money(prices.int_ultra ?? 20, 'USD') : money(prices.ultra, 'CUP')}/mes).</p>
+            <p className="mt-1 text-sm text-slate-600">{prices.trial_days ? tx('Tendrás {trial_days} días gratis con todo incluido.', { trial_days: prices.trial_days }) : tx('Empiezas con una prueba gratis con todo incluido.')} {tx('Después eliges: Solo (')}{IS_INT ? money(prices.int_basico ?? 12.5, 'USD') : money(prices.basico, 'CUP')}{tx('/mes) o Equipo, si trabajas con más personas (')}{IS_INT ? money(prices.int_ultra ?? 23.5, 'USD') : money(prices.ultra, 'CUP')}{tx('/mes).')}</p>
           </div>
           <p className="text-sm text-slate-500">
-            ¿Ya tienes cuenta? <Link to="/entrar" className="font-semibold text-brand">Entra</Link> y tu app se creará con estos datos.
+            {tx('¿Ya tienes cuenta?')}{' '}<Link to="/entrar" className="font-semibold text-brand">{tx('Entra')}</Link> {tx('y tu app se creará con estos datos.')}
           </p>
         </section>
       )}
@@ -614,14 +615,14 @@ export default function Create() {
         <div className="sticky bottom-0 -mx-4 mt-6 border-t border-slate-200 bg-slate-50/95 px-4 py-3 backdrop-blur safe-bottom">
           <div className="flex gap-3">
             <Button variant="secondary" onClick={() => { setError(null); setStep((s) => s - 1) }} disabled={busy}>
-              Atrás
+              {tx('Atrás')}
             </Button>
             {step < 5 ? (
               <Button block onClick={next} loading={busy} disabled={step === 1 && slugState === 'checking'}>
-                {step === 4 && session ? 'Crear mi app' : 'Siguiente'}
+                {step === 4 && session ? tx('Crear mi app') : tx('Siguiente')}
               </Button>
             ) : (
-              <Button block onClick={signUpAndCreate} loading={busy}>Crear mi app</Button>
+              <Button block onClick={signUpAndCreate} loading={busy}>{tx('Crear mi app')}</Button>
             )}
           </div>
           {skipLabel && (
@@ -648,8 +649,9 @@ function Shell({ children }: { children: ReactNode }) {
         <div className="mx-auto flex max-w-xl items-center justify-between px-4 py-3">
           <Link to="/"><CitoraLogo className="text-lg" /></Link>
           <div className="flex items-center gap-2">
+            <LangSwitch />
             <ThemeToggle />
-            <Link to="/entrar" className="text-sm font-semibold text-slate-600">Entrar</Link>
+            <Link to="/entrar" className="text-sm font-semibold text-slate-600">{tx('Entrar')}</Link>
           </div>
         </div>
       </header>
@@ -684,9 +686,9 @@ function Welcome({ id, slug, draft, trialDays }: { id: string; slug: string; dra
         <span aria-hidden className="pointer-events-none absolute -left-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
         <span aria-hidden className="pointer-events-none absolute -right-12 top-16 h-32 w-32 rounded-full bg-white/10" />
         <p className="ui-sheet text-5xl" aria-hidden>🎉</p>
-        <p className="mt-4 text-sm font-semibold uppercase tracking-[0.16em] text-white/75">Tu app ya está lista</p>
-        <h1 className="mx-auto mt-1 max-w-md text-[28px] font-extrabold leading-tight tracking-tight">Te damos la bienvenida a {draft.name}</h1>
-        <p className="mt-2 text-white/85">{trialDays ? `Tus ${trialDays} días gratis con todo incluido ya empezaron.` : 'Tu prueba gratis con todo incluido ya empezó.'}</p>
+        <p className="mt-4 text-sm font-semibold uppercase tracking-[0.16em] text-white/75">{tx('Tu app ya está lista')}</p>
+        <h1 className="mx-auto mt-1 max-w-md text-[28px] font-extrabold leading-tight tracking-tight">{tx('Te damos la bienvenida a')}{' '}{draft.name}</h1>
+        <p className="mt-2 text-white/85">{trialDays ? tx('Tus {trialDays} días gratis con todo incluido ya empezaron.', { trialDays: trialDays }) : tx('Tu prueba gratis con todo incluido ya empezó.')}</p>
       </div>
 
       <div className="mx-auto -mt-16 max-w-md px-5">
@@ -716,7 +718,7 @@ function Welcome({ id, slug, draft, trialDays }: { id: string; slug: string; dra
             ))}
           </div>
           <div className="px-4 pb-4 pt-1">
-            <div className="rounded-btn bg-brand bg-btn-grad py-2.5 text-center text-sm font-bold text-white">Reservar cita</div>
+            <div className="rounded-btn bg-brand bg-btn-grad py-2.5 text-center text-sm font-bold text-white">{tx('Reservar cita')}</div>
           </div>
         </div>
       </div>
@@ -724,17 +726,17 @@ function Welcome({ id, slug, draft, trialDays }: { id: string; slug: string; dra
       <div className="mx-auto max-w-md space-y-2.5 px-5 pb-10 pt-6">
         {later.length > 0 && (
           <p className="mb-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">
-            Dejaste <b>{later.map((k) => (k === 'servicios' ? 'los servicios' : 'el horario')).join(' y ')}</b> para después. Revísalo antes de compartir tu enlace: te lo recordamos en tu panel.
+            {tx('Dejaste')}{' '}<b>{later.map((k) => (k === 'servicios' ? tx('los servicios') : tx('el horario'))).join(' y ')}</b> {tx('para después. Revísalo antes de compartir tu enlace: te lo recordamos en tu panel.')}
           </p>
         )}
         <Button block size="lg" onClick={() => navigate(`${panelPath(slug)}?tutorial=1`)}>
-          <Icon name="sparkles" /> Hacer el tutorial · 2 minutos
+          <Icon name="sparkles" /> {tx('Hacer el tutorial · 2 minutos')}
         </Button>
         <Button block size="lg" variant="secondary" onClick={seePage}>
-          <Icon name="eye" /> Ver mi página como un cliente
+          <Icon name="eye" /> {tx('Ver mi página como un cliente')}
         </Button>
         <Link to={panelPath(slug)} className="block w-full rounded-xl py-3 text-center text-[15px] font-semibold text-slate-500 transition hover:bg-slate-50">
-          Ahora no, ir a mi panel
+          {tx('Ahora no, ir a mi panel')}
         </Link>
       </div>
     </div>

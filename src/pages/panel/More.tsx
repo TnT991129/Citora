@@ -13,6 +13,8 @@ import { waLink } from '../../lib/whatsapp'
 import { usePanel } from './context'
 import { Icon } from './Panel'
 import { Chip, Row, RowList, SectionTitle } from './rows'
+import { t as tx } from '../../lib/i18n'
+import { IS_INT } from '../../lib/market'
 
 /** true / false si este móvil tiene los avisos; null mientras se mira (o si no se puede saber) */
 export function usePushOnThisDevice(): boolean | null {
@@ -53,22 +55,22 @@ export default function More() {
 
   const activate = (id: string, label: string) => {
     updateOnboarding({ tools: [...tools, id] })
-    flash(`${label} activado. Ya está en tus herramientas.`)
+    flash(tx('{label} activado. Ya está en tus herramientas.', { label: label }))
   }
 
   const planSub = business.comped
-    ? 'Cortesía · sin mensualidad'
+    ? tx('Cortesía · sin mensualidad')
     : status.status === 'prueba'
-    ? `Prueba gratis · ${daysLeft(status.trial_ends_at) <= 0 ? 'último día' : `quedan ${daysLeft(status.trial_ends_at)} días`}`
-    : status.paid_until ? `Pagado hasta dentro de ${Math.max(daysLeft(status.paid_until), 0)} días` : 'Hasta cuándo está pagado y cómo pagar'
+    ? tx('Prueba gratis · {v}', { v: daysLeft(status.trial_ends_at) <= 0 ? tx('último día') : tx('quedan {daysLeft} días', { daysLeft: daysLeft(status.trial_ends_at) }) })
+    : status.paid_until ? tx('Pagado hasta dentro de {max} días', { max: Math.max(daysLeft(status.paid_until), 0) }) : tx('Hasta cuándo está pagado y cómo pagar')
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-extrabold tracking-tight">Más</h1>
+      <h1 className="text-2xl font-extrabold tracking-tight">{tx('Más')}</h1>
 
       {on.length > 0 && (
         <div>
-          <SectionTitle>Tus herramientas</SectionTitle>
+          <SectionTitle>{tx('Tus herramientas')}</SectionTitle>
           <RowList>
             {on.map((t) => <Row key={t.id} icon={t.icon} title={t.label} sub={t.desc} to={link(t.id)} />)}
           </RowList>
@@ -77,7 +79,7 @@ export default function More() {
 
       {off.length > 0 && (
         <div>
-          <SectionTitle right={<span className="text-xs text-slate-400">Actívalas cuando las necesites</span>}>Más herramientas</SectionTitle>
+          <SectionTitle right={<span className="text-xs text-slate-400">{tx('Actívalas cuando las necesites')}</span>}>{tx('Más herramientas')}</SectionTitle>
           <RowList>
             {off.map((t) => (
               <div key={t.id} className="flex items-center gap-3 px-4 py-3.5">
@@ -86,7 +88,7 @@ export default function More() {
                   <span className="block font-semibold">{t.label}</span>
                   <span className="block text-sm text-slate-500">{t.desc}</span>
                 </span>
-                <Button size="sm" variant="secondary" onClick={() => activate(t.id, t.label)}>Activar</Button>
+                <Button size="sm" variant="secondary" onClick={() => activate(t.id, t.label)}>{tx('Activar')}</Button>
               </div>
             ))}
           </RowList>
@@ -94,51 +96,53 @@ export default function More() {
       )}
 
       <div>
-        <SectionTitle>Tu cuenta</SectionTitle>
+        <SectionTitle>{tx('Tu cuenta')}</SectionTitle>
         <RowList>
-          <Row icon="card" title="Mensualidad" sub={planSub} to={link('plan')} />
+          <Row icon="card" title={tx('Mensualidad')} sub={planSub} to={link('plan')} />
           <Row
             icon="gear"
-            title="Ajustes y avisos"
-            sub={push === true ? 'Avisos activados en este móvil' : push === false ? 'Avisos sin activar en este móvil' : 'Avisos, datos del negocio y tu cuenta'}
+            title={tx('Ajustes y avisos')}
+            sub={push === true ? tx('Avisos activados en este móvil') : push === false ? tx('Avisos sin activar en este móvil') : tx('Avisos, datos del negocio y tu cuenta')}
             to={link('ajustes')}
             tour="avisos"
-            right={push === false ? <Chip>Actívalos</Chip> : undefined}
+            right={push === false ? <Chip>{tx('Actívalos')}</Chip> : undefined}
           />
         </RowList>
       </div>
 
       <div>
-        <SectionTitle>Ayuda</SectionTitle>
+        <SectionTitle>{tx('Ayuda')}</SectionTitle>
         <RowList>
-          <Row icon="sparkles" title="Tutorial paso a paso" sub="Te enseñamos a usar tu panel en 2 minutos" onClick={tutorial.active ? undefined : showTour} />
+          <Row icon="sparkles" title={tx('Tutorial paso a paso')} sub={tx('Te enseñamos a usar tu panel en 2 minutos')} onClick={tutorial.active ? undefined : showTour} />
           {support && (
             <Row
               icon="whatsapp"
-              title="Hablar con una persona"
-              sub="Te ayudamos por WhatsApp"
+              title={tx('Hablar con una persona')}
+              sub={tx('Te ayudamos por WhatsApp')}
               tint="bg-[#25D366]/15 text-[#128C7E]"
-              href={waLink(support, `Hola, soy de ${business.name} (código ${business.code}) y necesito ayuda con Citora.`)}
+              href={waLink(support, tx('Hola, soy de {name} (código {code}) y necesito ayuda con Citora.', { name: business.name, code: business.code }))}
             />
           )}
           {community && (
             <Row
               icon="whatsapp"
-              title="Grupo de Citora en WhatsApp"
-              sub="Novedades, consejos y dudas con otros negocios"
+              title={tx('Grupo de Citora en WhatsApp')}
+              sub={tx('Novedades, consejos y dudas con otros negocios')}
               tint="bg-[#25D366]/15 text-[#128C7E]"
               href={community}
             />
           )}
-          <Row icon="globe" title="Ver mi página de reservas" sub="Así la ven tus clientes" href={publicUrl(business.slug)} />
+          <Row icon="globe" title={tx('Ver mi página de reservas')} sub={tx('Así la ven tus clientes')} href={publicUrl(business.slug)} />
         </RowList>
       </div>
 
-      <InstallButton appName="tu panel" label="Instalar el panel en este móvil" block />
-      <button onClick={showNews} className="mx-auto flex items-center gap-1.5 text-sm font-semibold text-brand">
-        <Icon name="sparkles" className="h-4 w-4" /> Novedades de la versión {APP_VERSION}
-      </button>
-      <p className="-mt-3 text-center text-xs text-slate-400">Citora v{APP_VERSION}</p>
+      <InstallButton appName={tx('tu panel')} label={tx('Instalar el panel en este móvil')} block />
+      {!IS_INT && (
+        <button onClick={showNews} className="mx-auto flex items-center gap-1.5 text-sm font-semibold text-brand">
+          <Icon name="sparkles" className="h-4 w-4" /> {tx('Novedades de la versión')}{' '}{APP_VERSION}
+        </button>
+      )}
+      <p className="-mt-3 text-center text-xs text-slate-400">{tx('Citora v')}{APP_VERSION}</p>
     </div>
   )
 }

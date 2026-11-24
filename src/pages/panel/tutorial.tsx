@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom'
 import { zonedToIso } from '../../lib/format'
 import type { Slot } from '../../lib/dayPlan'
 import type { Appointment, Service } from '../../lib/types'
+import { t as tx } from '../../lib/i18n'
 
 export interface TourStep {
   kind?: 'intro' | 'final'
@@ -23,50 +24,50 @@ export interface TourStep {
 
 /** Los pasos. En el móvil se habla del botón "+" y de "abajo"; en el ordenador, de "Nueva cita" y "a la izquierda". */
 export function tourSteps(mobile: boolean, demoName: string): TourStep[] {
-  const plus = mobile ? <>el botón <b>+</b></> : <><b>Nueva cita</b></>
-  const where = mobile ? 'abajo' : 'a la izquierda'
+  const plus = mobile ? <>{tx('el botón')}{' '}<b>+</b></> : <><b>{tx('Nueva cita')}</b></>
+  const where = mobile ? tx('abajo') : tx('a la izquierda')
   return [
     { kind: 'intro' },
     {
-      route: '', target: 'resumen', emoji: '🏠', title: 'Esta es tu pantalla de Hoy',
-      text: <>Cada vez que abras Citora empiezas aquí. Arriba ves <b>cuántas citas tienes hoy</b> y <b>cuánto dinero</b> vas a cobrar si vienen todos.</>,
+      route: '', target: 'resumen', emoji: '🏠', title: tx('Esta es tu pantalla de Hoy'),
+      text: <>{tx('Cada vez que abras Citora empiezas aquí. Arriba ves')}{' '}<b>{tx('cuántas citas tienes hoy')}</b> {tx('y')}{' '}<b>{tx('cuánto dinero')}</b> {tx('vas a cobrar si vienen todos.')}</>,
     },
     {
-      route: '', target: 'dia', emoji: '🕘', title: 'Tu día, hora por hora',
-      text: <>Cada tarjeta de color es <b>un cliente</b>, del tamaño de lo que dura su cita. Los recuadros con <b>Libre</b> son huecos: nadie ha reservado a esa hora.</>,
+      route: '', target: 'dia', emoji: '🕘', title: tx('Tu día, hora por hora'),
+      text: <>{tx('Cada tarjeta de color es')}{' '}<b>{tx('un cliente')}</b>{tx(', del tamaño de lo que dura su cita. Los recuadros con')}{' '}<b>{tx('Libre')}</b> {tx('son huecos: nadie ha reservado a esa hora.')}</>,
     },
     {
-      route: '', target: 'confirm', tap: true, emoji: '✅', title: 'Confirma las citas nuevas',
-      text: <>Cuando alguien reserva desde tu enlace, la cita llega <b>"Por confirmar"</b>, en naranja. Confirmar es decirle al cliente: <i>"Sí, te espero"</i>.</>,
-      doit: <>Toca <b>Confirmar</b> en la cita de {demoName}</>,
+      route: '', target: 'confirm', tap: true, emoji: '✅', title: tx('Confirma las citas nuevas'),
+      text: <>{tx('Cuando alguien reserva desde tu enlace, la cita llega')}{' '}<b>{tx('"Por confirmar"')}</b>{tx(', en naranja. Confirmar es decirle al cliente:')}{' '}<i>{tx('"Sí, te espero"')}</i>.</>,
+      doit: <>{tx('Toca')}{' '}<b>{tx('Confirmar')}</b> {tx('en la cita de')}{' '}{demoName}</>,
     },
     {
-      route: '', target: 'fab', tap: true, emoji: '📞', title: '¿Te pidieron cita por WhatsApp o por teléfono?',
-      text: <>Apúntala tú. Así ese hueco deja de estar libre y <b>nadie más puede reservarlo</b> a la misma hora.</>,
-      doit: <>Toca {plus}</>,
+      route: '', target: 'fab', tap: true, emoji: '📞', title: tx('¿Te pidieron cita por WhatsApp o por teléfono?'),
+      text: <>{tx('Apúntala tú. Así ese hueco deja de estar libre y')}{' '}<b>{tx('nadie más puede reservarlo')}</b> {tx('a la misma hora.')}</>,
+      doit: <>{tx('Toca')}{' '}{plus}</>,
     },
     {
-      route: '', sheet: 'nueva', target: 'guardar', emoji: '✍️', title: 'Rellenas tres cosas y guardas',
-      text: <><b>Quién</b> viene, <b>qué</b> se va a hacer y <b>qué día y a qué hora</b>. Al guardar, la cita aparece en tu día como cualquier otra.</>,
+      route: '', sheet: 'nueva', target: 'guardar', emoji: '✍️', title: tx('Rellenas tres cosas y guardas'),
+      text: <><b>{tx('Quién')}</b> {tx('viene,')}{' '}<b>{tx('qué')}</b> {tx('se va a hacer y')}{' '}<b>{tx('qué día y a qué hora')}</b>{tx('. Al guardar, la cita aparece en tu día como cualquier otra.')}</>,
     },
     {
-      route: '', target: 'nav-negocio', tap: true, emoji: '🔗', title: 'Ahora, lo más importante',
-      text: <>Para que te lleguen reservas, tus clientes tienen que <b>conocer tu enlace</b>. Lo encuentras en "Mi negocio".</>,
-      doit: <>Toca <b>Mi negocio</b>, {where}</>,
+      route: '', target: 'nav-negocio', tap: true, emoji: '🔗', title: tx('Ahora, lo más importante'),
+      text: <>{tx('Para que te lleguen reservas, tus clientes tienen que')}{' '}<b>{tx('conocer tu enlace')}</b>{tx('. Lo encuentras en "Mi negocio".')}</>,
+      doit: <>{tx('Toca')}{' '}<b>{tx('Mi negocio')}</b>, {where}</>,
     },
     {
-      route: 'negocio', target: 'compartir', tap: true, emoji: '📣', title: 'Este es tu enlace',
-      text: <>Es como tu tienda en internet: quien lo abre ve tus servicios y <b>reserva solo</b>, sin tener que escribirte. Ponlo en tu estado de WhatsApp y en tu Instagram.</>,
-      doit: <>Toca el botón verde <b>Compartir</b></>,
+      route: 'negocio', target: 'compartir', tap: true, emoji: '📣', title: tx('Este es tu enlace'),
+      text: <>{tx('Es como tu tienda en internet: quien lo abre ve tus servicios y')}{' '}<b>{tx('reserva solo')}</b>{tx(', sin tener que escribirte. Ponlo en tu estado de WhatsApp y en tu Instagram.')}</>,
+      doit: <>{tx('Toca el botón verde')}{' '}<b>{tx('Compartir')}</b></>,
     },
     {
-      route: 'negocio', target: 'nav-mas', tap: true, emoji: '🔔', title: 'Un último paso: los avisos',
-      text: <>Para que tu móvil <b>suene cuando alguien reserve</b>, hay que activar los avisos. Están en "Más".</>,
-      doit: <>Toca <b>Más</b>, {where}</>,
+      route: 'negocio', target: 'nav-mas', tap: true, emoji: '🔔', title: tx('Un último paso: los avisos'),
+      text: <>{tx('Para que tu móvil')}{' '}<b>{tx('suene cuando alguien reserve')}</b>{tx(', hay que activar los avisos. Están en "Más".')}</>,
+      doit: <>{tx('Toca')}{' '}<b>{tx('Más')}</b>, {where}</>,
     },
     {
-      route: 'mas', target: 'avisos', emoji: '🔔', title: 'Actívalos en "Ajustes y avisos"',
-      text: <>Hazlo en <b>cada móvil</b> que uses. Sin los avisos, las reservas te llegan igual, pero <b>no te enteras</b> hasta que abres Citora.</>,
+      route: 'mas', target: 'avisos', emoji: '🔔', title: tx('Actívalos en "Ajustes y avisos"'),
+      text: <>{tx('Hazlo en')}{' '}<b>{tx('cada móvil')}</b> {tx('que uses. Sin los avisos, las reservas te llegan igual, pero')}{' '}<b>{tx('no te enteras')}</b> {tx('hasta que abres Citora.')}</>,
     },
     { kind: 'final' },
   ]
@@ -214,11 +215,11 @@ export function GuidedTour({ steps, index, onNext, onPrev, onExit, onFinish }: {
       >
         {arrow && <span className="absolute h-3.5 w-3.5 rotate-45 bg-white" style={{ left: ax - 7, [arrow]: -7 }} />}
         <div className="relative flex items-center gap-3">
-          <span className="shrink-0 text-xs font-bold text-slate-400">Paso {index} de {total}</span>
+          <span className="shrink-0 text-xs font-bold text-slate-400">{tx('Paso')}{' '}{index} {tx('de')}{' '}{total}</span>
           <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
             <span className="block h-full rounded-full bg-brand transition-all duration-500" style={{ width: `${(index / total) * 100}%` }} />
           </span>
-          <button onClick={onExit} className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-slate-400 hover:bg-slate-100 hover:text-slate-600">Salir</button>
+          <button onClick={onExit} className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-slate-400 hover:bg-slate-100 hover:text-slate-600">{tx('Salir')}</button>
         </div>
         <div className="relative mt-3 flex gap-3">
           <span className="text-[28px] leading-none" aria-hidden>{step.emoji}</span>
@@ -235,12 +236,12 @@ export function GuidedTour({ steps, index, onNext, onPrev, onExit, onFinish }: {
         )}
         <div className="relative mt-3 flex min-h-[40px] items-center justify-between gap-3">
           {index > 1 ? (
-            <button onClick={onPrev} className="rounded-lg px-2 py-1.5 text-sm font-semibold text-slate-500 hover:bg-slate-100">← Atrás</button>
+            <button onClick={onPrev} className="rounded-lg px-2 py-1.5 text-sm font-semibold text-slate-500 hover:bg-slate-100">{tx('← Atrás')}</button>
           ) : <span />}
           {step.tap ? (
-            <button onClick={doIt} className="rounded-lg px-2 py-1.5 text-sm font-semibold text-slate-400 underline-offset-2 hover:underline">Hazlo por mí</button>
+            <button onClick={doIt} className="rounded-lg px-2 py-1.5 text-sm font-semibold text-slate-400 underline-offset-2 hover:underline">{tx('Hazlo por mí')}</button>
           ) : (
-            <button onClick={onNext} className="rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-white shadow-sm shadow-brand/30">Siguiente →</button>
+            <button onClick={onNext} className="rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-white shadow-sm shadow-brand/30">{tx('Siguiente →')}</button>
           )}
         </div>
       </div>
@@ -271,22 +272,22 @@ function Check({ children }: { children: ReactNode }) {
 
 function Intro({ onStart, onExit }: { onStart: () => void; onExit: () => void }) {
   return (
-    <div className="ui-sheet w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl" role="dialog" aria-label="Tutorial">
+    <div className="ui-sheet w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl" role="dialog" aria-label={tx('Tutorial')}>
       <p className="text-4xl" aria-hidden>👋</p>
-      <h2 className="mt-3 text-[22px] font-extrabold leading-tight tracking-tight">Te enseñamos a usar tu panel</h2>
-      <p className="mt-1.5 text-[15px] leading-relaxed text-slate-600">Te llevamos de la mano, pantalla por pantalla. Vas a aprender a:</p>
+      <h2 className="mt-3 text-[22px] font-extrabold leading-tight tracking-tight">{tx('Te enseñamos a usar tu panel')}</h2>
+      <p className="mt-1.5 text-[15px] leading-relaxed text-slate-600">{tx('Te llevamos de la mano, pantalla por pantalla. Vas a aprender a:')}</p>
       <ol className="mt-4 space-y-2.5">
-        <Num n={1}>Ver tus citas del día</Num>
-        <Num n={2}>Confirmar una cita nueva</Num>
-        <Num n={3}>Apuntar una cita que te pidieron por WhatsApp</Num>
-        <Num n={4}>Compartir tu enlace para que te reserven</Num>
+        <Num n={1}>{tx('Ver tus citas del día')}</Num>
+        <Num n={2}>{tx('Confirmar una cita nueva')}</Num>
+        <Num n={3}>{tx('Apuntar una cita que te pidieron por WhatsApp')}</Num>
+        <Num n={4}>{tx('Compartir tu enlace para que te reserven')}</Num>
       </ol>
       <p className="mt-5 rounded-xl bg-slate-50 p-3 text-sm leading-relaxed text-slate-500">
-        Usamos <b>citas de ejemplo</b>: no se envía nada a nadie. Son unos 2 minutos y puedes salir cuando quieras.
+        {tx('Usamos')}{' '}<b>{tx('citas de ejemplo')}</b>{tx(': no se envía nada a nadie. Son unos 2 minutos y puedes salir cuando quieras.')}
       </p>
       <div className="mt-5 space-y-1.5">
-        <button onClick={onStart} className="w-full rounded-btn bg-brand bg-btn-grad px-5 py-3.5 font-semibold text-white shadow-md shadow-brand/25">Empezar</button>
-        <button onClick={onExit} className="w-full rounded-xl py-2.5 text-[15px] font-semibold text-slate-500 hover:bg-slate-50">Ahora no</button>
+        <button onClick={onStart} className="w-full rounded-btn bg-brand bg-btn-grad px-5 py-3.5 font-semibold text-white shadow-md shadow-brand/25">{tx('Empezar')}</button>
+        <button onClick={onExit} className="w-full rounded-xl py-2.5 text-[15px] font-semibold text-slate-500 hover:bg-slate-50">{tx('Ahora no')}</button>
       </div>
     </div>
   )
@@ -295,20 +296,20 @@ function Intro({ onStart, onExit }: { onStart: () => void; onExit: () => void })
 function Final({ onFinish }: { onFinish: () => void }) {
   const mobile = isMobileScreen()
   return (
-    <div className="ui-sheet w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl" role="dialog" aria-label="Tutorial terminado">
+    <div className="ui-sheet w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl" role="dialog" aria-label={tx('Tutorial terminado')}>
       <p className="text-4xl" aria-hidden>🎉</p>
-      <h2 className="mt-3 text-[22px] font-extrabold leading-tight tracking-tight">¡Ya sabes lo básico!</h2>
-      <p className="mt-1.5 text-[15px] text-slate-600">Esto es lo que aprendiste:</p>
+      <h2 className="mt-3 text-[22px] font-extrabold leading-tight tracking-tight">{tx('¡Ya sabes lo básico!')}</h2>
+      <p className="mt-1.5 text-[15px] text-slate-600">{tx('Esto es lo que aprendiste:')}</p>
       <ul className="mt-4 space-y-3">
-        <Check>En <b>Hoy</b> ves tus citas del día.</Check>
-        <Check><b>Confirmar</b> es decirle al cliente que lo esperas.</Check>
-        <Check>Con {mobile ? <>el botón <b>+</b></> : <b>Nueva cita</b>} apuntas las citas que te piden por WhatsApp.</Check>
-        <Check>Tu <b>enlace</b> está en <b>Mi negocio</b>: compártelo para recibir reservas.</Check>
+        <Check>{tx('En')}{' '}<b>{tx('Hoy')}</b> {tx('ves tus citas del día.')}</Check>
+        <Check><b>{tx('Confirmar')}</b> {tx('es decirle al cliente que lo esperas.')}</Check>
+        <Check>{tx('Con')}{' '}{mobile ? <>{tx('el botón')}{' '}<b>+</b></> : <b>{tx('Nueva cita')}</b>} {tx('apuntas las citas que te piden por WhatsApp.')}</Check>
+        <Check>{tx('Tu')}{' '}<b>{tx('enlace')}</b> {tx('está en')}{' '}<b>{tx('Mi negocio')}</b>{tx(': compártelo para recibir reservas.')}</Check>
       </ul>
       <p className="mt-5 rounded-xl bg-slate-50 p-3 text-sm leading-relaxed text-slate-500">
-        ¿Se te olvidó algo? Repite el tutorial cuando quieras en <b>Más → Tutorial paso a paso</b>.
+        {tx('¿Se te olvidó algo? Repite el tutorial cuando quieras en')}{' '}<b>{tx('Más → Tutorial paso a paso')}</b>.
       </p>
-      <button onClick={onFinish} className="mt-5 w-full rounded-btn bg-brand bg-btn-grad px-5 py-3.5 font-semibold text-white shadow-md shadow-brand/25">Empezar a usar Citora</button>
+      <button onClick={onFinish} className="mt-5 w-full rounded-btn bg-brand bg-btn-grad px-5 py-3.5 font-semibold text-white shadow-md shadow-brand/25">{tx('Empezar a usar Citora')}</button>
     </div>
   )
 }

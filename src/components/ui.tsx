@@ -180,13 +180,13 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
   )
 }
 
-export function CopyButton({ text, label = 'Copiar' }: { text: string; label?: string }) {
+export function CopyButton({ text, label = t('Copiar') }: { text: string; label?: string }) {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(text)
-      flash('Copiado')
+      flash(t('Copiado'))
     } catch {
-      flash('No se pudo copiar')
+      flash(t('No se pudo copiar'))
     }
   }
   return (

@@ -9,12 +9,13 @@ import { AppointmentRow } from './AppointmentList'
 import { AppointmentModal } from './AppointmentModal'
 import { usePanel } from './context'
 import { NewAppointment } from './NewAppointment'
+import { t, tn } from '../../lib/i18n'
 
 type View = 'dia' | 'semana' | 'mes'
 const VIEWS: { key: View; label: string }[] = [
-  { key: 'dia', label: 'Día' },
-  { key: 'semana', label: 'Semana' },
-  { key: 'mes', label: 'Mes' },
+  { key: 'dia', label: t('Día') },
+  { key: 'semana', label: t('Semana') },
+  { key: 'mes', label: t('Mes') },
 ]
 
 /** Lunes de la semana de un día */
@@ -88,12 +89,12 @@ export default function Agenda() {
     return (
       <section key={d}>
         <div className="mb-2 flex items-baseline justify-between">
-          <h2 className={`font-bold ${d === today ? 'text-brand' : ''}`}>{compact ? shortDate(d) : dayTitle(d)}{d === today && compact ? ' · hoy' : ''}</h2>
-          {items.length > 0 && <span className="text-xs text-slate-500">{items.filter(isActive).length} citas · {money(total, business.currency)}</span>}
+          <h2 className={`font-bold ${d === today ? 'text-brand' : ''}`}>{compact ? shortDate(d) : dayTitle(d)}{d === today && compact ? t(' · hoy') : ''}</h2>
+          {items.length > 0 && <span className="text-xs text-slate-500">{items.filter(isActive).length} {t('citas ·')}{' '}{money(total, business.currency)}</span>}
         </div>
         <div className="space-y-2">
           {items.length === 0 ? (
-            compact ? <p className="rounded-xl bg-white/60 px-3 py-2 text-sm text-slate-400">Sin citas</p> : <Empty title="Sin citas este día" />
+            compact ? <p className="rounded-xl bg-white/60 px-3 py-2 text-sm text-slate-400">{t('Sin citas')}</p> : <Empty title={t('Sin citas este día')} />
           ) : (
             items.map((a) => <AppointmentRow key={a.id} a={a} onClick={() => setOpen(a)} />)
           )}
@@ -105,8 +106,8 @@ export default function Agenda() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-extrabold">Agenda</h1>
-        <Button size="sm" onClick={() => setAdding(true)}>+ Cita</Button>
+        <h1 className="text-2xl font-extrabold">{t('Agenda')}</h1>
+        <Button size="sm" onClick={() => setAdding(true)}>{t('+ Cita')}</Button>
       </div>
 
       <div className="grid grid-cols-3 rounded-xl bg-slate-200 p-1">
@@ -122,27 +123,27 @@ export default function Agenda() {
       </div>
 
       <div className="flex items-center gap-2">
-        <button onClick={() => move(-1)} className="rounded-lg p-2 hover:bg-slate-200" aria-label="Anterior">
+        <button onClick={() => move(-1)} className="rounded-lg p-2 hover:bg-slate-200" aria-label={t('Anterior')}>
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 6l-6 6 6 6" /></svg>
         </button>
         <div className="min-w-0 flex-1 text-center">
           <p className="truncate text-lg font-bold">{title}</p>
           {list && (
             <p className="text-xs text-slate-500">
-              {active.length} {active.length === 1 ? 'cita' : 'citas'} · {money(periodTotal, business.currency)}
+              {active.length} {active.length === 1 ? t('cita') : t('citas')} · {money(periodTotal, business.currency)}
             </p>
           )}
         </div>
-        <button onClick={() => move(1)} className="rounded-lg p-2 hover:bg-slate-200" aria-label="Siguiente">
+        <button onClick={() => move(1)} className="rounded-lg p-2 hover:bg-slate-200" aria-label={t('Siguiente')}>
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 6l6 6-6 6" /></svg>
         </button>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <input type="date" value={day} onChange={(e) => e.target.value && setDay(e.target.value)} className="input w-auto py-1.5" aria-label="Ir a una fecha" />
-        {!isCurrent && <Button size="sm" variant="secondary" onClick={() => setDay(today)}>Hoy</Button>}
+        <input type="date" value={day} onChange={(e) => e.target.value && setDay(e.target.value)} className="input w-auto py-1.5" aria-label={t('Ir a una fecha')} />
+        {!isCurrent && <Button size="sm" variant="secondary" onClick={() => setDay(today)}>{t('Hoy')}</Button>}
         <label className="ml-auto flex items-center gap-2 text-sm text-slate-600">
-          <input type="checkbox" checked={showCancelled} onChange={(e) => setShowCancelled(e.target.checked)} /> Ver canceladas
+          <input type="checkbox" checked={showCancelled} onChange={(e) => setShowCancelled(e.target.checked)} /> {t('Ver canceladas')}
         </label>
       </div>
 
@@ -165,7 +166,7 @@ export default function Agenda() {
                 >
                   <span className={`text-[11px] font-semibold ${sel ? 'text-white/80' : 'text-slate-400'}`}>{WEEKDAYS_SHORT[weekdayOf(d)]}</span>
                   <span className="text-lg font-extrabold leading-none">{Number(d.slice(8))}</span>
-                  <span className="flex h-1.5 gap-0.5" aria-label={`${n} ${n === 1 ? 'cita' : 'citas'}`}>
+                  <span className="flex h-1.5 gap-0.5" aria-label={tn(n, '{n} cita', '{n} citas')}>
                     {Array.from({ length: Math.min(n, 4) }, (_, k) => <span key={k} className={`h-1.5 w-1.5 rounded-full ${sel ? 'bg-white/80' : 'bg-brand/50'}`} />)}
                   </span>
                 </button>
@@ -190,7 +191,7 @@ export default function Agenda() {
                 >
                   <span className="block text-[11px] font-medium text-slate-500">{WEEKDAYS_SHORT[weekdayOf(d)]}</span>
                   <span className={`block text-lg font-extrabold ${d === today ? 'text-brand' : ''}`}>{Number(d.slice(8))}</span>
-                  <span className={`block text-[11px] font-semibold ${n ? 'text-brand' : 'text-slate-300'}`}>{n ? `${n} ${n === 1 ? 'cita' : 'citas'}` : '—'}</span>
+                  <span className={`block text-[11px] font-semibold ${n ? 'text-brand' : 'text-slate-300'}`}>{n ? tn(n, '{n} cita', '{n} citas') : '—'}</span>
                 </button>
               )
             })}
@@ -251,7 +252,7 @@ function MonthGrid({ monthStart, today, selected, count, onPick }: {
               } ${isToday && !isSel ? 'ring-2 ring-brand' : ''} ${d < today && !isSel ? 'opacity-60' : ''}`}
               // Cuantas más citas, más intenso el fondo
               style={!isSel && n ? { backgroundColor: `rgb(var(--brand-rgb) / ${0.1 + 0.3 * (n / max)})` } : undefined}
-              aria-label={`${d}: ${n} citas`}
+              aria-label={t('{d}: {n} citas', { d: d, n: n })}
             >
               <span className={`font-bold ${isToday && !isSel ? 'text-brand' : ''}`}>{Number(d.slice(8))}</span>
               <span className={`text-[10px] font-semibold leading-none ${isSel ? 'text-white/90' : 'text-slate-600'} ${n ? '' : 'invisible'}`}>{n || 0}</span>
@@ -259,7 +260,7 @@ function MonthGrid({ monthStart, today, selected, count, onPick }: {
           )
         })}
       </div>
-      <p className="mt-3 text-center text-xs text-slate-500">El número bajo cada día son sus citas. Toca un día para verlas.</p>
+      <p className="mt-3 text-center text-xs text-slate-500">{t('El número bajo cada día son sus citas. Toca un día para verlas.')}</p>
     </div>
   )
 }

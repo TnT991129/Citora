@@ -20,6 +20,7 @@ import { waLink } from '../../lib/whatsapp'
 import { hasMainService, ServicePicker } from './ServicePicker'
 import { applyOptions, missingOption, optionsFor, type OptionChoice } from '../../lib/serviceOptions'
 import { Centered, PoweredBy, PublicHeader, Stars } from './shared'
+import { t } from '../../lib/i18n'
 
 export default function BookingPage() {
   const { slug, token } = useParams()
@@ -45,7 +46,7 @@ export default function BookingPage() {
       setBrandColor(b.business.color_primary)
       applyAppearance(b.business.appearance)
       setAppManifest({ name: b.business.name, path: clientPath(b.business.slug).slice(1), color: b.business.color_primary, logo: b.business.logo_url })
-      document.title = `Tu cita · ${b.business.name}`
+      document.title = t('Tu cita · {name}', { name: b.business.name })
       rememberBooking({ token: b.token, slug: b.business.slug, starts_at: b.starts_at })
     }
   }, [token])
@@ -59,9 +60,9 @@ export default function BookingPage() {
   if (booking === null || booking.business.slug !== slug) {
     return (
       <Centered>
-        <h1 className="text-xl font-bold">No encontramos esta cita</h1>
-        <p className="text-slate-600">Revisa el enlace.</p>
-        <Link to={clientPath(slug || '')} className="font-semibold text-brand">Ir al negocio</Link>
+        <h1 className="text-xl font-bold">{t('No encontramos esta cita')}</h1>
+        <p className="text-slate-600">{t('Revisa el enlace.')}</p>
+        <Link to={clientPath(slug || '')} className="font-semibold text-brand">{t('Ir al negocio')}</Link>
       </Centered>
     )
   }
@@ -75,12 +76,12 @@ export default function BookingPage() {
   const link = bookingUrl(b.slug, booking.token)
 
   const waText = [
-    `Hola, soy ${booking.customer_name}. Reservé una cita en ${b.name}:`,
-    `📅 ${longDate(key)} a las ${time}`,
+    t('Hola, soy {customer_name}. Reservé una cita en {name}:', { customer_name: booking.customer_name, name: b.name }),
+    t('📅 {longDate} a las {time}', { longDate: longDate(key), time: time }),
     `✂️ ${booking.services.map((s) => s.name).join(', ')}`,
-    `💵 Total: ${price(booking.total, b.currency, booking.usd_rate)}`,
+    t('💵 Total: {price}', { price: price(booking.total, b.currency, booking.usd_rate) }),
     booking.customer_note ? `📝 ${booking.customer_note}` : '',
-    `Mi cita: ${link}`,
+    t('Mi cita: {link}', { link: link }),
   ].filter(Boolean).join('\n')
 
   const addToCalendar = () => {
@@ -112,21 +113,21 @@ export default function BookingPage() {
       <main className="mx-auto max-w-xl space-y-4 px-4 py-5">
         {isNew && active && (
           <div className="rounded-2xl bg-emerald-50 p-4 text-emerald-900 ring-1 ring-emerald-200">
-            <p className="text-lg font-bold">¡Reserva hecha! 🎉</p>
+            <p className="text-lg font-bold">{t('¡Reserva hecha! 🎉')}</p>
             {booking.business.appearance?.thanks_message && (
               <p className="mt-1 whitespace-pre-line">{booking.business.appearance.thanks_message}</p>
             )}
-            <p className="mt-1 text-sm">Guarda este enlace: desde aquí puedes ver, cambiar o cancelar tu cita. También queda guardada en este móvil.</p>
+            <p className="mt-1 text-sm">{t('Guarda este enlace: desde aquí puedes ver, cambiar o cancelar tu cita. También queda guardada en este móvil.')}</p>
           </div>
         )}
 
         <section className="card">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm text-slate-500">Tu cita</p>
+              <p className="text-sm text-slate-500">{t('Tu cita')}</p>
               <p className="mt-1 truncate text-2xl font-extrabold">{dayTitle(key)}</p>
               <p className="text-xl font-bold text-brand">{time}</p>
-              {booking.staff_name && <p className="truncate text-sm text-slate-600">Con <b>{booking.staff_name}</b></p>}
+              {booking.staff_name && <p className="truncate text-sm text-slate-600">{t('Con')}{' '}<b>{booking.staff_name}</b></p>}
             </div>
             <StatusBadge status={booking.status} />
           </div>
@@ -139,20 +140,20 @@ export default function BookingPage() {
             ))}
             {Number(booking.discount || 0) > 0 && (
               <div className="flex justify-between gap-3 py-1 font-medium text-emerald-700">
-                <span className="min-w-0 break-words">Descuento{booking.discount_code ? ` (${booking.discount_code})` : ''}</span>
+                <span className="min-w-0 break-words">{t('Descuento')}{booking.discount_code ? ` (${booking.discount_code})` : ''}</span>
                 <span className="shrink-0 text-right">-{money(Number(booking.discount), b.currency)}</span>
               </div>
             )}
             <div className="mt-2 flex justify-between gap-3 border-t border-slate-100 pt-2 font-bold">
-              <span className="shrink-0">Total</span>
+              <span className="shrink-0">{t('Total')}</span>
               <span className="min-w-0 text-right">{price(booking.total, b.currency, booking.usd_rate)}</span>
             </div>
-            <p className="mt-1 text-xs text-slate-500">Duración aproximada: {duration(minutes)}</p>
+            <p className="mt-1 text-xs text-slate-500">{t('Duración aproximada:')}{' '}{duration(minutes)}</p>
           </div>
           {b.address && <p className="mt-3 text-sm text-slate-600">📍 {b.address}</p>}
           {booking.status === 'pendiente' && (
             <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              El negocio confirmará tu cita. Si quieres, avísale por WhatsApp ahora.
+              {t('El negocio confirmará tu cita. Si quieres, avísale por WhatsApp ahora.')}
             </p>
           )}
         </section>
@@ -160,9 +161,9 @@ export default function BookingPage() {
         {booking.customer && booking.customer.visits > 0 && (
           <p className="rounded-2xl bg-white px-4 py-3 text-center text-sm text-slate-600 ring-1 ring-slate-200">
             {booking.customer.visits === 1
-              ? <>Ya has venido <b>1 vez</b> a {b.name}.</>
-              : <>Llevas <b>{booking.customer.visits} visitas</b> a {b.name}. ¡Gracias por volver!</>}
-            {' '}<Link to={clientPath(b.slug, 'mis-citas')} className="font-semibold text-brand">Mis citas</Link>
+              ? <>{t('Ya has venido')}{' '}<b>{t('1 vez')}</b> {t('a')}{' '}{b.name}.</>
+              : <>{t('Llevas')}{' '}<b>{booking.customer.visits} {t('visitas')}</b> {t('a')}{' '}{b.name}{t('. ¡Gracias por volver!')}</>}
+            {' '}<Link to={clientPath(b.slug, 'mis-citas')} className="font-semibold text-brand">{t('Mis citas')}</Link>
           </p>
         )}
 
@@ -180,26 +181,26 @@ export default function BookingPage() {
 
         {active && b.whatsapp && (
           <LinkButton href={waLink(b.whatsapp, waText)} variant="whatsapp" size="lg" block newTab>
-            <WhatsAppIcon /> Avisar al negocio por WhatsApp
+            <WhatsAppIcon /> {t('Avisar al negocio por WhatsApp')}
           </LinkButton>
         )}
-        {active && <Button variant="secondary" block onClick={addToCalendar}>📅 Agregar al calendario</Button>}
+        {active && <Button variant="secondary" block onClick={addToCalendar}>{t('📅 Agregar al calendario')}</Button>}
 
         {active && (booking.can_cancel || booking.can_edit) && (
           <div className={`grid gap-3 ${booking.can_edit && booking.can_cancel ? 'grid-cols-2' : 'grid-cols-1'}`}>
-            {booking.can_edit && <Button variant="secondary" onClick={() => setEditing(true)}>Editar cita</Button>}
-            {booking.can_cancel && <Button variant="danger" onClick={() => setConfirmCancel(true)}>Cancelar cita</Button>}
+            {booking.can_edit && <Button variant="secondary" onClick={() => setEditing(true)}>{t('Editar cita')}</Button>}
+            {booking.can_cancel && <Button variant="danger" onClick={() => setConfirmCancel(true)}>{t('Cancelar cita')}</Button>}
           </div>
         )}
         {active && !booking.can_cancel && !booking.can_edit && (
           <p className="text-center text-sm text-slate-500">
-            Ya no se puede cambiar ni cancelar desde aquí. Para cambios, escribe al negocio por WhatsApp.
+            {t('Ya no se puede cambiar ni cancelar desde aquí. Para cambios, escribe al negocio por WhatsApp.')}
           </p>
         )}
 
         {!active && (
           <Link to={clientPath(b.slug, 'reservar')} className="flex w-full items-center justify-center rounded-btn bg-brand bg-btn-grad py-4 text-lg font-bold text-white">
-            Reservar otra cita
+            {t('Reservar otra cita')}
           </Link>
         )}
 
@@ -209,15 +210,15 @@ export default function BookingPage() {
       <Modal
         open={confirmCancel}
         onClose={() => setConfirmCancel(false)}
-        title="¿Cancelar la cita?"
+        title={t('¿Cancelar la cita?')}
         footer={
           <div className="flex gap-3">
-            <Button variant="secondary" block onClick={() => setConfirmCancel(false)}>No, mantener</Button>
-            <Button variant="danger" block onClick={cancel} loading={busy}>Sí, cancelar</Button>
+            <Button variant="secondary" block onClick={() => setConfirmCancel(false)}>{t('No, mantener')}</Button>
+            <Button variant="danger" block onClick={cancel} loading={busy}>{t('Sí, cancelar')}</Button>
           </div>
         }
       >
-        <p className="text-slate-700">Se liberará tu turno del <b>{longDate(key)}</b> a las <b>{time}</b>.</p>
+        <p className="text-slate-700">{t('Se liberará tu turno del')}{' '}<b>{longDate(key)}</b> {t('a las')}{' '}<b>{time}</b>.</p>
       </Modal>
 
       {editing && (
@@ -226,7 +227,7 @@ export default function BookingPage() {
           onClose={() => setEditing(false)}
           onDone={() => {
             setEditing(false)
-            flash('Cita actualizada')
+            flash(t('Cita actualizada'))
             loadBooking()
           }}
         />
@@ -273,12 +274,12 @@ function EditBooking({ booking, onClose, onDone }: {
   const closed = new Set(biz?.closed_days || [])
 
   const save = async () => {
-    if (!same && !hasMainService(services, selected)) return setError('Elige al menos un servicio principal.')
-    if (!same && who === null) return setError(MIXED_PEOPLE)
+    if (!same && !hasMainService(services, selected)) return setError(t('Elige al menos un servicio principal.'))
+    if (!same && who === null) return setError(t(MIXED_PEOPLE))
     const noOption = !same && missingOption(services, selected, choice)
-    if (noOption) return setError(`Elige una opción de «${noOption.name}».`)
-    if (!date || !time) return setError('Elige el día y la hora.')
-    if (name.trim().length < 2) return setError('Escribe tu nombre.')
+    if (noOption) return setError(t('Elige una opción de «{name}».', { name: noOption.name }))
+    if (!date || !time) return setError(t('Elige el día y la hora.'))
+    if (name.trim().length < 2) return setError(t('Escribe tu nombre.'))
     setBusy(true)
     setError(null)
     const { error } = await supabase.rpc('edit_booking', {
@@ -303,17 +304,17 @@ function EditBooking({ booking, onClose, onDone }: {
     <Modal
       open
       onClose={onClose}
-      title="Editar mi cita"
-      footer={<Button block onClick={save} loading={busy} disabled={!biz?.accepting}>Guardar cambios · {price(total, booking.business.currency, rate)}</Button>}
+      title={t('Editar mi cita')}
+      footer={<Button block onClick={save} loading={busy} disabled={!biz?.accepting}>{t('Guardar cambios ·')}{' '}{price(total, booking.business.currency, rate)}</Button>}
     >
       {!biz ? (
         <PageLoader />
       ) : !biz.accepting ? (
-        <Alert kind="warning">El negocio no está recibiendo reservas ahora. Para cambios, escríbele por WhatsApp.</Alert>
+        <Alert kind="warning">{t('El negocio no está recibiendo reservas ahora. Para cambios, escríbele por WhatsApp.')}</Alert>
       ) : (
         <div className="space-y-5">
           <div>
-            <h3 className="mb-2 font-bold">Servicios</h3>
+            <h3 className="mb-2 font-bold">{t('Servicios')}</h3>
             <ServicePicker
               services={services}
               selected={selected}
@@ -337,9 +338,9 @@ function EditBooking({ booking, onClose, onDone }: {
           </div>
           {team.length > 0 && who !== 'dueno' && eligibleTeam.length >= 2 && (
             <div>
-              <h3 className="mb-2 font-bold">¿Con quién?</h3>
+              <h3 className="mb-2 font-bold">{t('¿Con quién?')}</h3>
               <div className="flex flex-wrap gap-2">
-                {[{ id: null, name: 'Cualquiera' }, ...eligibleTeam].map((s) => (
+                {[{ id: null, name: t('Cualquiera') }, ...eligibleTeam].map((s) => (
                   <button
                     key={s.id || 'any'}
                     type="button"
@@ -356,7 +357,7 @@ function EditBooking({ booking, onClose, onDone }: {
             </div>
           )}
           <div>
-            <h3 className="mb-2 font-bold">Día y hora</h3>
+            <h3 className="mb-2 font-bold">{t('Día y hora')}</h3>
             <Calendar
               today={biz.today || todayKey(tz)}
               maxDays={biz.max_days_ahead || 60}
@@ -373,16 +374,16 @@ function EditBooking({ booking, onClose, onDone }: {
               </div>
             )}
           </div>
-          <Field label="Tu nombre">
+          <Field label={t('Tu nombre')}>
             <input className="input" autoComplete="name" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
           </Field>
-          <Field label="Nota para el negocio (opcional)">
+          <Field label={t('Nota para el negocio (opcional)')}>
             <textarea className="input min-h-[80px]" maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
           </Field>
           <p className="text-xs text-slate-500">
-            Si cambias los servicios, el día, la hora o el profesional, el negocio tendrá que volver a confirmar tu cita.
+            {t('Si cambias los servicios, el día, la hora o el profesional, el negocio tendrá que volver a confirmar tu cita.')}
             {booking.business.max_reschedules != null && (
-              <> Cambios de día u hora usados: {booking.reschedule_count} de {booking.business.max_reschedules}.</>
+              <> {t('Cambios de día u hora usados:')}{' '}{booking.reschedule_count} {t('de')}{' '}{booking.business.max_reschedules}.</>
             )}
           </p>
           {error && <Alert>{error}</Alert>}
@@ -399,8 +400,8 @@ function LoyaltyNote({ visits, every, reward }: { visits: number; every: number;
   return (
     <div className={`rounded-2xl p-4 text-center text-sm ring-1 ${hit ? 'bg-amber-50 text-amber-900 ring-amber-200' : 'bg-white text-slate-600 ring-slate-200'}`}>
       {hit
-        ? <>🎉 ¡Llegaste a tus <b>{visits} visitas</b>! {reward ? <>Pregunta por: <b>{reward}</b></> : 'Pregunta por tu premio.'}</>
-        : <>Te {left === 1 ? 'falta' : 'faltan'} <b>{left} {left === 1 ? 'visita' : 'visitas'}</b> para tu premio{reward ? <>: <b>{reward}</b></> : ''}.</>}
+        ? <>{t('🎉 ¡Llegaste a tus')}{' '}<b>{visits} {t('visitas')}</b>! {reward ? <>{t('Pregunta por:')}{' '}<b>{reward}</b></> : t('Pregunta por tu premio.')}</>
+        : <>{t('Te')}{' '}{left === 1 ? t('falta') : t('faltan')} <b>{left} {left === 1 ? t('visita') : t('visitas')}</b> {t('para tu premio')}{reward ? <>: <b>{reward}</b></> : ''}.</>}
     </div>
   )
 }
@@ -419,9 +420,9 @@ function PushReminderBox({ token }: { token: string }) {
     setBusy(true)
     const ok = await subscribeCustomerPush(token)
     setBusy(false)
-    if (!ok) return flash('No se pudo activar. Revisa los permisos de notificaciones del navegador.')
+    if (!ok) return flash(t('No se pudo activar. Revisa los permisos de notificaciones del navegador.'))
     setOn(true)
-    flash('Listo, te avisaremos en este dispositivo')
+    flash(t('Listo, te avisaremos en este dispositivo'))
   }
 
   return (
@@ -430,7 +431,7 @@ function PushReminderBox({ token }: { token: string }) {
       disabled={busy}
       className="w-full rounded-2xl bg-white px-4 py-3 text-left text-sm ring-1 ring-slate-200"
     >
-      🔔 <span className="font-semibold text-brand">Avisarme de esta cita</span> en este dispositivo (recordatorio, si se confirma o si cambia).
+      🔔 <span className="font-semibold text-brand">{t('Avisarme de esta cita')}</span> {t('en este dispositivo (recordatorio, si se confirma o si cambia).')}
     </button>
   )
 }
@@ -443,7 +444,7 @@ function ReviewBox({ booking, onSaved }: { booking: PublicBooking; onSaved: () =
   const [error, setError] = useState<string | null>(null)
 
   const save = async () => {
-    if (!rating) return setError('Elige de 1 a 5 estrellas.')
+    if (!rating) return setError(t('Elige de 1 a 5 estrellas.'))
     setBusy(true)
     setError(null)
     const { error } = await supabase.rpc('submit_review', { p_token: booking.token, p_rating: rating, p_comment: comment })
@@ -457,15 +458,15 @@ function ReviewBox({ booking, onSaved }: { booking: PublicBooking; onSaved: () =
     return (
       <section className="card">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="font-bold">Tu opinión</h2>
+          <h2 className="font-bold">{t('Tu opinión')}</h2>
           <Stars value={booking.review.rating} size={18} />
         </div>
         {booking.review.comment && <p className="mt-2 text-slate-700">{booking.review.comment}</p>}
         {booking.review.reply && (
-          <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600"><b>Respuesta del negocio:</b> {booking.review.reply}</p>
+          <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600"><b>{t('Respuesta del negocio:')}</b> {booking.review.reply}</p>
         )}
         {booking.can_review && (
-          <button onClick={() => setEditing(true)} className="mt-2 text-sm font-semibold text-brand">Cambiar mi opinión</button>
+          <button onClick={() => setEditing(true)} className="mt-2 text-sm font-semibold text-brand">{t('Cambiar mi opinión')}</button>
         )}
       </section>
     )
@@ -473,18 +474,18 @@ function ReviewBox({ booking, onSaved }: { booking: PublicBooking; onSaved: () =
 
   return (
     <section className="card">
-      <h2 className="font-bold">¿Qué tal tu visita?</h2>
-      <p className="text-sm text-slate-500">Tu opinión ayuda a {booking.business.name} y a otros clientes.</p>
+      <h2 className="font-bold">{t('¿Qué tal tu visita?')}</h2>
+      <p className="text-sm text-slate-500">{t('Tu opinión ayuda a')}{' '}{booking.business.name} {t('y a otros clientes.')}</p>
       <div className="mt-3 flex justify-center"><Stars value={rating} onChange={setRating} size={34} /></div>
       <textarea
         className="input mt-3 min-h-[80px]"
         maxLength={500}
-        placeholder="Cuéntanos qué te pareció (opcional)"
+        placeholder={t('Cuéntanos qué te pareció (opcional)')}
         value={comment}
         onChange={(e) => setComment(e.target.value)}
       />
       {error && <div className="mt-3"><Alert>{error}</Alert></div>}
-      <Button block className="mt-3" onClick={save} loading={busy} disabled={!rating}>Enviar opinión</Button>
+      <Button block className="mt-3" onClick={save} loading={busy} disabled={!rating}>{t('Enviar opinión')}</Button>
     </section>
   )
 }

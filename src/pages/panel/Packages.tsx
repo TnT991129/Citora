@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 import type { Package } from '../../lib/types'
 import { usePanel } from './context'
 import { Locked, useModule } from './Locked'
+import { t } from '../../lib/i18n'
 
 export default function Packages() {
   const allowed = useModule('clientes')
@@ -37,7 +38,7 @@ export default function Packages() {
   const remove = async (p: Package) => {
     const { error } = await supabase.from('packages').delete().eq('id', p.id)
     if (error) return setError(errorMessage(error))
-    flash('Bono borrado')
+    flash(t('Bono borrado'))
     load()
   }
 
@@ -45,19 +46,18 @@ export default function Packages() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold">Bonos</h1>
+          <h1 className="text-2xl font-extrabold">{t('Bonos')}</h1>
           <p className="text-slate-600">
-            Paquetes de sesiones prepagadas (ej. "5 cortes por el precio de 4"). No hay pasarela de pago: tú cobras por tu
-            cuenta y lo vendes desde la ficha de cada clienta, en Clientes.
+            {t('Paquetes de sesiones prepagadas (ej. "5 cortes por el precio de 4"). No hay pasarela de pago: tú cobras por tu cuenta y lo vendes desde la ficha de cada clienta, en Clientes.')}
           </p>
         </div>
-        <Button onClick={() => setCreating(true)}>Nuevo bono</Button>
+        <Button onClick={() => setCreating(true)}>{t('Nuevo bono')}</Button>
       </div>
       {error && <Alert>{error}</Alert>}
 
       {list.length === 0 && (
         <div className="card text-center text-slate-600">
-          Crea un bono, por ejemplo "5 cortes" con su precio, y ya podrás vendérselo a tus clientas.
+          {t('Crea un bono, por ejemplo "5 cortes" con su precio, y ya podrás vendérselo a tus clientas.')}
         </div>
       )}
 
@@ -66,11 +66,11 @@ export default function Packages() {
           <li key={p.id} className={`card flex items-center justify-between gap-3 ${p.active ? '' : 'opacity-60'}`}>
             <div className="min-w-0">
               <p className="font-bold">{p.name}</p>
-              <p className="text-sm text-slate-500">{p.sessions} sesiones · {money(p.price, business.currency)}</p>
+              <p className="text-sm text-slate-500">{p.sessions} {t('sesiones ·')}{' '}{money(p.price, business.currency)}</p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <Toggle checked={p.active} onChange={(v) => toggle(p, v)} label="Activo" />
-              <button onClick={() => remove(p)} className="rounded-lg px-2 py-1 text-sm font-medium text-red-600 hover:bg-red-50">Borrar</button>
+              <Toggle checked={p.active} onChange={(v) => toggle(p, v)} label={t('Activo')} />
+              <button onClick={() => remove(p)} className="rounded-lg px-2 py-1 text-sm font-medium text-red-600 hover:bg-red-50">{t('Borrar')}</button>
             </div>
           </li>
         ))}
@@ -98,8 +98,8 @@ function NewPackage({ businessId, onClose, onDone }: { businessId: string; onClo
   const [error, setError] = useState<string | null>(null)
 
   const save = async () => {
-    if (name.trim().length < 2) return setError('Escribe un nombre para el bono.')
-    if (!(sessions >= 2)) return setError('El bono debe tener al menos 2 sesiones.')
+    if (name.trim().length < 2) return setError(t('Escribe un nombre para el bono.'))
+    if (!(sessions >= 2)) return setError(t('El bono debe tener al menos 2 sesiones.'))
     setBusy(true)
     setError(null)
     const { error } = await supabase.from('packages').insert({
@@ -107,21 +107,21 @@ function NewPackage({ businessId, onClose, onDone }: { businessId: string; onClo
     })
     setBusy(false)
     if (error) return setError(errorMessage(error))
-    flash('Bono creado')
+    flash(t('Bono creado'))
     onDone()
   }
 
   return (
-    <Modal open onClose={onClose} title="Nuevo bono" footer={<Button block onClick={save} loading={busy}>Crear bono</Button>}>
+    <Modal open onClose={onClose} title={t('Nuevo bono')} footer={<Button block onClick={save} loading={busy}>{t('Crear bono')}</Button>}>
       <div className="space-y-4">
-        <Field label="Nombre" hint="Lo que ve tu clienta. Ej. 5 cortes">
+        <Field label={t('Nombre')} hint={t('Lo que ve tu clienta. Ej. 5 cortes')}>
           <input className="input" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Sesiones">
+          <Field label={t('Sesiones')}>
             <input className="input" type="number" min={2} max={100} value={sessions} onChange={(e) => setSessions(Number(e.target.value))} />
           </Field>
-          <Field label="Precio">
+          <Field label={t('Precio')}>
             <input className="input" type="number" min={0} step="any" inputMode="decimal" value={price} onChange={(e) => setPrice(Number(e.target.value))} />
           </Field>
         </div>

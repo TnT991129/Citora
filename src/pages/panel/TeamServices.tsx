@@ -8,6 +8,7 @@ import { money } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import type { Service, Staff } from '../../lib/types'
 import { usePanel } from './context'
+import { t } from '../../lib/i18n'
 
 export function DistributeServices({ onClose }: { onClose: () => void }) {
   const { business, services, staff, reloadStaff } = usePanel()
@@ -51,7 +52,7 @@ export function DistributeServices({ onClose }: { onClose: () => void }) {
     const { error } = await supabase.rpc('owner_set_team_services', { p_map: payload })
     setBusy(false)
     if (error) return setError(errorMessage(error))
-    flash('Servicios repartidos. Tus clientes ya los ven así.')
+    flash(t('Servicios repartidos. Tus clientes ya los ven así.'))
     await reloadStaff()
     onClose()
   }
@@ -62,29 +63,28 @@ export function DistributeServices({ onClose }: { onClose: () => void }) {
     <Modal
       open
       onClose={onClose}
-      title="Repartir servicios"
+      title={t('Repartir servicios')}
       footer={
         <div className="space-y-2">
         {confirmEmpty && (
             <Alert kind="warning">
-              <b>{confirmEmpty.map((st) => st.name.split(' ')[0]).join(', ')}</b> se {confirmEmpty.length === 1 ? 'queda' : 'quedan'} sin servicios: no se podrá reservar con {confirmEmpty.length === 1 ? 'ella' : 'ellas'} hasta que {confirmEmpty.length === 1 ? 'cree' : 'creen'} los suyos con su enlace.
+              <b>{confirmEmpty.map((st) => st.name.split(' ')[0]).join(', ')}</b> {t('se')}{' '}{confirmEmpty.length === 1 ? t('queda') : t('quedan')} {t('sin servicios: no se podrá reservar con')}{' '}{confirmEmpty.length === 1 ? 'ella' : 'ellas'} {t('hasta que')}{' '}{confirmEmpty.length === 1 ? 'cree' : 'creen'} {t('los suyos con su enlace.')}
               <span className="mt-2 flex gap-2">
-                <Button size="sm" onClick={() => save(true)} loading={busy}>Guardar igualmente</Button>
-                <Button size="sm" variant="ghost" onClick={() => setConfirmEmpty(null)}>Revisar</Button>
+                <Button size="sm" onClick={() => save(true)} loading={busy}>{t('Guardar igualmente')}</Button>
+                <Button size="sm" variant="ghost" onClick={() => setConfirmEmpty(null)}>{t('Revisar')}</Button>
               </span>
             </Alert>
           )}
-          <Button block size="lg" onClick={() => save()} loading={busy} disabled={!map}>Guardar el reparto</Button>
+          <Button block size="lg" onClick={() => save()} loading={busy} disabled={!map}>{t('Guardar el reparto')}</Button>
         </div>
       }
     >
       <div className="space-y-4">
         <p className="text-sm text-slate-600">
-          Toca en cada servicio a quién lo hace (puede ser más de una persona). Lo que no tenga a nadie marcado lo haces tú.
-          Tus clientes verán los servicios agrupados por persona.
+          {t('Toca en cada servicio a quién lo hace (puede ser más de una persona). Lo que no tenga a nadie marcado lo haces tú. Tus clientes verán los servicios agrupados por persona.')}
         </p>
         {!map ? (
-          <p className="text-sm text-slate-400">Cargando…</p>
+          <p className="text-sm text-slate-400">{t('Cargando…')}</p>
         ) : (
           <ul className="space-y-2.5">
             {list.map((s) => {
@@ -112,7 +112,7 @@ export function DistributeServices({ onClose }: { onClose: () => void }) {
                     })}
                   </div>
                   <p className="mt-1.5 text-xs text-slate-500">
-                    {people.length === 0 ? 'Lo haces tú' : people.length === 1 ? `Solo ${people[0].name.split(' ')[0]}` : `${people.length} personas: el cliente elige con quién`}
+                    {people.length === 0 ? t('Lo haces tú') : people.length === 1 ? t('Solo {v}', { v: people[0].name.split(' ')[0] }) : t('{length} personas: el cliente elige con quién', { length: people.length })}
                   </p>
                 </li>
               )

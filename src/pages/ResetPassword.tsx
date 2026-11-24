@@ -5,6 +5,7 @@ import { Alert, Button, Field } from '../components/ui'
 import { setBrandColor } from '../lib/brand'
 import { errorMessage } from '../lib/errors'
 import { supabase } from '../lib/supabase'
+import { t } from '../lib/i18n'
 
 export default function ResetPassword() {
   const navigate = useNavigate()
@@ -16,7 +17,7 @@ export default function ResetPassword() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    if (password.length < 6) return setError('Mínimo 6 caracteres.')
+    if (password.length < 6) return setError(t('Mínimo 6 caracteres.'))
     setBusy(true)
     const { error } = await supabase.auth.updateUser({ password })
     setBusy(false)
@@ -25,13 +26,13 @@ export default function ResetPassword() {
   }
 
   return (
-    <AuthShell title="Nueva contraseña" subtitle="Elige una contraseña nueva para entrar a tu panel.">
+    <AuthShell title={t('Nueva contraseña')} subtitle={t('Elige una contraseña nueva para entrar a tu panel.')}>
       <form onSubmit={submit} className="card space-y-4">
-        <Field label="Contraseña nueva" hint="Mínimo 6 caracteres.">
+        <Field label={t('Contraseña nueva')} hint={t('Mínimo 6 caracteres.')}>
           <input className="input" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </Field>
         {error && <Alert>{error}</Alert>}
-        <Button type="submit" block size="lg" loading={busy}>Guardar y entrar</Button>
+        <Button type="submit" block size="lg" loading={busy}>{t('Guardar y entrar')}</Button>
       </form>
     </AuthShell>
   )

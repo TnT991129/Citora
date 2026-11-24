@@ -10,6 +10,7 @@ import NotFound from '../NotFound'
 import { Centered, PoweredBy, PublicHeader, usePublicBusiness } from './shared'
 import { serverNow } from '../../lib/clockSkew'
 
+import { t } from '../../lib/i18n'
 /** Todas las citas que el cliente reservó desde este móvil en un negocio */
 export default function MyAppointments() {
   const { slug } = useParams()
@@ -54,50 +55,50 @@ export default function MyAppointments() {
     <div className="min-h-dvh pb-10">
       <PublicHeader business={business} back />
       <main className="mx-auto max-w-xl space-y-4 px-4 py-5">
-        <h1 className="text-2xl font-extrabold">Mis citas</h1>
+        <h1 className="text-2xl font-extrabold">{t('Mis citas')}</h1>
 
         {bookings.length === 0 ? (
           <div className="card text-center">
-            <p className="text-slate-600">Todavía no tienes citas guardadas en este móvil.</p>
-            <p className="mt-1 text-sm text-slate-500">Si reservaste desde otro móvil, abre el enlace de tu cita y quedará guardada aquí.</p>
+            <p className="text-slate-600">{t('Todavía no tienes citas guardadas en este móvil.')}</p>
+            <p className="mt-1 text-sm text-slate-500">{t('Si reservaste desde otro móvil, abre el enlace de tu cita y quedará guardada aquí.')}</p>
             {business.accepting && (
               <Link to={clientPath(business.slug, 'reservar')} className="mt-4 flex w-full items-center justify-center rounded-btn bg-brand bg-btn-grad py-3.5 font-bold text-white">
-                Reservar cita
+                {t('Reservar cita')}
               </Link>
             )}
           </div>
         ) : (
           <>
             <div className="grid grid-cols-3 gap-2">
-              <Tile label="Visitas" value={String(summary?.visits ?? 0)} />
-              <Tile label="Reservas" value={String(summary?.bookings ?? bookings.length)} />
-              <Tile label="Gastado" value={money(spent, currency)} small />
+              <Tile label={t('Visitas')} value={String(summary?.visits ?? 0)} />
+              <Tile label={t('Reservas')} value={String(summary?.bookings ?? bookings.length)} />
+              <Tile label={t('Gastado')} value={money(spent, currency)} small />
             </div>
             {summary?.since && (
-              <p className="text-center text-sm text-slate-500">Cliente desde el {fullDateFromIso(summary.since, tz)}</p>
+              <p className="text-center text-sm text-slate-500">{t('Cliente desde el')}{' '}{fullDateFromIso(summary.since, tz)}</p>
             )}
 
             <section className="card">
-              <h2 className="text-lg font-bold">Próximas</h2>
+              <h2 className="text-lg font-bold">{t('Próximas')}</h2>
               {upcoming.length === 0 ? (
-                <p className="mt-2 text-slate-500">No tienes citas próximas.</p>
+                <p className="mt-2 text-slate-500">{t('No tienes citas próximas.')}</p>
               ) : (
                 <BookingList items={upcoming} slug={business.slug} tz={tz} currency={currency} />
               )}
               {business.accepting && (
                 <Link to={clientPath(business.slug, 'reservar')} className="mt-3 flex w-full items-center justify-center rounded-btn bg-brand bg-btn-grad py-3.5 font-bold text-white">
-                  Reservar otra cita
+                  {t('Reservar otra cita')}
                 </Link>
               )}
             </section>
 
             {past.length > 0 && (
               <section className="card">
-                <h2 className="text-lg font-bold">Anteriores</h2>
+                <h2 className="text-lg font-bold">{t('Anteriores')}</h2>
                 <BookingList items={past} slug={business.slug} tz={tz} currency={currency} />
               </section>
             )}
-            <p className="text-center text-xs text-slate-400">Aquí aparecen las citas reservadas o abiertas desde este móvil.</p>
+            <p className="text-center text-xs text-slate-400">{t('Aquí aparecen las citas reservadas o abiertas desde este móvil.')}</p>
           </>
         )}
         <PoweredBy />
@@ -117,9 +118,9 @@ function BookingList({ items, slug, tz, currency }: { items: PublicBooking[]; sl
                 {dayTitle(dateKey(b.starts_at, tz))} <span className="font-normal text-slate-500">· {timeOf(b.starts_at, tz, true)}</span>
               </span>
               <span className="block truncate text-sm text-slate-500">
-                {b.services.map((s) => s.name).join(', ') || 'Cita'} · {money(b.total, currency)}
+                {b.services.map((s) => s.name).join(', ') || t('Cita')} · {money(b.total, currency)}
               </span>
-              {b.can_review && !b.review && <span className="text-sm font-semibold text-brand">★ Deja tu opinión</span>}
+              {b.can_review && !b.review && <span className="text-sm font-semibold text-brand">{t('★ Deja tu opinión')}</span>}
             </span>
             <StatusBadge status={b.status} />
           </Link>

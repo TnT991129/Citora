@@ -7,6 +7,7 @@ import type { GalleryPhoto } from '../../lib/types'
 import { publicUrl } from '../../lib/url'
 import { usePanel } from './context'
 import { Locked, useModule } from './Locked'
+import { t } from '../../lib/i18n'
 
 const MAX = 30
 
@@ -35,12 +36,12 @@ export default function Gallery() {
   const upload = async (files: File[]) => {
     const room = MAX - list.length
     const batch = files.filter((f) => f.type.startsWith('image/')).slice(0, room)
-    if (files.length > room) setError(`Puedes tener hasta ${MAX} fotos. Se subirán ${room}.`)
+    if (files.length > room) setError(t('Puedes tener hasta {MAX} fotos. Se subirán {room}.', { MAX: MAX, room: room }))
     else setError(null)
     let pos = list.reduce((m, p) => Math.max(m, p.position ?? 0), 0)
     try {
       for (let i = 0; i < batch.length; i++) {
-        setUploading(`Subiendo ${i + 1} de ${batch.length}…`)
+        setUploading(t('Subiendo {a} de {b}…', { a: i + 1, b: batch.length }))
         const blob = await shrinkImage(batch[i], 1280)
         const path = `${business.id}/galeria/${Date.now()}-${i}.${imageExt(blob)}`
         const { error: upErr } = await supabase.storage.from('logos').upload(path, blob, { contentType: blob.type })
@@ -49,7 +50,7 @@ export default function Gallery() {
         const { error } = await supabase.from('gallery_photos').insert({ business_id: business.id, url: data.publicUrl, position: ++pos })
         if (error) throw error
       }
-      if (batch.length) flash(batch.length === 1 ? 'Foto añadida' : `${batch.length} fotos añadidas`)
+      if (batch.length) flash(batch.length === 1 ? t('Foto añadida') : t('{length} fotos añadidas', { length: batch.length }))
     } catch (e) {
       setError(errorMessage(e))
     } finally {
@@ -83,19 +84,19 @@ export default function Gallery() {
     if ((p.caption || '') === caption.trim()) return
     const { error } = await supabase.from('gallery_photos').update({ caption: caption.trim().slice(0, 120) || null }).eq('id', p.id)
     if (error) setError(errorMessage(error))
-    else flash('Texto guardado')
+    else flash(t('Texto guardado'))
   }
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold">Galería</h1>
-          <p className="text-slate-600">Fotos de tus trabajos. Se ven en tu web. {list.length}/{MAX}</p>
-          <p className="text-sm text-slate-500">Cada foto pasa por una revisión automática antes de verse en tu web (puede tardar un momento).</p>
+          <h1 className="text-2xl font-extrabold">{t('Galería')}</h1>
+          <p className="text-slate-600">{t('Fotos de tus trabajos. Se ven en tu web.')}{' '}{list.length}/{MAX}</p>
+          <p className="text-sm text-slate-500">{t('Cada foto pasa por una revisión automática antes de verse en tu web (puede tardar un momento).')}</p>
         </div>
         <Button onClick={() => fileRef.current?.click()} loading={Boolean(uploading)} disabled={list.length >= MAX}>
-          Añadir fotos
+          {t('Añadir fotos')}
         </Button>
         <input
           ref={fileRef}
@@ -116,19 +117,19 @@ export default function Gallery() {
       {list.length === 0 ? (
         <button onClick={() => fileRef.current?.click()} className="card flex w-full flex-col items-center gap-2 border-2 border-dashed border-slate-300 py-10 text-slate-500">
           <span className="text-4xl">📷</span>
-          Sube tus mejores trabajos para que tus clientes los vean antes de reservar.
+          {t('Sube tus mejores trabajos para que tus clientes los vean antes de reservar.')}
         </button>
       ) : (
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {list.map((p, i) => (
             <li key={p.id} className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
               <div className="relative">
-                <img src={p.url} alt={p.caption || 'Trabajo'} loading="lazy" className="aspect-square w-full object-cover" />
+                <img src={p.url} alt={p.caption || t('Trabajo')} loading="lazy" className="aspect-square w-full object-cover" />
                 {p.moderation_status === 'pendiente' && (
-                  <span className="absolute left-1.5 top-1.5 chip bg-amber-100 text-xs text-amber-700">En revisión</span>
+                  <span className="absolute left-1.5 top-1.5 chip bg-amber-100 text-xs text-amber-700">{t('En revisión')}</span>
                 )}
                 {p.moderation_status === 'rechazada' && (
-                  <span className="absolute left-1.5 top-1.5 chip bg-red-100 text-xs text-red-700">Rechazada</span>
+                  <span className="absolute left-1.5 top-1.5 chip bg-red-100 text-xs text-red-700">{t('Rechazada')}</span>
                 )}
               </div>
               {p.moderation_status === 'rechazada' && p.moderation_note && (
@@ -139,15 +140,15 @@ export default function Gallery() {
                   className="input py-1.5 text-sm"
                   defaultValue={p.caption || ''}
                   maxLength={120}
-                  placeholder="Texto (opcional)"
+                  placeholder={t('Texto (opcional)')}
                   onBlur={(e) => saveCaption(p, e.target.value)}
                 />
                 <div className="flex items-center justify-between">
                   <div className="flex">
-                    <IconBtn label="Mover antes" disabled={i === 0} onClick={() => move(i, -1)} d="M15 6l-6 6 6 6" />
-                    <IconBtn label="Mover después" disabled={i === list.length - 1} onClick={() => move(i, 1)} d="M9 6l6 6-6 6" />
+                    <IconBtn label={t('Mover antes')} disabled={i === 0} onClick={() => move(i, -1)} d="M15 6l-6 6 6 6" />
+                    <IconBtn label={t('Mover después')} disabled={i === list.length - 1} onClick={() => move(i, 1)} d="M9 6l6 6-6 6" />
                   </div>
-                  <button onClick={() => remove(p)} className="rounded-lg px-2 py-1 text-sm font-medium text-red-600 hover:bg-red-50">Quitar</button>
+                  <button onClick={() => remove(p)} className="rounded-lg px-2 py-1 text-sm font-medium text-red-600 hover:bg-red-50">{t('Quitar')}</button>
                 </div>
               </div>
             </li>
@@ -156,7 +157,7 @@ export default function Gallery() {
       )}
 
       {list.length > 0 && (
-        <a href={publicUrl(business.slug)} target="_blank" rel="noreferrer" className="inline-block text-sm font-semibold text-brand">Ver mi web →</a>
+        <a href={publicUrl(business.slug)} target="_blank" rel="noreferrer" className="inline-block text-sm font-semibold text-brand">{t('Ver mi web →')}</a>
       )}
     </div>
   )

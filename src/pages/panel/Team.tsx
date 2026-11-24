@@ -12,6 +12,7 @@ import { usePanel } from './context'
 import { Locked, useModule } from './Locked'
 import { DistributeServices } from './TeamServices'
 import { businessType } from '../../lib/templates'
+import { t as tx } from '../../lib/i18n'
 
 const MAX = 20
 const ORDER = [1, 2, 3, 4, 5, 6, 0]
@@ -38,7 +39,7 @@ export default function Team() {
 
   const add = async () => {
     const n = name.trim()
-    if (n.length < 2) return setError('Escribe el nombre (al menos 2 letras).')
+    if (n.length < 2) return setError(tx('Escribe el nombre (al menos 2 letras).'))
     setBusy(true)
     setError(null)
     // Empieza sin servicios: los crea ella misma con su enlace (se abre al momento para mandárselo)
@@ -72,9 +73,9 @@ export default function Team() {
   return (
     <div className="max-w-xl space-y-4">
       <div>
-        <h1 className="text-2xl font-extrabold">Equipo</h1>
+        <h1 className="text-2xl font-extrabold">{tx('Equipo')}</h1>
         <p className="text-slate-600">
-          Añade a las personas que atienden. Cada una tiene su propia agenda: dos clientes pueden reservar a la misma hora con profesionales distintos.
+          {tx('Añade a las personas que atienden. Cada una tiene su propia agenda: dos clientes pueden reservar a la misma hora con profesionales distintos.')}
         </p>
       </div>
 
@@ -82,17 +83,17 @@ export default function Team() {
         <div className="flex gap-2">
           <input
             className="input"
-            placeholder="Nombre (ej. Carlos)"
+            placeholder={tx('Nombre (ej. Carlos)')}
             maxLength={60}
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && add()}
           />
-          <Button onClick={add} loading={busy} disabled={staff.length >= MAX}>Añadir</Button>
+          <Button onClick={add} loading={busy} disabled={staff.length >= MAX}>{tx('Añadir')}</Button>
         </div>
         {staff.length === 0 && (
           <p className="text-sm text-slate-500">
-            Mientras no añadas a nadie, tu negocio funciona con una sola agenda, como ahora.
+            {tx('Mientras no añadas a nadie, tu negocio funciona con una sola agenda, como ahora.')}
           </p>
         )}
       </section>
@@ -105,16 +106,16 @@ export default function Team() {
             <div className="flex items-start gap-3">
               <span className="text-2xl" aria-hidden>✂️</span>
               <div>
-                <h2 className="font-bold">Reparte los servicios de tu salón</h2>
+                <h2 className="font-bold">{tx('Reparte los servicios de tu salón')}</h2>
                 <p className="text-sm text-slate-600">
-                  Ahora cada servicio puede ser de una persona: las uñas para tu manicura, las pestañas para tu lashista… Tus clientes los verán agrupados por persona y solo podrán reservar cada uno con quien lo hace.
+                  {tx('Ahora cada servicio puede ser de una persona: las uñas para tu manicura, las pestañas para tu lashista… Tus clientes los verán agrupados por persona y solo podrán reservar cada uno con quien lo hace.')}
                 </p>
               </div>
             </div>
-            <Button block onClick={() => setDistributing(true)}>Repartir servicios</Button>
+            <Button block onClick={() => setDistributing(true)}>{tx('Repartir servicios')}</Button>
           </section>
         ) : (
-          <Button block variant="secondary" onClick={() => setDistributing(true)}>Repartir servicios entre el equipo</Button>
+          <Button block variant="secondary" onClick={() => setDistributing(true)}>{tx('Repartir servicios entre el equipo')}</Button>
         )
       )}
 
@@ -129,9 +130,9 @@ export default function Team() {
               first={i === 0}
               last={i === staff.length - 1}
               onMove={(dir) => move(i, dir)}
-              onRename={(n) => run(() => supabase.from('staff').update({ name: n }).eq('id', s.id), 'Nombre guardado')}
+              onRename={(n) => run(() => supabase.from('staff').update({ name: n }).eq('id', s.id), tx('Nombre guardado'))}
               onToggle={(v) => run(() => supabase.from('staff').update({ active: v }).eq('id', s.id))}
-              onRemove={() => run(() => supabase.from('staff').delete().eq('id', s.id), `${s.name} quitado`)}
+              onRemove={() => run(() => supabase.from('staff').delete().eq('id', s.id), tx('{name} quitado', { name: s.name }))}
               onDetail={() => setDetail({ staff: s })}
             />
           ))}
@@ -140,8 +141,7 @@ export default function Team() {
 
       {staff.length > 0 && (
         <p className="text-sm text-slate-500">
-          {active} {active === 1 ? 'profesional activo' : 'profesionales activos'}. Tus clientes pueden elegir con quién reservar o dejar que se asigne al que esté libre.
-          Los inactivos no reciben reservas nuevas, pero conservan sus citas.
+          {active} {active === 1 ? tx('profesional activo') : tx('profesionales activos')}{tx('. Tus clientes pueden elegir con quién reservar o dejar que se asigne al que esté libre. Los inactivos no reciben reservas nuevas, pero conservan sus citas.')}
         </p>
       )}
 
@@ -166,31 +166,31 @@ function StaffRow({ s, first, last, onMove, onRename, onToggle, onRemove, onDeta
     <li className={`card space-y-3 ${s.active ? '' : 'opacity-60'}`}>
       <div className="flex items-center gap-3">
         <div className="flex flex-col">
-          <ArrowBtn label="Subir" disabled={first} onClick={() => onMove(-1)} d="M6 15l6-6 6 6" />
-          <ArrowBtn label="Bajar" disabled={last} onClick={() => onMove(1)} d="M6 9l6 6 6-6" />
+          <ArrowBtn label={tx('Subir')} disabled={first} onClick={() => onMove(-1)} d="M6 15l6-6 6 6" />
+          <ArrowBtn label={tx('Bajar')} disabled={last} onClick={() => onMove(1)} d="M6 9l6 6 6-6" />
         </div>
         <BusinessAvatar name={s.name} logo={s.photo_url} size={40} />
         <input
           className="input min-w-0 flex-1"
           defaultValue={s.name}
           maxLength={60}
-          aria-label="Nombre"
+          aria-label={tx('Nombre')}
           onBlur={(e) => {
             const n = e.target.value.trim()
             if (n.length >= 2 && n !== s.name) onRename(n)
           }}
         />
-        <Toggle checked={s.active} onChange={onToggle} label="Activo" />
+        <Toggle checked={s.active} onChange={onToggle} label={tx('Activo')} />
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Button size="sm" variant="secondary" onClick={onDetail}>Horario, servicios y su enlace</Button>
+        <Button size="sm" variant="secondary" onClick={onDetail}>{tx('Horario, servicios y su enlace')}</Button>
         {confirm ? (
           <span className="flex gap-1">
-            <Button size="sm" variant="danger" onClick={onRemove}>Quitar</Button>
-            <Button size="sm" variant="ghost" onClick={() => setConfirm(false)}>No</Button>
+            <Button size="sm" variant="danger" onClick={onRemove}>{tx('Quitar')}</Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirm(false)}>{tx('No')}</Button>
           </span>
         ) : (
-          <button onClick={() => setConfirm(true)} className="rounded-lg px-2 py-1 text-sm font-medium text-red-600 hover:bg-red-50">Quitar</button>
+          <button onClick={() => setConfirm(true)} className="rounded-lg px-2 py-1 text-sm font-medium text-red-600 hover:bg-red-50">{tx('Quitar')}</button>
         )}
       </div>
     </li>
@@ -247,7 +247,7 @@ function StaffDetailsModal({ staff, justAdded, onClose, onPhotoChanged }: { staf
       const { error } = await supabase.from('staff').update({ photo_url: data.publicUrl }).eq('id', staff.id)
       if (error) throw error
       await onPhotoChanged()
-      flash('Foto actualizada')
+      flash(tx('Foto actualizada'))
     } catch (e) {
       setError(errorMessage(e))
     } finally {
@@ -259,7 +259,7 @@ function StaffDetailsModal({ staff, justAdded, onClose, onPhotoChanged }: { staf
     setCustom(v)
     if (!v) {
       await supabase.from('staff_schedule_days').delete().eq('staff_id', staff.id)
-      flash('Ahora usa el horario del negocio')
+      flash(tx('Ahora usa el horario del negocio'))
     }
   }
 
@@ -270,7 +270,7 @@ function StaffDetailsModal({ staff, justAdded, onClose, onPhotoChanged }: { staf
     const { error } = await supabase.from('staff_schedule_days').upsert(days.map((d) => ({ ...d, staff_id: staff.id })))
     setBusy(false)
     if (error) return setError(errorMessage(error))
-    flash('Horario guardado')
+    flash(tx('Horario guardado'))
   }
 
   const toggleService = (id: string) => {
@@ -290,7 +290,7 @@ function StaffDetailsModal({ staff, justAdded, onClose, onPhotoChanged }: { staf
     setBusy(false)
     if (e0 || e1 || e2) return setError(errorMessage(e0 || e1 || e2))
     if (!own) setServiceIds([])
-    flash('Servicios guardados')
+    flash(tx('Servicios guardados'))
     void reloadStaff()
   }
 
@@ -301,13 +301,13 @@ function StaffDetailsModal({ staff, justAdded, onClose, onPhotoChanged }: { staf
           <BusinessAvatar name={staff.name} logo={staff.photo_url} size={56} />
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" onClick={() => fileRef.current?.click()} loading={uploading}>
-              {staff.photo_url ? 'Cambiar foto' : 'Subir foto'}
+              {staff.photo_url ? tx('Cambiar foto') : tx('Subir foto')}
             </Button>
             {staff.photo_url && (
               <Button variant="ghost" size="sm" onClick={async () => {
                 await supabase.from('staff').update({ photo_url: null }).eq('id', staff.id)
                 await onPhotoChanged()
-              }}>Quitar</Button>
+              }}>{tx('Quitar')}</Button>
             )}
           </div>
           <input
@@ -332,7 +332,7 @@ function StaffDetailsModal({ staff, justAdded, onClose, onPhotoChanged }: { staf
               onClick={() => setTab(t)}
               className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold ${tab === t ? 'bg-white shadow-sm' : 'text-slate-600'}`}
             >
-              {t === 'horario' ? 'Horario' : t === 'servicios' ? 'Servicios' : 'Su enlace'}
+              {t === 'horario' ? tx('Horario') : t === 'servicios' ? tx('Servicios') : tx('Su enlace')}
             </button>
           ))}
         </div>
@@ -341,10 +341,10 @@ function StaffDetailsModal({ staff, justAdded, onClose, onPhotoChanged }: { staf
           <div className="space-y-3">
             <label className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2">
               <span className="text-sm">
-                <b>Horario propio</b>
-                <br /><span className="text-slate-500">Si lo apagas, usa el mismo horario que el negocio (en Horario).</span>
+                <b>{tx('Horario propio')}</b>
+                <br /><span className="text-slate-500">{tx('Si lo apagas, usa el mismo horario que el negocio (en Horario).')}</span>
               </span>
-              <Toggle checked={Boolean(custom)} onChange={toggleCustom} label="Horario propio" />
+              <Toggle checked={Boolean(custom)} onChange={toggleCustom} label={tx('Horario propio')} />
             </label>
             {custom && days && (
               <>
@@ -355,7 +355,7 @@ function StaffDetailsModal({ staff, justAdded, onClose, onPhotoChanged }: { staf
                       <Toggle
                         checked={d.is_open}
                         onChange={(v) => setDays((ds) => ds!.map((x) => (x.weekday === d.weekday ? { ...x, is_open: v } : x)))}
-                        label={`Abrir ${WEEKDAYS[d.weekday]}`}
+                        label={tx('Abrir {v}', { v: WEEKDAYS[d.weekday] })}
                       />
                     </div>
                     {d.is_open ? (
@@ -363,11 +363,11 @@ function StaffDetailsModal({ staff, justAdded, onClose, onPhotoChanged }: { staf
                         <TimeChips value={d.slots} onChange={(slots) => setDays((ds) => ds!.map((x) => (x.weekday === d.weekday ? { ...x, slots } : x)))} />
                       </div>
                     ) : (
-                      <p className="mt-1 text-sm text-slate-400">No trabaja este día</p>
+                      <p className="mt-1 text-sm text-slate-400">{tx('No trabaja este día')}</p>
                     )}
                   </div>
                 ))}
-                <Button block onClick={saveSchedule} loading={busy}>Guardar horario</Button>
+                <Button block onClick={saveSchedule} loading={busy}>{tx('Guardar horario')}</Button>
               </>
             )}
           </div>
@@ -377,8 +377,8 @@ function StaffDetailsModal({ staff, justAdded, onClose, onPhotoChanged }: { staf
           <div className="space-y-3">
             <div className="grid gap-2">
               {([
-                [true, 'Sus propios servicios', `Los crea ${staff.name.split(' ')[0]} con su enlace (pestaña "Su enlace"). Si quieres, márcale también alguno de los tuyos.`],
-                [false, 'Todos los servicios del negocio', 'Hace todo lo que ofreces: los clientes pueden reservar cualquier servicio con esta persona.'],
+                [true, tx('Sus propios servicios'), tx('Los crea {v} con su enlace (pestaña "Su enlace"). Si quieres, márcale también alguno de los tuyos.', { v: staff.name.split(' ')[0] })],
+                [false, tx('Todos los servicios del negocio'), tx('Hace todo lo que ofreces: los clientes pueden reservar cualquier servicio con esta persona.')],
               ] as const).map(([v, t, d]) => (
                 <button
                   key={String(v)}
@@ -406,10 +406,10 @@ function StaffDetailsModal({ staff, justAdded, onClose, onPhotoChanged }: { staf
                   {sv.name}
                 </button>
               ))}
-              {services.length === 0 && <p className="text-sm text-slate-400">Todavía no tienes servicios creados.</p>}
+              {services.length === 0 && <p className="text-sm text-slate-400">{tx('Todavía no tienes servicios creados.')}</p>}
             </div>
             )}
-            <Button block onClick={saveServices} loading={busy}>Guardar</Button>
+            <Button block onClick={saveServices} loading={busy}>{tx('Guardar')}</Button>
           </div>
         )}
 
@@ -436,7 +436,7 @@ function OwnerCard() {
     if (n === (business.owner_name || '') && sp === (business.owner_specialty || '')) return
     const { error } = await supabase.from('businesses').update({ owner_name: n || null, owner_specialty: sp || null }).eq('id', business.id)
     if (error) return setError(errorMessage(error))
-    flash('Guardado')
+    flash(tx('Guardado'))
     await reloadBusiness()
   }
   const bt = businessType(business.business_type)
@@ -446,21 +446,21 @@ function OwnerCard() {
       <div className="flex items-center gap-3">
         <span className="shrink-0"><BusinessAvatar name={business.name} logo={business.logo_url} size={40} /></span>
         <div className="min-w-0">
-          <h2 className="font-bold">Tú también atiendes</h2>
-          <p className="text-sm text-slate-500">Los servicios que no son de nadie del equipo son los tuyos. En tu página salen con tu nombre y tu especialidad.</p>
+          <h2 className="font-bold">{tx('Tú también atiendes')}</h2>
+          <p className="text-sm text-slate-500">{tx('Los servicios que no son de nadie del equipo son los tuyos. En tu página salen con tu nombre y tu especialidad.')}</p>
         </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Tu nombre">
-          <input className="input" value={name} maxLength={40} placeholder="Ej. Osmel" onChange={(e) => setName(e.target.value)} onBlur={save} />
+        <Field label={tx('Tu nombre')}>
+          <input className="input" value={name} maxLength={40} placeholder={tx('Ej. Osmel')} onChange={(e) => setName(e.target.value)} onBlur={save} />
         </Field>
-        <Field label="Tu especialidad">
-          <input className="input" value={specialty} maxLength={40} placeholder="Ej. Peluquería" onChange={(e) => setSpecialty(e.target.value)} onBlur={save} />
+        <Field label={tx('Tu especialidad')}>
+          <input className="input" value={specialty} maxLength={40} placeholder={tx('Ej. Peluquería')} onChange={(e) => setSpecialty(e.target.value)} onBlur={save} />
         </Field>
       </div>
       {!business.owner_specialty && (
         <p className="text-xs text-slate-500">
-          Mientras no la pongas, tus servicios salen en tu página como «{typeName || name.trim() || 'Servicios'}», arriba del todo, y los de tu equipo debajo con su especialidad.
+          {tx('Mientras no la pongas, tus servicios salen en tu página como «')}{typeName || name.trim() || tx('Servicios')}{tx('», arriba del todo, y los de tu equipo debajo con su especialidad.')}
         </p>
       )}
       {error && <Alert>{error}</Alert>}
@@ -477,22 +477,22 @@ function SpecialtyField({ staff, onSaved }: { staff: Staff; onSaved: () => Promi
     if (v === (staff.specialty || '')) return
     const { error } = await supabase.from('staff').update({ specialty: v || null }).eq('id', staff.id)
     if (error) return setError(errorMessage(error))
-    flash('Especialidad guardada')
+    flash(tx('Especialidad guardada'))
     await onSaved()
   }
   return (
     <div>
-      <label className="label" htmlFor="especialidad">Especialidad</label>
+      <label className="label" htmlFor="especialidad">{tx('Especialidad')}</label>
       <input
         id="especialidad"
         className="input"
         value={value}
         maxLength={40}
-        placeholder="Ej. Uñas, Pestañas, Peluquería"
+        placeholder={tx('Ej. Uñas, Pestañas, Peluquería')}
         onChange={(e) => setValue(e.target.value)}
         onBlur={save}
       />
-      <p className="mt-1 text-xs text-slate-500">En tu página, sus servicios salen agrupados con este título.</p>
+      <p className="mt-1 text-xs text-slate-500">{tx('En tu página, sus servicios salen agrupados con este título.')}</p>
       {error && <div className="mt-2"><Alert>{error}</Alert></div>}
     </div>
   )
@@ -514,45 +514,44 @@ function StaffLink({ staff, canEditServices, autoCreate }: { staff: Staff; canEd
   }, [])
 
   const act = async (action: 'ver' | 'nuevo' | 'anular') => {
-    if (action === 'anular' && !window.confirm(`¿Anular el enlace de ${first}? Dejará de funcionar y tendrás que mandarle uno nuevo.`)) return
+    if (action === 'anular' && !window.confirm(tx('¿Anular el enlace de {first}? Dejará de funcionar y tendrás que mandarle uno nuevo.', { first: first }))) return
     setBusy(action)
     setError(null)
     const { data, error } = await supabase.rpc('owner_staff_link', { p_staff: staff.id, p_action: action })
     setBusy(null)
     if (error) return setError(errorMessage(error))
     setToken((data as string | null) || null)
-    if (action === 'nuevo') flash('Enlace nuevo creado. El anterior ya no funciona.')
-    if (action === 'anular') flash('Enlace anulado')
+    if (action === 'nuevo') flash(tx('Enlace nuevo creado. El anterior ya no funciona.'))
+    if (action === 'anular') flash(tx('Enlace anulado'))
     void reloadStaff()
   }
 
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(url)
-      flash('Enlace copiado')
+      flash(tx('Enlace copiado'))
     } catch {
-      flash('No se pudo copiar')
+      flash(tx('No se pudo copiar'))
     }
   }
 
   return (
     <div className="space-y-3">
       <p className="text-sm text-slate-600">
-        Con este enlace, <b>{first}</b> cambia desde su móvil <b>sus servicios</b> (nombre, precio, duración) y <b>su horario</b>, sin crear cuenta.
-        Solo puede tocar lo suyo: los servicios que comparte con otras personas del equipo los sigues cambiando tú.
+        {tx('Con este enlace,')}{' '}<b>{first}</b> {tx('cambia desde su móvil')}{' '}<b>{tx('sus servicios')}</b> {tx('(nombre, precio, duración) y')}{' '}<b>{tx('su horario')}</b>{tx(', sin crear cuenta. Solo puede tocar lo suyo: los servicios que comparte con otras personas del equipo los sigues cambiando tú.')}
       </p>
       {autoCreate && (
         <Alert kind="success">
-          <b>{first}</b> ya está en tu equipo. Mándale su enlace: con él crea sus servicios con sus precios y pone su horario. Hasta que cree alguno, no se puede reservar con ella.
+          <b>{first}</b> {tx('ya está en tu equipo. Mándale su enlace: con él crea sus servicios con sus precios y pone su horario. Hasta que cree alguno, no se puede reservar con ella.')}
         </Alert>
       )}
       {!canEditServices && (
         <Alert kind="warning">
-          {first} hace todos los servicios del negocio, así que con el enlace solo puede cambiar su horario. Para que tenga los suyos, elige "Sus propios servicios" en la pestaña <b>Servicios</b>.
+          {first} {tx('hace todos los servicios del negocio, así que con el enlace solo puede cambiar su horario. Para que tenga los suyos, elige "Sus propios servicios" en la pestaña')}{' '}<b>{tx('Servicios')}</b>.
         </Alert>
       )}
       {!token ? (
-        <Button block onClick={() => act('ver')} loading={busy === 'ver'}>Crear enlace para {first}</Button>
+        <Button block onClick={() => act('ver')} loading={busy === 'ver'}>{tx('Crear enlace para')}{' '}{first}</Button>
       ) : (
         <>
           <p className="break-all rounded-xl bg-slate-50 px-3 py-2 font-mono text-xs text-slate-600">{url.replace(/^https?:\/\//, '')}</p>
@@ -563,15 +562,15 @@ function StaffLink({ staff, canEditServices, autoCreate }: { staff: Staff; canEd
               rel="noreferrer"
               className="inline-flex items-center justify-center gap-2 rounded-btn bg-[#25D366] px-4 py-2.5 font-semibold text-white shadow-sm"
             >
-              <WhatsAppIcon className="h-4 w-4" /> Mandárselo por WhatsApp
+              <WhatsAppIcon className="h-4 w-4" /> {tx('Mandárselo por WhatsApp')}
             </a>
-            <Button variant="secondary" onClick={copy}>Copiar</Button>
+            <Button variant="secondary" onClick={copy}>{tx('Copiar')}</Button>
           </div>
           <div className="flex flex-wrap gap-2 pt-1">
-            <Button size="sm" variant="ghost" onClick={() => act('nuevo')} loading={busy === 'nuevo'}>Hacer uno nuevo</Button>
-            <Button size="sm" variant="ghost" onClick={() => act('anular')} loading={busy === 'anular'} className="text-red-600">Anular enlace</Button>
+            <Button size="sm" variant="ghost" onClick={() => act('nuevo')} loading={busy === 'nuevo'}>{tx('Hacer uno nuevo')}</Button>
+            <Button size="sm" variant="ghost" onClick={() => act('anular')} loading={busy === 'anular'} className="text-red-600">{tx('Anular enlace')}</Button>
           </div>
-          <p className="text-xs text-slate-500">Si {first} deja de trabajar contigo o el enlace llega a otra persona, anúlalo: deja de funcionar al momento.</p>
+          <p className="text-xs text-slate-500">{tx('Si')}{' '}{first} {tx('deja de trabajar contigo o el enlace llega a otra persona, anúlalo: deja de funcionar al momento.')}</p>
         </>
       )}
       {error && <Alert>{error}</Alert>}

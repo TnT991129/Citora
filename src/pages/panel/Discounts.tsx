@@ -8,6 +8,7 @@ import { publicUrl } from '../../lib/url'
 import { shareLink } from '../../lib/whatsapp'
 import { usePanel } from './context'
 import { Locked, useModule } from './Locked'
+import { t } from '../../lib/i18n'
 
 export default function Discounts() {
   const allowed = useModule('descuentos')
@@ -31,7 +32,7 @@ export default function Discounts() {
   if (!list) return <PageLoader />
 
   const today = todayKey(business.timezone)
-  const describe = (d: Discount) => (d.percent ? `${d.percent}% de descuento` : `${money(d.amount, business.currency)} de descuento`)
+  const describe = (d: Discount) => (d.percent ? t('{n}% de descuento', { n: d.percent }) : t('{amount} de descuento', { amount: money(d.amount, business.currency) }))
 
   const toggle = async (d: Discount, active: boolean) => {
     const { error } = await supabase.from('discounts').update({ active }).eq('id', d.id)
@@ -42,7 +43,7 @@ export default function Discounts() {
   const remove = async (d: Discount) => {
     const { error } = await supabase.from('discounts').delete().eq('id', d.id)
     if (error) return setError(errorMessage(error))
-    flash('Código borrado')
+    flash(t('Código borrado'))
     load()
   }
 
@@ -50,16 +51,16 @@ export default function Discounts() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold">Cupones</h1>
-          <p className="text-slate-600">Códigos que tus clientes escriben al reservar para tener descuento.</p>
+          <h1 className="text-2xl font-extrabold">{t('Cupones')}</h1>
+          <p className="text-slate-600">{t('Códigos que tus clientes escriben al reservar para tener descuento.')}</p>
         </div>
-        <Button onClick={() => setCreating(true)}>Nuevo código</Button>
+        <Button onClick={() => setCreating(true)}>{t('Nuevo código')}</Button>
       </div>
       {error && <Alert>{error}</Alert>}
 
       {list.length === 0 && (
         <div className="card text-center text-slate-600">
-          Crea un código como <b>BIENVENIDO10</b> y compártelo por WhatsApp o en tus redes.
+          {t('Crea un código como')}{' '}<b>{t('BIENVENIDO10')}</b> {t('y compártelo por WhatsApp o en tus redes.')}
         </div>
       )}
 
@@ -75,28 +76,28 @@ export default function Discounts() {
                   <p className="font-mono text-lg font-bold tracking-wide">{d.code}</p>
                   <p className="text-sm text-slate-600">{describe(d)}</p>
                   <p className="text-sm text-slate-500">
-                    {d.uses} {d.uses === 1 ? 'uso' : 'usos'}{d.max_uses !== null && ` de ${d.max_uses}`}
-                    {d.valid_until && <> · {expired ? 'venció' : 'válido hasta'} el {longDate(d.valid_until)}</>}
+                    {d.uses} {d.uses === 1 ? t('uso') : t('usos')}{d.max_uses !== null && t(' de {max_uses}', { max_uses: d.max_uses })}
+                    {d.valid_until && <> · {expired ? t('venció') : t('válido hasta')} {t('el')}{' '}{longDate(d.valid_until)}</>}
                   </p>
                   {!live && (
                     <span className="chip mt-1 bg-slate-100 text-xs text-slate-600">
-                      {!d.active ? 'Pausado' : expired ? 'Vencido' : 'Agotado'}
+                      {!d.active ? t('Pausado') : expired ? t('Vencido') : t('Agotado')}
                     </span>
                   )}
                 </div>
-                <Toggle checked={d.active} onChange={(v) => toggle(d, v)} label="Activo" />
+                <Toggle checked={d.active} onChange={(v) => toggle(d, v)} label={t('Activo')} />
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <CopyButton text={d.code} label="Copiar código" />
+                <CopyButton text={d.code} label={t('Copiar código')} />
                 <a
                   href={shareLink(`🎁 Usa el código *${d.code}* al reservar en ${business.name} y ten ${describe(d)}.\n${publicUrl(business.slug)}`)}
                   target="_blank"
                   rel="noreferrer"
                   className="rounded-lg px-3 py-1.5 text-sm font-semibold text-brand hover:bg-slate-100"
                 >
-                  Compartir por WhatsApp
+                  {t('Compartir por WhatsApp')}
                 </a>
-                <button onClick={() => remove(d)} className="rounded-lg px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50">Borrar</button>
+                <button onClick={() => remove(d)} className="rounded-lg px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50">{t('Borrar')}</button>
               </div>
             </li>
           )
@@ -128,8 +129,8 @@ function NewDiscount({ businessId, currency, onClose, onDone }: { businessId: st
   const [error, setError] = useState<string | null>(null)
 
   const save = async () => {
-    if (!/^[A-Z0-9-]{3,20}$/.test(code)) return setError('El código debe tener de 3 a 20 letras, números o guiones.')
-    if (!(value > 0) || (kind === 'percent' && value > 100)) return setError(kind === 'percent' ? 'El porcentaje va de 1 a 100.' : 'Escribe un importe mayor que 0.')
+    if (!/^[A-Z0-9-]{3,20}$/.test(code)) return setError(t('El código debe tener de 3 a 20 letras, números o guiones.'))
+    if (!(value > 0) || (kind === 'percent' && value > 100)) return setError(kind === 'percent' ? t('El porcentaje va de 1 a 100.') : t('Escribe un importe mayor que 0.'))
     setBusy(true)
     setError(null)
     const { error } = await supabase.from('discounts').insert({
@@ -141,33 +142,33 @@ function NewDiscount({ businessId, currency, onClose, onDone }: { businessId: st
       max_uses: maxUses ? Math.max(1, Number(maxUses)) : null,
     })
     setBusy(false)
-    if (error) return setError(/duplicate|unique/i.test(error.message) ? 'Ya tienes un código con ese nombre.' : errorMessage(error))
-    flash('Código creado')
+    if (error) return setError(/duplicate|unique/i.test(error.message) ? t('Ya tienes un código con ese nombre.') : errorMessage(error))
+    flash(t('Código creado'))
     onDone()
   }
 
   return (
-    <Modal open onClose={onClose} title="Nuevo código" footer={<Button block onClick={save} loading={busy}>Crear código</Button>}>
+    <Modal open onClose={onClose} title={t('Nuevo código')} footer={<Button block onClick={save} loading={busy}>{t('Crear código')}</Button>}>
       <div className="space-y-4">
-        <Field label="Código" hint="Lo que escribe el cliente. Ej. BIENVENIDO10">
+        <Field label={t('Código')} hint={t('Lo que escribe el cliente. Ej. BIENVENIDO10')}>
           <input className="input font-mono uppercase" value={code} maxLength={20} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))} />
         </Field>
         <div className="grid grid-cols-2 gap-2">
           {(['percent', 'amount'] as const).map((k) => (
             <button key={k} onClick={() => setKind(k)} className={`rounded-xl py-2.5 font-semibold ${kind === k ? 'bg-brand text-white' : 'bg-white ring-1 ring-slate-300'}`}>
-              {k === 'percent' ? 'Porcentaje' : 'Importe fijo'}
+              {k === 'percent' ? t('Porcentaje') : t('Importe fijo')}
             </button>
           ))}
         </div>
-        <Field label={kind === 'percent' ? 'Descuento (%)' : `Descuento (${currency})`}>
+        <Field label={kind === 'percent' ? t('Descuento (%)') : t('Descuento ({currency})', { currency: currency })}>
           <input className="input" type="number" min={1} step="any" inputMode="decimal" max={kind === 'percent' ? 100 : undefined} value={value} onChange={(e) => setValue(Number(e.target.value))} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Válido hasta (opcional)">
+          <Field label={t('Válido hasta (opcional)')}>
             <input className="input" type="date" value={until} onChange={(e) => setUntil(e.target.value)} />
           </Field>
-          <Field label="Usos máximos (opcional)">
-            <input className="input" type="number" min={1} value={maxUses} onChange={(e) => setMaxUses(e.target.value)} placeholder="Sin límite" />
+          <Field label={t('Usos máximos (opcional)')}>
+            <input className="input" type="number" min={1} value={maxUses} onChange={(e) => setMaxUses(e.target.value)} placeholder={t('Sin límite')} />
           </Field>
         </div>
         {error && <Alert>{error}</Alert>}

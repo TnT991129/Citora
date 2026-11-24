@@ -11,10 +11,11 @@ import { publicUrl } from '../../lib/url'
 import { waLink } from '../../lib/whatsapp'
 import { usePanel } from './context'
 import { Locked, useModule } from './Locked'
+import { t as tx } from '../../lib/i18n'
 
 type Sort = 'recientes' | 'visitas' | 'gasto' | 'nombre' | 'inactivos'
 const INACTIVE_DAYS = 45
-const TAGS = ['VIP', 'Frecuente', 'Nuevo', 'Puntual', 'Llega tarde', 'No viene']
+const TAGS = [tx('VIP'), tx('Frecuente'), tx('Nuevo'), tx('Puntual'), tx('Llega tarde'), tx('No viene')]
 
 /** Hace tiempo que no viene: su última visita fue hace 45 días o más y no tiene ninguna cita pendiente */
 function isLapsed(c: CustomerSummary): boolean {
@@ -24,16 +25,16 @@ function isLapsed(c: CustomerSummary): boolean {
 
 type Filter = 'todos' | 'fieles' | 'lejos' | 'nuevos'
 const FILTERS: Record<Filter, { label: string; test: (c: CustomerSummary) => boolean }> = {
-  todos: { label: 'Todos', test: () => true },
-  fieles: { label: 'Fieles', test: (c) => c.visits >= 5 },
-  lejos: { label: 'Hace tiempo que no vienen', test: isLapsed },
-  nuevos: { label: 'Nuevos', test: (c) => c.visits <= 1 && serverNow() - new Date(c.first_at).getTime() < 30 * 86400000 },
+  todos: { label: tx('Todos'), test: () => true },
+  fieles: { label: tx('Fieles'), test: (c) => c.visits >= 5 },
+  lejos: { label: tx('Hace tiempo que no vienen'), test: isLapsed },
+  nuevos: { label: tx('Nuevos'), test: (c) => c.visits <= 1 && serverNow() - new Date(c.first_at).getTime() < 30 * 86400000 },
 }
 
 /** "Te echamos de menos": para escribir a quien hace tiempo que no viene */
 export function missYouMessage(customer: string, business: string, url: string): string {
   const first = customer.trim().split(/\s+/)[0] || ''
-  return `¡Hola${first ? ` ${first}` : ''}! Hace tiempo que no te vemos por ${business} y te echamos de menos. 😊 Cuando quieras, reserva tu cita aquí: ${url}`
+  return tx('¡Hola{v}! Hace tiempo que no te vemos por {business} y te echamos de menos. 😊 Cuando quieras, reserva tu cita aquí: {url}', { v: first ? ` ${first}` : '', business: business, url: url })
 }
 
 export default function Customers() {
@@ -88,24 +89,24 @@ export default function Customers() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-extrabold">Clientes</h1>
+        <h1 className="text-2xl font-extrabold">{tx('Clientes')}</h1>
         <p className="text-slate-600">
-          {list.length} {list.length === 1 ? 'cliente' : 'clientes'} · {returning} han vuelto más de una vez
+          {list.length} {list.length === 1 ? tx('cliente') : tx('clientes')} · {returning} {tx('han vuelto más de una vez')}
         </p>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <input className="input sm:max-w-xs" placeholder="Buscar por nombre, teléfono o etiqueta…" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select className="input w-auto" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Ordenar">
-          <option value="recientes">Más recientes</option>
-          <option value="visitas">Más visitas</option>
-          <option value="gasto">Más gasto</option>
-          <option value="nombre">Nombre (A-Z)</option>
-          <option value="inactivos">Más tiempo sin venir</option>
+        <input className="input sm:max-w-xs" placeholder={tx('Buscar por nombre, teléfono o etiqueta…')} value={q} onChange={(e) => setQ(e.target.value)} />
+        <select className="input w-auto" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label={tx('Ordenar')}>
+          <option value="recientes">{tx('Más recientes')}</option>
+          <option value="visitas">{tx('Más visitas')}</option>
+          <option value="gasto">{tx('Más gasto')}</option>
+          <option value="nombre">{tx('Nombre (A-Z)')}</option>
+          <option value="inactivos">{tx('Más tiempo sin venir')}</option>
         </select>
       </div>
 
-      <div className="no-scrollbar scroll-fade-x -mx-4 flex gap-2 overflow-x-auto px-4" role="tablist" aria-label="Filtrar clientes">
+      <div className="no-scrollbar scroll-fade-x -mx-4 flex gap-2 overflow-x-auto px-4" role="tablist" aria-label={tx('Filtrar clientes')}>
         {(Object.keys(FILTERS) as Filter[]).map((k) => (
           <button
             key={k}
@@ -121,13 +122,13 @@ export default function Customers() {
       </div>
       {filter === 'lejos' && (
         <p className="rounded-xl bg-brand/5 p-3 text-sm text-slate-600 ring-1 ring-brand/15">
-          Escríbeles para que vuelvan. El mensaje ya va escrito y puedes cambiarlo antes de enviarlo.
+          {tx('Escríbeles para que vuelvan. El mensaje ya va escrito y puedes cambiarlo antes de enviarlo.')}
         </p>
       )}
 
       {list.length === 0 && (
         <div className="card text-center text-slate-600">
-          Cuando tus clientes reserven, aparecerán aquí con su historial.
+          {tx('Cuando tus clientes reserven, aparecerán aquí con su historial.')}
         </div>
       )}
 
@@ -144,12 +145,12 @@ export default function Customers() {
                   {c.tags.map((t) => <span key={t} className="chip ml-1.5 bg-slate-100 text-xs text-slate-600">{t}</span>)}
                 </p>
                 <p className="text-sm text-slate-500">
-                  {c.visits} {c.visits === 1 ? 'visita' : 'visitas'}
-                  {c.last_visit && <> · última {shortDate(dateKey(c.last_visit, business.timezone))}</>}
-                  {c.no_shows > 0 && <span className="text-red-600"> · {c.no_shows} sin venir</span>}
+                  {c.visits} {c.visits === 1 ? tx('visita') : tx('visitas')}
+                  {c.last_visit && <> {tx('· última')}{' '}{shortDate(dateKey(c.last_visit, business.timezone))}</>}
+                  {c.no_shows > 0 && <span className="text-red-600"> · {c.no_shows} {tx('sin venir')}</span>}
                 </p>
-                {c.next_at && <p className="text-sm font-medium text-brand">Próxima: {shortDate(dateKey(c.next_at, business.timezone))} · {timeOf(c.next_at, business.timezone, true)}</p>}
-                {inactive && <p className="text-sm font-medium text-amber-700">⏰ {daysSince} días sin venir</p>}
+                {c.next_at && <p className="text-sm font-medium text-brand">{tx('Próxima:')}{' '}{shortDate(dateKey(c.next_at, business.timezone))} · {timeOf(c.next_at, business.timezone, true)}</p>}
+                {inactive && <p className="text-sm font-medium text-amber-700">⏰ {daysSince} {tx('días sin venir')}</p>}
               </div>
               <span className="shrink-0 font-semibold">{money(c.spent, business.currency)}</span>
             </button>
@@ -160,13 +161,13 @@ export default function Customers() {
                 rel="noreferrer"
                 className="absolute bottom-3 left-4 inline-flex items-center gap-1.5 rounded-lg bg-[#25D366] px-3 py-1.5 text-sm font-semibold text-white shadow-sm sm:bottom-auto sm:left-auto sm:right-4 sm:top-1/2 sm:-translate-y-1/2"
               >
-                <WhatsAppIcon className="h-4 w-4" /> Escribirle
+                <WhatsAppIcon className="h-4 w-4" /> {tx('Escribirle')}
               </a>
             )}
           </li>
           )
         })}
-        {list.length > 0 && filtered.length === 0 && <p className="py-6 text-center text-slate-500">Nadie coincide con la búsqueda.</p>}
+        {list.length > 0 && filtered.length === 0 && <p className="py-6 text-center text-slate-500">{tx('Nadie coincide con la búsqueda.')}</p>}
       </ul>
 
       {open && (
@@ -218,7 +219,7 @@ function CustomerModal({ customer: c, business, onClose, onSaved }: {
     })
     setBusy(false)
     if (error) return setError(errorMessage(error))
-    flash('Ficha guardada')
+    flash(tx('Ficha guardada'))
     onSaved()
   }
 
@@ -227,34 +228,34 @@ function CustomerModal({ customer: c, business, onClose, onSaved }: {
   const tz = business.timezone
 
   return (
-    <Modal open onClose={onClose} title={c.name} footer={<Button block onClick={save} loading={busy}>Guardar ficha</Button>}>
+    <Modal open onClose={onClose} title={c.name} footer={<Button block onClick={save} loading={busy}>{tx('Guardar ficha')}</Button>}>
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           <a href={`tel:+${c.phone}`} className="font-mono text-slate-700">+{c.phone}</a>
-          <LinkButton href={waLink(c.phone, `Hola ${first}, te escribo de ${business.name}. `)} variant="whatsapp" size="sm" newTab>
+          <LinkButton href={waLink(c.phone, tx('Hola {first}, te escribo de {name}. ', { first: first, name: business.name }))} variant="whatsapp" size="sm" newTab>
             <WhatsAppIcon className="h-4 w-4" /> WhatsApp
           </LinkButton>
           <LinkButton
-            href={waLink(c.phone, `Hola ${first}, hace tiempo que no te vemos por ${business.name}. ¿Te reservo una cita? Puedes elegir día y hora aquí: ${publicUrl(business.slug)}`)}
+            href={waLink(c.phone, tx('Hola {first}, hace tiempo que no te vemos por {name}. ¿Te reservo una cita? Puedes elegir día y hora aquí: {publicUrl}', { first: first, name: business.name, publicUrl: publicUrl(business.slug) }))}
             variant="secondary"
             size="sm"
             newTab
           >
-            Invitar a volver
+            {tx('Invitar a volver')}
           </LinkButton>
         </div>
 
         <div className="grid grid-cols-3 gap-2 text-center">
-          <Mini label="Visitas" value={String(c.visits)} />
-          <Mini label="Gastado" value={money(c.spent, business.currency)} />
-          <Mini label="Sin venir" value={String(c.no_shows)} warn={c.no_shows > 0} />
+          <Mini label={tx('Visitas')} value={String(c.visits)} />
+          <Mini label={tx('Gastado')} value={money(c.spent, business.currency)} />
+          <Mini label={tx('Sin venir')} value={String(c.no_shows)} warn={c.no_shows > 0} />
         </div>
         <p className="text-sm text-slate-500">
-          Cliente desde el {fullDateFromIso(c.first_at, tz)} · {c.bookings} {c.bookings === 1 ? 'reserva' : 'reservas'}
+          {tx('Cliente desde el')}{' '}{fullDateFromIso(c.first_at, tz)} · {c.bookings} {c.bookings === 1 ? tx('reserva') : tx('reservas')}
           {c.cancelled > 0 && <> · {c.cancelled} {c.cancelled === 1 ? 'cancelada' : 'canceladas'}</>}
         </p>
 
-        <Field label="Etiquetas">
+        <Field label={tx('Etiquetas')}>
           <div className="flex flex-wrap gap-1.5">
             {TAGS.map((t) => (
               <button
@@ -268,14 +269,14 @@ function CustomerModal({ customer: c, business, onClose, onSaved }: {
             ))}
           </div>
         </Field>
-        <Field label="Notas privadas" hint="Solo las ves tú. Ej. preferencias, alergias, cómo le gusta el corte.">
+        <Field label={tx('Notas privadas')} hint={tx('Solo las ves tú. Ej. preferencias, alergias, cómo le gusta el corte.')}>
           <textarea className="input min-h-[80px]" maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} />
         </Field>
 
         <BonosSection phone={c.phone} business={business} />
 
         <div>
-          <p className="mb-1 text-sm font-semibold text-slate-700">Historial</p>
+          <p className="mb-1 text-sm font-semibold text-slate-700">{tx('Historial')}</p>
           {!history ? (
             <PageLoader />
           ) : (
@@ -326,19 +327,19 @@ function BonosSection({ phone, business }: { phone: string; business: Business }
     <div>
       <div className="mb-1 flex items-center justify-between">
         <span className="flex items-center gap-1.5">
-          <p className="text-sm font-semibold text-slate-700">Bonos</p>
-          <HelpTip text="Paquetes de sesiones prepagadas (ej. 5 cortes). Tú cobras por tu cuenta y descuentas una sesión aquí cada vez que la clienta viene." />
+          <p className="text-sm font-semibold text-slate-700">{tx('Bonos')}</p>
+          <HelpTip text={tx('Paquetes de sesiones prepagadas (ej. 5 cortes). Tú cobras por tu cuenta y descuentas una sesión aquí cada vez que la clienta viene.')} />
         </span>
-        <button onClick={() => setSelling(true)} className="text-sm font-semibold text-brand">Vender bono</button>
+        <button onClick={() => setSelling(true)} className="text-sm font-semibold text-brand">{tx('Vender bono')}</button>
       </div>
       {!list ? null : list.length === 0 ? (
-        <p className="text-sm text-slate-400">No tiene ningún bono.</p>
+        <p className="text-sm text-slate-400">{tx('No tiene ningún bono.')}</p>
       ) : (
         <ul className="space-y-1.5">
           {list.map((cp) => (
             <li key={cp.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm">
-              <span className="min-w-0 truncate"><b>{cp.package_name}</b> · {cp.sessions_left} de {cp.sessions_total}</span>
-              <Button size="sm" variant="secondary" disabled={cp.sessions_left <= 0} onClick={() => spendSession(cp)}>Usar 1 sesión</Button>
+              <span className="min-w-0 truncate"><b>{cp.package_name}</b> · {cp.sessions_left} {tx('de')}{' '}{cp.sessions_total}</span>
+              <Button size="sm" variant="secondary" disabled={cp.sessions_left <= 0} onClick={() => spendSession(cp)}>{tx('Usar 1 sesión')}</Button>
             </li>
           ))}
         </ul>
@@ -373,9 +374,9 @@ function SellPackage({ phone, business, types, onClose, onDone }: {
 
   if (types.length === 0) {
     return (
-      <Modal open onClose={onClose} title="Vender bono">
+      <Modal open onClose={onClose} title={tx('Vender bono')}>
         <p className="text-sm text-slate-600">
-          Todavía no tienes ningún bono creado. Ve a Más → Bonos para crear uno primero (ej. "5 cortes").
+          {tx('Todavía no tienes ningún bono creado. Ve a Más → Bonos para crear uno primero (ej. "5 cortes").')}
         </p>
       </Modal>
     )
@@ -383,7 +384,7 @@ function SellPackage({ phone, business, types, onClose, onDone }: {
 
   const sell = async () => {
     const pkg = types.find((t) => t.id === packageId)
-    if (!pkg) return setError('Elige un bono.')
+    if (!pkg) return setError(tx('Elige un bono.'))
     setBusy(true)
     setError(null)
     const { error } = await supabase.from('customer_packages').insert({
@@ -392,19 +393,19 @@ function SellPackage({ phone, business, types, onClose, onDone }: {
     })
     setBusy(false)
     if (error) return setError(errorMessage(error))
-    flash('Bono vendido')
+    flash(tx('Bono vendido'))
     onDone()
   }
 
   return (
-    <Modal open onClose={onClose} title="Vender bono" footer={<Button block onClick={sell} loading={busy}>Confirmar venta</Button>}>
+    <Modal open onClose={onClose} title={tx('Vender bono')} footer={<Button block onClick={sell} loading={busy}>{tx('Confirmar venta')}</Button>}>
       <div className="space-y-4">
-        <Field label="Bono">
+        <Field label={tx('Bono')}>
           <select className="input" value={packageId} onChange={(e) => setPackageId(e.target.value)}>
-            {types.map((t) => <option key={t.id} value={t.id}>{t.name} · {t.sessions} sesiones · {money(t.price, business.currency)}</option>)}
+            {types.map((t) => <option key={t.id} value={t.id}>{t.name} · {t.sessions} {tx('sesiones ·')}{' '}{money(t.price, business.currency)}</option>)}
           </select>
         </Field>
-        <p className="text-xs text-slate-500">Cobra el bono por tu cuenta (Transfermóvil, efectivo...) antes de confirmar.</p>
+        <p className="text-xs text-slate-500">{business.market === 'int' ? tx('Cobra el bono por tu cuenta (efectivo, transferencia...) antes de confirmar.') : tx('Cobra el bono por tu cuenta (Transfermóvil, efectivo...) antes de confirmar.')}</p>
         {error && <Alert>{error}</Alert>}
       </div>
     </Modal>

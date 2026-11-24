@@ -1131,6 +1131,13 @@ begin
 end $$;
 set role authenticated;
 select expect_error($$select _expiry_push_text('prueba', now(), 'UTC', 'x')$$, 'permission denied');
+reset role;
+do $$ declare t text[]; begin
+  t := _expiry_push_text_en('prueba', now() + interval '3 days', 'UTC', 'Nails Miami');
+  assert t[1] = '3 days left in your free trial', 'aviso en inglés: ' || t[1];
+  assert _l('en', 'hola', 'hi') = 'hi' and _l('es', 'hola', 'hi') = 'hola' and _l(null, 'hola', 'hi') = 'hola', 'idioma de los avisos';
+end $$;
+set role authenticated;
 
 -- ===== Encuestas a los dueños =====
 set role authenticated;
@@ -1521,7 +1528,7 @@ do $$ begin
   assert (select whatsapp from businesses where slug = 'nails-miami') = '13055551234', 'aunque su número sea de fuera';
 end $$;
 reset role;
-update platform_settings set price_int_basico = 10, price_int_ultra = 20, paypal_client_id = '';
+update platform_settings set price_int_basico = 12.50, price_int_ultra = 23.50, paypal_client_id = '';
 delete from businesses where slug in ('nails-miami', 'spa-habana');
 delete from auth.users where id in ('66666666-6666-6666-6666-666666666666', '77777777-7777-7777-7777-777777777777');
 set role authenticated;

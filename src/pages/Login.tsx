@@ -9,6 +9,7 @@ import { errorMessage } from '../lib/errors'
 import { goToMarket, type Market } from '../lib/market'
 import { supabase } from '../lib/supabase'
 import { panelPath, siteUrl } from '../lib/url'
+import { t } from '../lib/i18n'
 
 export default function Login() {
   const session = useSession()
@@ -25,7 +26,7 @@ export default function Login() {
 
   useEffect(() => {
     setBrandColor(null)
-    document.title = 'Entrar · Citora'
+    document.title = t('Entrar · Citora')
     track('visita', { page: 'entrar' })
   }, [])
 
@@ -57,7 +58,7 @@ export default function Login() {
   }
 
   const forgot = async () => {
-    if (!/^\S+@\S+\.\S+$/.test(email)) return setError('Escribe tu correo arriba y vuelve a pulsar.')
+    if (!/^\S+@\S+\.\S+$/.test(email)) return setError(t('Escribe tu correo arriba y vuelve a pulsar.'))
     setBusy(true)
     setError(null)
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
@@ -65,34 +66,34 @@ export default function Login() {
     })
     setBusy(false)
     if (error) setError(errorMessage(error))
-    else setInfo('Te enviamos un correo con un enlace para crear una contraseña nueva.')
+    else setInfo(t('Te enviamos un correo con un enlace para crear una contraseña nueva.'))
   }
 
   return (
     <AuthShell
-      title={session && !justSignedIn ? 'Ya tienes la sesión abierta' : 'Bienvenido de nuevo'}
-      subtitle={session && !justSignedIn ? undefined : 'Entra a tu panel para ver tu agenda.'}
-      footer={<>¿No tienes app todavía? <Link to="/crear" className="font-semibold text-brand">Créala gratis</Link></>}
+      title={session && !justSignedIn ? t('Ya tienes la sesión abierta') : t('Bienvenido de nuevo')}
+      subtitle={session && !justSignedIn ? undefined : t('Entra a tu panel para ver tu agenda.')}
+      footer={<>{t('¿No tienes app todavía?')}{' '}<Link to="/crear" className="font-semibold text-brand">{t('Créala gratis')}</Link></>}
     >
       {session && !justSignedIn ? (
         <div className="card space-y-3 text-center">
-          <p className="text-slate-600">Estás conectado como <b>{session.user.email}</b>.</p>
-          <Button block onClick={goToPanel}>Ir a mi panel</Button>
-          <Button block variant="secondary" onClick={() => supabase.auth.signOut()}>Entrar con otra cuenta</Button>
+          <p className="text-slate-600">{t('Estás conectado como')}{' '}<b>{session.user.email}</b>.</p>
+          <Button block onClick={goToPanel}>{t('Ir a mi panel')}</Button>
+          <Button block variant="secondary" onClick={() => supabase.auth.signOut()}>{t('Entrar con otra cuenta')}</Button>
         </div>
       ) : (
       <form onSubmit={submit} className="card space-y-4">
-        <Field label="Correo electrónico">
+        <Field label={t('Correo electrónico')}>
           <input className="input" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         </Field>
-        <Field label="Contraseña">
+        <Field label={t('Contraseña')}>
           <input className="input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         </Field>
         {error && <Alert>{error}</Alert>}
         {info && <Alert kind="success">{info}</Alert>}
-        <Button type="submit" block size="lg" loading={busy}>Entrar</Button>
+        <Button type="submit" block size="lg" loading={busy}>{t('Entrar')}</Button>
         <button type="button" onClick={forgot} className="w-full text-center text-sm font-medium text-slate-500 hover:text-slate-700">
-          Olvidé mi contraseña
+          {t('Olvidé mi contraseña')}
         </button>
       </form>
       )}

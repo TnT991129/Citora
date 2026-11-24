@@ -13,6 +13,8 @@ export interface Business {
   code: string
   /** Versión de Citora: 'cu' (Cuba) o 'int' (internacional, citora-app.com/int/). La cambia el administrador. */
   market: Market
+  /** Idioma del panel del dueño ('es' o 'en'): en él le llegan los avisos push a él y a sus clientes */
+  lang?: 'es' | 'en'
   name: string
   business_type: string
   whatsapp: string

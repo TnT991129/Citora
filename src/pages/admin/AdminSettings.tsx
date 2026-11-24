@@ -31,10 +31,10 @@ interface Settings {
 }
 
 /** Campo numérico con su unidad a la derecha ("1500 CUP", "15 días") */
-function SuffixInput({ value, suffix, onChange, min, max }: { value: number; suffix: string; onChange: (v: number) => void; min?: number; max?: number }) {
+function SuffixInput({ value, suffix, onChange, min, max, decimals }: { value: number; suffix: string; onChange: (v: number) => void; min?: number; max?: number; decimals?: boolean }) {
   return (
     <div className="flex items-center rounded-xl border border-slate-300 bg-white pr-3.5 shadow-sm shadow-slate-900/[0.03] transition focus-within:border-brand focus-within:ring-4 focus-within:ring-brand/15">
-      <input className="w-full min-w-0 rounded-xl bg-transparent px-3.5 py-2.5 text-base outline-none" type="number" inputMode="numeric" min={min} max={max} value={value} onChange={(e) => onChange(Number(e.target.value))} />
+      <input className="w-full min-w-0 rounded-xl bg-transparent px-3.5 py-2.5 text-base outline-none" type="number" inputMode={decimals ? 'decimal' : 'numeric'} step={decimals ? 0.01 : 1} min={min} max={max} value={value} onChange={(e) => onChange(Number(e.target.value))} />
       <span className="shrink-0 text-slate-400">{suffix}</span>
     </div>
   )
@@ -111,10 +111,10 @@ export default function AdminSettings() {
           <div className="card space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Citora Solo, al mes">
-                <SuffixInput value={s.price_int_basico ?? 10} suffix="USD" min={0} onChange={(v) => setS({ ...s, price_int_basico: v })} />
+                <SuffixInput value={s.price_int_basico ?? 12.5} suffix="USD" min={0} decimals onChange={(v) => setS({ ...s, price_int_basico: v })} />
               </Field>
               <Field label="Citora Equipo, al mes">
-                <SuffixInput value={s.price_int_ultra ?? 20} suffix="USD" min={0} onChange={(v) => setS({ ...s, price_int_ultra: v })} />
+                <SuffixInput value={s.price_int_ultra ?? 23.5} suffix="USD" min={0} decimals onChange={(v) => setS({ ...s, price_int_ultra: v })} />
               </Field>
             </div>
             <Field

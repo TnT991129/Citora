@@ -7,6 +7,7 @@ import { publicUrl } from '../../lib/url'
 import { shareLink } from '../../lib/whatsapp'
 import { usePanel } from './context'
 import { Icon } from './Panel'
+import { t } from '../../lib/i18n'
 
 /** Los negocios creados antes de esta versión que ya reciben reservas no ven la tarjeta */
 const SINCE = '2026-11-16T00:00:00Z'
@@ -36,10 +37,10 @@ export function FirstSteps() {
       <div className="card flex items-center gap-3">
         <span className="text-2xl" aria-hidden>🏆</span>
         <div className="min-w-0 flex-1">
-          <p className="font-bold">¡Todo listo!</p>
-          <p className="text-sm text-slate-500">Ya recibiste tu primera reserva de un cliente. Esta tarjeta ya no saldrá más.</p>
+          <p className="font-bold">{t('¡Todo listo!')}</p>
+          <p className="text-sm text-slate-500">{t('Ya recibiste tu primera reserva de un cliente. Esta tarjeta ya no saldrá más.')}</p>
         </div>
-        <button onClick={() => updateOnboarding({ all_done: new Date().toISOString() })} className="shrink-0 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-brand hover:bg-brand/10">Cerrar</button>
+        <button onClick={() => updateOnboarding({ all_done: new Date().toISOString() })} className="shrink-0 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-brand hover:bg-brand/10">{t('Cerrar')}</button>
       </div>
     )
   }
@@ -55,7 +56,7 @@ export function FirstSteps() {
       window.open(publicUrl(business.slug, 'reservar'), '_blank', 'noopener')
       markStep('prueba')
     } else if (id === 'compartir') {
-      window.open(shareLink(`¡Reserva tu cita en ${business.name} desde aquí! ${url}`), '_blank', 'noopener')
+      window.open(shareLink(t('¡Reserva tu cita en {name} desde aquí! {url}', { name: business.name, url })), '_blank', 'noopener')
       markStep('compartir')
     }
   }
@@ -71,8 +72,8 @@ export function FirstSteps() {
           <span className="absolute text-xs font-bold">{count}/{FIRST_STEPS.length}</span>
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block font-bold">Primeros pasos</span>
-          <span className="block text-sm text-slate-500">Hasta tu primera reserva de un cliente</span>
+          <span className="block font-bold">{t('Primeros pasos')}</span>
+          <span className="block text-sm text-slate-500">{t('Hasta tu primera reserva de un cliente')}</span>
         </span>
         <Icon name="chevron" className={`h-4 w-4 shrink-0 text-slate-400 transition ${open ? 'rotate-90' : ''}`} />
       </button>
@@ -96,7 +97,7 @@ export function FirstSteps() {
                   <span className={`block font-semibold ${ok ? 'text-slate-400 line-through' : ''}`}>{s.title}</span>
                   {!ok && (
                     <span className={`block text-sm ${warn ? 'text-amber-800' : 'text-slate-500'}`}>
-                      {warn ? 'Tus clientes verán los precios de ejemplo. Revísalos antes de compartir.' : s.desc}
+                      {warn ? t('Tus clientes verán los precios de ejemplo. Revísalos antes de compartir.') : s.desc}
                     </span>
                   )}
                 </span>

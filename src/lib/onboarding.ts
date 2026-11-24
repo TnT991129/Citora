@@ -2,6 +2,7 @@
 // schema.sql). Si la base de datos aún no tiene la columna, todo funciona con los valores por defecto.
 import { supabase } from './supabase'
 import type { Business } from './types'
+import { t } from './i18n'
 
 export type SkipKey = 'moneda' | 'servicios' | 'horario'
 export type StepId = 'precios' | 'ver' | 'prueba' | 'avisos' | 'compartir' | 'primera'
@@ -16,15 +17,15 @@ export interface Onboarding {
 
 /** Herramientas de "Más". Las tres primeras están activas al empezar; el resto se activa con un toque. */
 export const TOOLS = [
-  { id: 'recordatorios', label: 'Recordatorios', desc: 'Avisa por WhatsApp a los clientes de mañana', icon: 'bell' },
-  { id: 'opiniones', label: 'Opiniones', desc: 'Lo que dicen tus clientes', icon: 'star' },
-  { id: 'estadisticas', label: 'Estadísticas', desc: 'Ingresos, asistencia y lo más pedido', icon: 'chart' },
-  { id: 'espera', label: 'Lista de espera', desc: 'Clientes que quieren un hueco si se libera', icon: 'hourglass' },
-  { id: 'cupones', label: 'Cupones', desc: 'Códigos de descuento para tus clientes', icon: 'gift' },
-  { id: 'bonos', label: 'Bonos', desc: 'Paquetes de sesiones pagadas por adelantado', icon: 'ticket' },
-  { id: 'galeria', label: 'Galería', desc: 'Fotos de tus trabajos en tu página', icon: 'image' },
-  { id: 'gastos', label: 'Gastos', desc: 'Apunta tus gastos y mira lo que ganas de verdad', icon: 'receipt' },
-  { id: 'respaldo', label: 'Respaldo', desc: 'Descarga tus citas y clientes en Excel', icon: 'download' },
+  { id: 'recordatorios', label: t('Recordatorios'), desc: t('Avisa por WhatsApp a los clientes de mañana'), icon: 'bell' },
+  { id: 'opiniones', label: t('Opiniones'), desc: t('Lo que dicen tus clientes'), icon: 'star' },
+  { id: 'estadisticas', label: t('Estadísticas'), desc: t('Ingresos, asistencia y lo más pedido'), icon: 'chart' },
+  { id: 'espera', label: t('Lista de espera'), desc: t('Clientes que quieren un hueco si se libera'), icon: 'hourglass' },
+  { id: 'cupones', label: t('Cupones'), desc: t('Códigos de descuento para tus clientes'), icon: 'gift' },
+  { id: 'bonos', label: t('Bonos'), desc: t('Paquetes de sesiones pagadas por adelantado'), icon: 'ticket' },
+  { id: 'galeria', label: t('Galería'), desc: t('Fotos de tus trabajos en tu página'), icon: 'image' },
+  { id: 'gastos', label: t('Gastos'), desc: t('Apunta tus gastos y mira lo que ganas de verdad'), icon: 'receipt' },
+  { id: 'respaldo', label: t('Respaldo'), desc: t('Descarga tus citas y clientes en Excel'), icon: 'download' },
 ] as const
 
 export type ToolId = (typeof TOOLS)[number]['id']
@@ -70,12 +71,12 @@ export async function fetchProgress(): Promise<Progress | null> {
 
 /** Primeros pasos, en orden. "primera" se marca sola. */
 export const FIRST_STEPS: { id: StepId; title: string; desc: string }[] = [
-  { id: 'precios', title: 'Revisa tus servicios y precios', desc: 'Son lo primero que ven tus clientes.' },
-  { id: 'ver', title: 'Mira tu página como un cliente', desc: 'Así sabes qué verán al abrir tu enlace.' },
-  { id: 'prueba', title: 'Haz una reserva de prueba', desc: 'Resérvate una cita tú mismo y mira cómo te llega.' },
-  { id: 'avisos', title: 'Activa los avisos en este móvil', desc: 'Sin esto no te enteras cuando alguien reserva.' },
-  { id: 'compartir', title: 'Comparte tu enlace en WhatsApp', desc: 'Ponlo en tu estado: el mensaje ya está escrito.' },
-  { id: 'primera', title: 'Recibe tu primera reserva', desc: 'Se marca sola cuando un cliente reserve.' },
+  { id: 'precios', title: t('Revisa tus servicios y precios'), desc: t('Son lo primero que ven tus clientes.') },
+  { id: 'ver', title: t('Mira tu página como un cliente'), desc: t('Así sabes qué verán al abrir tu enlace.') },
+  { id: 'prueba', title: t('Haz una reserva de prueba'), desc: t('Resérvate una cita tú mismo y mira cómo te llega.') },
+  { id: 'avisos', title: t('Activa los avisos en este móvil'), desc: t('Sin esto no te enteras cuando alguien reserva.') },
+  { id: 'compartir', title: t('Comparte tu enlace en WhatsApp'), desc: t('Ponlo en tu estado: el mensaje ya está escrito.') },
+  { id: 'primera', title: t('Recibe tu primera reserva'), desc: t('Se marca sola cuando un cliente reserve.') },
 ]
 
 /** Qué pasos están hechos, mezclando lo que apuntó el panel con lo que dicen los datos */

@@ -1,3 +1,4 @@
+import { t as tx } from './i18n'
 // Tipos de negocio y servicios sugeridos para cada uno
 export interface ServiceTemplate {
   name: string
@@ -14,70 +15,70 @@ export interface BusinessType {
 
 export const BUSINESS_TYPES: BusinessType[] = [
   {
-    key: 'unas', name: 'Uñas', emoji: '💅',
+    key: 'unas', name: tx('Uñas'), emoji: '💅',
     services: [
-      { name: 'Manicura', price: 1500, duration_min: 60 },
-      { name: 'Pedicura', price: 1800, duration_min: 60 },
-      { name: 'Uñas acrílicas', price: 3500, duration_min: 120 },
-      { name: 'Retoque', price: 1200, duration_min: 60 },
+      { name: tx('Manicura'), price: 1500, duration_min: 60 },
+      { name: tx('Pedicura'), price: 1800, duration_min: 60 },
+      { name: tx('Uñas acrílicas'), price: 3500, duration_min: 120 },
+      { name: tx('Retoque'), price: 1200, duration_min: 60 },
     ],
   },
   {
-    key: 'barberia', name: 'Barbería', emoji: '💈',
+    key: 'barberia', name: tx('Barbería'), emoji: '💈',
     services: [
-      { name: 'Corte', price: 600, duration_min: 30 },
-      { name: 'Barba', price: 400, duration_min: 30 },
-      { name: 'Corte + barba', price: 900, duration_min: 60 },
+      { name: tx('Corte'), price: 600, duration_min: 30 },
+      { name: tx('Barba'), price: 400, duration_min: 30 },
+      { name: tx('Corte + barba'), price: 900, duration_min: 60 },
     ],
   },
   {
-    key: 'peluqueria', name: 'Peluquería', emoji: '💇‍♀️',
+    key: 'peluqueria', name: tx('Peluquería'), emoji: '💇‍♀️',
     services: [
-      { name: 'Corte de pelo', price: 1000, duration_min: 45 },
-      { name: 'Peinado', price: 1200, duration_min: 60 },
-      { name: 'Tinte', price: 3000, duration_min: 120 },
-      { name: 'Alisado', price: 4000, duration_min: 150 },
+      { name: tx('Corte de pelo'), price: 1000, duration_min: 45 },
+      { name: tx('Peinado'), price: 1200, duration_min: 60 },
+      { name: tx('Tinte'), price: 3000, duration_min: 120 },
+      { name: tx('Alisado'), price: 4000, duration_min: 150 },
     ],
   },
   {
-    key: 'cejas', name: 'Cejas y pestañas', emoji: '👁️',
+    key: 'cejas', name: tx('Cejas y pestañas'), emoji: '👁️',
     services: [
-      { name: 'Diseño de cejas', price: 800, duration_min: 30 },
-      { name: 'Extensión de pestañas', price: 3000, duration_min: 90 },
-      { name: 'Lifting de pestañas', price: 2000, duration_min: 60 },
+      { name: tx('Diseño de cejas'), price: 800, duration_min: 30 },
+      { name: tx('Extensión de pestañas'), price: 3000, duration_min: 90 },
+      { name: tx('Lifting de pestañas'), price: 2000, duration_min: 60 },
     ],
   },
   {
-    key: 'spa', name: 'Spa y masajes', emoji: '💆',
+    key: 'spa', name: tx('Spa y masajes'), emoji: '💆',
     services: [
-      { name: 'Masaje relajante', price: 2500, duration_min: 60 },
-      { name: 'Limpieza facial', price: 2000, duration_min: 60 },
+      { name: tx('Masaje relajante'), price: 2500, duration_min: 60 },
+      { name: tx('Limpieza facial'), price: 2000, duration_min: 60 },
     ],
   },
   {
-    key: 'maquillaje', name: 'Maquillaje', emoji: '💄',
+    key: 'maquillaje', name: tx('Maquillaje'), emoji: '💄',
     services: [
-      { name: 'Maquillaje social', price: 2500, duration_min: 60 },
-      { name: 'Maquillaje de novia', price: 6000, duration_min: 120 },
+      { name: tx('Maquillaje social'), price: 2500, duration_min: 60 },
+      { name: tx('Maquillaje de novia'), price: 6000, duration_min: 120 },
     ],
   },
   {
-    key: 'tatuajes', name: 'Tatuajes', emoji: '🖋️',
+    key: 'tatuajes', name: tx('Tatuajes'), emoji: '🖋️',
     services: [
-      { name: 'Tatuaje pequeño', price: 3000, duration_min: 60 },
-      { name: 'Consulta de diseño', price: 0, duration_min: 30 },
+      { name: tx('Tatuaje pequeño'), price: 3000, duration_min: 60 },
+      { name: tx('Consulta de diseño'), price: 0, duration_min: 30 },
     ],
   },
   {
-    key: 'consulta', name: 'Consulta', emoji: '🩺',
+    key: 'consulta', name: tx('Consulta'), emoji: '🩺',
     services: [
-      { name: 'Consulta', price: 1000, duration_min: 30 },
-      { name: 'Seguimiento', price: 600, duration_min: 30 },
+      { name: tx('Consulta'), price: 1000, duration_min: 30 },
+      { name: tx('Seguimiento'), price: 600, duration_min: 30 },
     ],
   },
   {
-    key: 'otro', name: 'Otro', emoji: '✨',
-    services: [{ name: 'Servicio', price: 1000, duration_min: 60 }],
+    key: 'otro', name: tx('Otro'), emoji: '✨',
+    services: [{ name: tx('Servicio'), price: 1000, duration_min: 60 }],
   },
 ]
 

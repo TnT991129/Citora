@@ -135,7 +135,7 @@ export default function BusinessHome() {
             </div>
           )}
           {rate && showPrices && (
-            <p className="mt-3 text-center text-xs text-slate-500">{t('Cambio en CUP a la tasa de hoy')}: 1 USD = {money(rate, 'CUP')}</p>
+            <p className="mt-3 text-center text-xs text-slate-500">{t('Cambio en CUP a la tasa de hoy')}{t(': 1 USD =')}{' '}{money(rate, 'CUP')}</p>
           )}
         </section>
 

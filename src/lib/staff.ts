@@ -1,5 +1,6 @@
 import { businessType } from './templates'
 import type { PublicStaff } from './types'
+import { t } from './i18n'
 
 /**
  * ¿Hace este profesional todos estos servicios? Como en la base de datos (_staff_can_do): si no
@@ -65,7 +66,7 @@ export function groupServices<S extends { id: string }>(
     groups.push({
       key: 'dueno',
       // Los servicios de la casa: su especialidad o, si no la puso, el tipo de negocio ("Barbería")
-      title: specialty || owner.typeName?.trim() || name || 'Servicios',
+      title: specialty || owner.typeName?.trim() || name || t('Servicios'),
       staff: name ? { id: 'dueno', name, photo_url: owner.photo_url || null, specialty: specialty || null } : null,
       services: byKey.get('dueno')!,
     })
@@ -74,7 +75,7 @@ export function groupServices<S extends { id: string }>(
     const list = byKey.get(st.id)
     if (list) groups.push({ key: st.id, title: st.specialty?.trim() || st.name, staff: st, services: list })
   }
-  if (byKey.has('varios')) groups.push({ key: 'varios', title: 'Con varias personas del equipo', staff: null, services: byKey.get('varios')! })
+  if (byKey.has('varios')) groups.push({ key: 'varios', title: t('Con varias personas del equipo'), staff: null, services: byKey.get('varios')! })
   if (groups.length <= 1) return [{ key: 'todos', title: null, staff: null, services }]
   return groups
 }

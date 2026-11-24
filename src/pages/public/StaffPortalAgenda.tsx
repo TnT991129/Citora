@@ -8,6 +8,8 @@ import { addDays, dateKey, dayTitle, money, timeOf, todayKey, WEEKDAYS_SHORT, we
 import { supabase } from '../../lib/supabase'
 import type { AppointmentStatus } from '../../lib/types'
 import { waLink } from '../../lib/whatsapp'
+import { t as tx } from '../../lib/i18n'
+import { IS_INT } from '../../lib/market'
 
 export interface PortalAppt {
   id: string
@@ -48,7 +50,7 @@ export function StaffAgenda({ token, tz, currency, businessName, services }: Ctx
   }, [load])
 
   const setStatus = async (a: PortalAppt, status: AppointmentStatus) => {
-    if (status === 'cancelada' && !window.confirm(`¿Cancelar la cita de ${a.customer_name}?`)) return
+    if (status === 'cancelada' && !window.confirm(tx('¿Cancelar la cita de {customer_name}?', { customer_name: a.customer_name }))) return
     setBusy(a.id + status)
     const { error } = await supabase.rpc('staff_portal_set_status', { p_token: token, p_id: a.id, p_status: status })
     setBusy(null)
@@ -64,15 +66,15 @@ export function StaffAgenda({ token, tz, currency, businessName, services }: Ctx
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-1">
-          <button onClick={() => setDay(addDays(day, -7))} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Semana anterior">
+          <button onClick={() => setDay(addDays(day, -7))} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label={tx('Semana anterior')}>
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 6l-6 6 6 6" /></svg>
           </button>
-          <button onClick={() => setDay(addDays(day, 7))} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Semana siguiente">
+          <button onClick={() => setDay(addDays(day, 7))} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label={tx('Semana siguiente')}>
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 6l6 6-6 6" /></svg>
           </button>
-          {day !== today && <button onClick={() => setDay(today)} className="rounded-lg px-2 py-1 text-sm font-semibold text-brand">Hoy</button>}
+          {day !== today && <button onClick={() => setDay(today)} className="rounded-lg px-2 py-1 text-sm font-semibold text-brand">{tx('Hoy')}</button>}
         </div>
-        <Button size="sm" onClick={() => setAdding(true)}>+ Cita</Button>
+        <Button size="sm" onClick={() => setAdding(true)}>{tx('+ Cita')}</Button>
       </div>
 
       <div className="grid grid-cols-7 gap-1.5">
@@ -88,7 +90,7 @@ export function StaffAgenda({ token, tz, currency, businessName, services }: Ctx
             >
               <span className={`text-[11px] font-semibold ${sel ? 'text-white/80' : 'text-slate-400'}`}>{WEEKDAYS_SHORT[weekdayOf(d)]}</span>
               <span className="text-lg font-extrabold leading-none">{Number(d.slice(8))}</span>
-              <span className="flex h-1.5 gap-0.5" aria-label={`${n} ${n === 1 ? 'cita' : 'citas'}`}>
+              <span className="flex h-1.5 gap-0.5" aria-label={n === 1 ? tx('1 cita') : tx('{n} citas', { n })}>
                 {Array.from({ length: Math.min(n, 4) }, (_, k) => <span key={k} className={`h-1.5 w-1.5 rounded-full ${sel ? 'bg-white/80' : 'bg-brand/50'}`} />)}
               </span>
             </button>
@@ -96,12 +98,12 @@ export function StaffAgenda({ token, tz, currency, businessName, services }: Ctx
         })}
       </div>
 
-      <h2 className="font-extrabold tracking-tight">{day === today ? 'Hoy' : dayTitle(day)}</h2>
+      <h2 className="font-extrabold tracking-tight">{day === today ? tx('Hoy') : dayTitle(day)}</h2>
       {error && <Alert>{error}</Alert>}
       {!list ? (
-        <p className="text-sm text-slate-400">Cargando…</p>
+        <p className="text-sm text-slate-400">{tx('Cargando…')}</p>
       ) : ofDay.length === 0 ? (
-        <div className="card text-center text-slate-500">No tienes citas este día.</div>
+        <div className="card text-center text-slate-500">{tx('No tienes citas este día.')}</div>
       ) : (
         <ul className="space-y-2">
           {ofDay.map((a) => (
@@ -110,32 +112,32 @@ export function StaffAgenda({ token, tz, currency, businessName, services }: Ctx
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-brand">{timeOf(a.starts_at, tz, true)} – {timeOf(a.ends_at, tz, true)}</p>
                   <p className={`truncate font-semibold ${a.status === 'cancelada' ? 'line-through' : ''}`}>{a.customer_name}</p>
-                  <p className="truncate text-sm text-slate-500">{a.services.join(', ') || 'Sin servicio'} · {money(a.total, currency)}</p>
+                  <p className="truncate text-sm text-slate-500">{a.services.join(', ') || tx('Sin servicio')} · {money(a.total, currency)}</p>
                   {a.customer_note && <p className="mt-1 text-sm text-slate-600">“{a.customer_note}”</p>}
                 </div>
                 <StatusBadge status={a.status} />
               </div>
               {a.status !== 'cancelada' && (
                 <div className="flex flex-wrap gap-2">
-                  {a.status === 'pendiente' && <Button size="sm" onClick={() => setStatus(a, 'confirmada')} loading={busy === a.id + 'confirmada'}>Confirmar</Button>}
+                  {a.status === 'pendiente' && <Button size="sm" onClick={() => setStatus(a, 'confirmada')} loading={busy === a.id + 'confirmada'}>{tx('Confirmar')}</Button>}
                   {(a.status === 'pendiente' || a.status === 'confirmada') && (
                     <>
-                      <Button size="sm" variant="secondary" onClick={() => setStatus(a, 'completada')} loading={busy === a.id + 'completada'}>Vino ✓</Button>
-                      <Button size="sm" variant="secondary" onClick={() => setStatus(a, 'no_asistio')} loading={busy === a.id + 'no_asistio'}>No vino</Button>
-                      <Button size="sm" variant="ghost" className="text-red-600" onClick={() => setStatus(a, 'cancelada')} loading={busy === a.id + 'cancelada'}>Cancelar</Button>
+                      <Button size="sm" variant="secondary" onClick={() => setStatus(a, 'completada')} loading={busy === a.id + 'completada'}>{tx('Vino ✓')}</Button>
+                      <Button size="sm" variant="secondary" onClick={() => setStatus(a, 'no_asistio')} loading={busy === a.id + 'no_asistio'}>{tx('No vino')}</Button>
+                      <Button size="sm" variant="ghost" className="text-red-600" onClick={() => setStatus(a, 'cancelada')} loading={busy === a.id + 'cancelada'}>{tx('Cancelar')}</Button>
                     </>
                   )}
                   {(a.status === 'completada' || a.status === 'no_asistio') && (
-                    <Button size="sm" variant="ghost" onClick={() => setStatus(a, 'confirmada')} loading={busy === a.id + 'confirmada'}>Volver a confirmada</Button>
+                    <Button size="sm" variant="ghost" onClick={() => setStatus(a, 'confirmada')} loading={busy === a.id + 'confirmada'}>{tx('Volver a confirmada')}</Button>
                   )}
                   {a.customer_phone.length >= 8 && (
                     <a
-                      href={waLink(a.customer_phone, `Hola ${a.customer_name.split(' ')[0]}, te escribo de ${businessName} por tu cita del ${dayTitle(dateKey(a.starts_at, tz)).toLowerCase()} a las ${timeOf(a.starts_at, tz, true)}.`)}
+                      href={waLink(a.customer_phone, tx('Hola {v}, te escribo de {businessName} por tu cita del {toLowerCase} a las {timeOf}.', { v: a.customer_name.split(' ')[0], businessName: businessName, toLowerCase: dayTitle(dateKey(a.starts_at, tz)).toLowerCase(), timeOf: timeOf(a.starts_at, tz, true) }))}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1.5 rounded-btn bg-[#25D366] px-3 py-1.5 text-sm font-semibold text-white"
                     >
-                      <WhatsAppIcon className="h-4 w-4" /> Escribir
+                      <WhatsAppIcon className="h-4 w-4" /> {tx('Escribir')}
                     </a>
                   )}
                 </div>
@@ -153,7 +155,7 @@ export function StaffAgenda({ token, tz, currency, businessName, services }: Ctx
           onClose={() => setAdding(false)}
           onCreated={(d) => {
             setAdding(false)
-            flash('Cita apuntada')
+            flash(tx('Cita apuntada'))
             setDay(d)
             load()
           }}
@@ -180,9 +182,9 @@ function NewStaffAppointment({ token, defaultDate, services, onClose, onCreated 
   const [error, setError] = useState<string | null>(null)
 
   const save = async () => {
-    if (picked.length === 0) return setError('Elige al menos un servicio.')
-    if (!date || !time) return setError('Elige el día y la hora.')
-    if (name.trim().length < 2) return setError('Escribe el nombre del cliente.')
+    if (picked.length === 0) return setError(tx('Elige al menos un servicio.'))
+    if (!date || !time) return setError(tx('Elige el día y la hora.'))
+    if (name.trim().length < 2) return setError(tx('Escribe el nombre del cliente.'))
     setBusy(true)
     setError(null)
     const { error } = await supabase.rpc('staff_portal_create_appointment', {
@@ -194,12 +196,12 @@ function NewStaffAppointment({ token, defaultDate, services, onClose, onCreated 
   }
 
   return (
-    <Modal open onClose={onClose} title="Nueva cita" footer={<Button block size="lg" onClick={save} loading={busy}>Guardar cita</Button>}>
+    <Modal open onClose={onClose} title={tx('Nueva cita')} footer={<Button block size="lg" onClick={save} loading={busy}>{tx('Guardar cita')}</Button>}>
       <div className="space-y-4">
         <div>
-          <p className="label">Qué se va a hacer</p>
+          <p className="label">{tx('Qué se va a hacer')}</p>
           {services.length === 0 ? (
-            <p className="text-sm text-slate-500">Primero crea tus servicios en la pestaña Servicios.</p>
+            <p className="text-sm text-slate-500">{tx('Primero crea tus servicios en la pestaña Servicios.')}</p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {services.map((s) => {
@@ -220,12 +222,12 @@ function NewStaffAppointment({ token, defaultDate, services, onClose, onCreated 
           )}
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Día"><input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
-          <Field label="Hora"><input type="time" className="input" value={time} step={300} onChange={(e) => setTime(e.target.value)} /></Field>
+          <Field label={tx('Día')}><input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+          <Field label={tx('Hora')}><input type="time" className="input" value={time} step={300} onChange={(e) => setTime(e.target.value)} /></Field>
         </div>
-        <Field label="Cliente"><input className="input" value={name} maxLength={80} placeholder="Nombre" onChange={(e) => setName(e.target.value)} /></Field>
-        <Field label="WhatsApp (opcional)"><input className="input" inputMode="tel" value={phone} placeholder="53 5555 5555" onChange={(e) => setPhone(e.target.value)} /></Field>
-        <Field label="Nota (opcional)"><input className="input" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} /></Field>
+        <Field label={tx('Cliente')}><input className="input" value={name} maxLength={80} placeholder={tx('Nombre')} onChange={(e) => setName(e.target.value)} /></Field>
+        <Field label={tx('WhatsApp (opcional)')}><input className="input" inputMode="tel" value={phone} placeholder={IS_INT ? '1 305 555 1234' : '53 5555 5555'} onChange={(e) => setPhone(e.target.value)} /></Field>
+        <Field label={tx('Nota (opcional)')}><input className="input" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} /></Field>
         {error && <Alert>{error}</Alert>}
       </div>
     </Modal>
@@ -257,27 +259,27 @@ export function StaffStats({ token, currency }: { token: string; currency: strin
   const max = Math.max(1, ...(s?.top_services || []).map((t) => t.count))
   return (
     <div className="space-y-4">
-      <div className="inline-flex rounded-full bg-slate-100 p-1" role="tablist" aria-label="Periodo">
+      <div className="inline-flex rounded-full bg-slate-100 p-1" role="tablist" aria-label={tx('Periodo')}>
         {[7, 30, 90].map((d) => (
           <button key={d} role="tab" aria-selected={days === d} onClick={() => setDays(d)}
             className={`rounded-full px-4 py-1.5 text-sm font-bold transition ${days === d ? 'bg-white text-slate-900 shadow' : 'text-slate-500'}`}>
-            {d} días
+            {d} {tx('días')}
           </button>
         ))}
       </div>
       {error && <Alert>{error}</Alert>}
       {!s ? (
-        <p className="text-sm text-slate-400">Cargando…</p>
+        <p className="text-sm text-slate-400">{tx('Cargando…')}</p>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
             {([
-              [money(s.revenue, currency), 'Ingresos (citas hechas)'],
-              [String(s.done), 'Citas hechas'],
-              [String(s.customers), 'Clientes distintos'],
-              [String(s.no_show), 'No vinieron'],
-              [String(s.cancelled), 'Canceladas'],
-              [String(s.upcoming), 'Próximas citas'],
+              [money(s.revenue, currency), tx('Ingresos (citas hechas)')],
+              [String(s.done), tx('Citas hechas')],
+              [String(s.customers), tx('Clientes distintos')],
+              [String(s.no_show), tx('No vinieron')],
+              [String(s.cancelled), tx('Canceladas')],
+              [String(s.upcoming), tx('Próximas citas')],
             ] as const).map(([v, l]) => (
               <div key={l} className="card p-3.5">
                 <p className="truncate text-xl font-extrabold tracking-tight">{v}</p>
@@ -286,9 +288,9 @@ export function StaffStats({ token, currency }: { token: string; currency: strin
             ))}
           </div>
           <section className="card">
-            <h2 className="font-bold">Lo que más te piden</h2>
+            <h2 className="font-bold">{tx('Lo que más te piden')}</h2>
             {s.top_services.length === 0 ? (
-              <p className="mt-2 text-sm text-slate-500">Todavía no hay citas en estos días.</p>
+              <p className="mt-2 text-sm text-slate-500">{tx('Todavía no hay citas en estos días.')}</p>
             ) : (
               <ul className="mt-3 space-y-2.5">
                 {s.top_services.map((t) => (
@@ -300,7 +302,7 @@ export function StaffStats({ token, currency }: { token: string; currency: strin
               </ul>
             )}
           </section>
-          <p className="text-center text-xs text-slate-400">Solo cuentan tus citas de los últimos {s.days} días.</p>
+          <p className="text-center text-xs text-slate-400">{tx('Solo cuentan tus citas de los últimos')}{' '}{s.days} {tx('días.')}</p>
         </>
       )}
     </div>

@@ -1,6 +1,6 @@
 // Fechas y dinero. Las fechas "clave" son textos YYYY-MM-DD en la zona horaria del negocio.
 import { serverNow } from './clockSkew'
-import { IS_EN } from './i18n'
+import { IS_EN, t } from './i18n'
 
 // Cuba: UTC−4 todo el año (ver "Etc/GMT+4" en schema.sql)
 export const DEFAULT_TZ = 'Etc/GMT+4'
@@ -27,7 +27,7 @@ const INT_NAMES: Record<IntCurrency, string> = {
 
 /** Monedas para elegir: las de Cuba (CUP, USD, USD y CUP) o, en la versión internacional, las de fuera */
 export function currencyOptions(intl: boolean): { key: CurrencyMode; name: string; hint: string }[] {
-  return intl ? INT_CURRENCIES.map((k) => ({ key: k, name: k, hint: INT_NAMES[k] })) : CURRENCY_MODES
+  return intl ? INT_CURRENCIES.map((k) => ({ key: k, name: k, hint: t(INT_NAMES[k]) })) : CURRENCY_MODES
 }
 
 export function currencyMode(b: { currency?: string; usd_prices?: boolean }): CurrencyMode {

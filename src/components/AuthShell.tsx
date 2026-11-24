@@ -2,8 +2,10 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ThemeToggle } from './ThemeToggle'
 import { CitoraLogo } from './ui'
+import { t } from '../lib/i18n'
+import { LangSwitch } from './LangSwitch'
 
-const POINTS = ['Tus clientes reservan solos, a cualquier hora', 'Recordatorios automáticos para que no falten', 'Tu agenda, tus clientes y tus números en el móvil']
+const POINTS = [t('Tus clientes reservan solos, a cualquier hora'), t('Recordatorios automáticos para que no falten'), t('Tu agenda, tus clientes y tus números en el móvil')]
 
 /**
  * Marco de las pantallas de acceso (entrar, contraseña nueva). En ordenador, a la izquierda un panel
@@ -28,9 +30,9 @@ export function AuthShell({ title, subtitle, children, footer }: { title: string
         <Link to="/" className="relative w-fit text-white"><CitoraLogo className="text-2xl" /></Link>
         <div className="relative">
           <p className="text-5xl font-extrabold leading-[1.04] tracking-[-0.035em] xl:text-6xl">
-            Tu agenda
+            {t('Tu agenda')}
             <br />
-            <span className="bg-gradient-to-r from-rose-400 via-orange-400 to-amber-300 bg-clip-text text-transparent">se llena sola.</span>
+            <span className="bg-gradient-to-r from-rose-400 via-orange-400 to-amber-300 bg-clip-text text-transparent">{t('se llena sola.')}</span>
           </p>
           <ul className="mt-9 space-y-3.5 text-white/75">
             {POINTS.map((p) => (
@@ -48,7 +50,10 @@ export function AuthShell({ title, subtitle, children, footer }: { title: string
 
       <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden px-4 py-12">
         <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-gradient-to-b from-brand/10 to-transparent lg:hidden" />
-        <ThemeToggle className="absolute right-3 top-3" />
+        <div className="absolute right-3 top-3 flex items-center gap-1">
+          <LangSwitch />
+          <ThemeToggle />
+        </div>
         <Link to="/" className="relative mb-8 lg:hidden"><CitoraLogo className="text-2xl" /></Link>
         <div className="ui-page relative w-full max-w-sm">
           <h1 className="text-3xl font-extrabold tracking-tight">{title}</h1>

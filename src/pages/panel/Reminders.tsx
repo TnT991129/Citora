@@ -8,6 +8,7 @@ import type { Appointment } from '../../lib/types'
 import { waLink } from '../../lib/whatsapp'
 import { usePanel } from './context'
 import { Locked, useModule } from './Locked'
+import { t } from '../../lib/i18n'
 
 export default function Reminders() {
   const allowed = useModule('recordatorios')
@@ -47,8 +48,8 @@ export default function Reminders() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-extrabold">Recordatorios</h1>
-        <p className="text-slate-600">Envía a cada cliente un recordatorio por WhatsApp con un toque. Así faltan menos.</p>
+        <h1 className="text-2xl font-extrabold">{t('Recordatorios')}</h1>
+        <p className="text-slate-600">{t('Envía a cada cliente un recordatorio por WhatsApp con un toque. Así faltan menos.')}</p>
       </div>
       <div className="flex gap-1.5">
         {[0, 1, 2].map((n) => {
@@ -59,7 +60,7 @@ export default function Reminders() {
               onClick={() => setDay(k)}
               className={`rounded-full px-3 py-1.5 text-sm font-semibold ${day === k ? 'bg-slate-900 text-white' : 'bg-white ring-1 ring-slate-300'}`}
             >
-              {n === 0 ? 'Hoy' : n === 1 ? 'Mañana' : 'Pasado mañana'}
+              {n === 0 ? t('Hoy') : n === 1 ? t('Mañana') : t('Pasado mañana')}
             </button>
           )
         })}
@@ -68,11 +69,11 @@ export default function Reminders() {
       {!list ? (
         <PageLoader />
       ) : list.length === 0 ? (
-        <div className="card text-center text-slate-600">No hay citas pendientes el {dayTitle(day).toLowerCase()}.</div>
+        <div className="card text-center text-slate-600">{t('No hay citas pendientes el')}{' '}{dayTitle(day).toLowerCase()}.</div>
       ) : (
         <>
           <p className="text-sm font-medium text-slate-600">
-            {dayTitle(day)} · {pending === 0 ? '¡Todos avisados! ✅' : `${pending} por avisar de ${list.length}`}
+            {dayTitle(day)} · {pending === 0 ? t('¡Todos avisados! ✅') : t('{pending} por avisar de {length}', { pending: pending, length: list.length })}
           </p>
           <ul className="space-y-2">
             {list.map((a) => (
@@ -82,7 +83,7 @@ export default function Reminders() {
                     <span className="text-brand">{timeOf(a.starts_at, business.timezone, true)}</span> · {a.customer_name}
                   </p>
                   <p className="truncate text-sm text-slate-500">{servicesText(a)}</p>
-                  {a.reminded_at && <p className="text-xs text-emerald-700">Recordatorio enviado</p>}
+                  {a.reminded_at && <p className="text-xs text-emerald-700">{t('Recordatorio enviado')}</p>}
                 </div>
                 <a
                   href={waLink(a.customer_phone, buildMessage('recordatorio', a, business))}
@@ -91,7 +92,7 @@ export default function Reminders() {
                   onClick={() => markSent(a)}
                   className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[#25D366] px-3 py-2 text-sm font-semibold text-white"
                 >
-                  <WhatsAppIcon className="h-4 w-4" /> {a.reminded_at ? 'Otra vez' : 'Enviar'}
+                  <WhatsAppIcon className="h-4 w-4" /> {a.reminded_at ? t('Otra vez') : t('Enviar')}
                 </a>
               </li>
             ))}

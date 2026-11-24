@@ -19,7 +19,7 @@ export const payCurrency = (market?: string | null): 'CUP' | 'USD' => (market ==
 
 /** Precio al mes de un plan en la versión del negocio (Cuba en CUP, internacional en USD) */
 export function planPrice(prices: Prices, plan: PlanKey | null | undefined, market?: string | null): number {
-  if (market === 'int') return plan === 'ultra' ? prices.int_ultra ?? 20 : prices.int_basico ?? 10
+  if (market === 'int') return plan === 'ultra' ? prices.int_ultra ?? 23.5 : prices.int_basico ?? 12.5
   return plan === 'ultra' ? prices.ultra : prices.basico
 }
 

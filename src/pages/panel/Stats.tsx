@@ -8,14 +8,15 @@ import { supabase } from '../../lib/supabase'
 import type { OwnerStats } from '../../lib/types'
 import { usePanel } from './context'
 import { Locked, useModule } from './Locked'
+import { t as tx } from '../../lib/i18n'
 
 type Range = '7' | '30' | '90' | 'mes' | '365'
 const RANGES: { key: Range; label: string }[] = [
-  { key: '7', label: '7 días' },
-  { key: '30', label: '30 días' },
-  { key: 'mes', label: 'Este mes' },
-  { key: '90', label: '90 días' },
-  { key: '365', label: '12 meses' },
+  { key: '7', label: tx('7 días') },
+  { key: '30', label: tx('30 días') },
+  { key: 'mes', label: tx('Este mes') },
+  { key: '90', label: tx('90 días') },
+  { key: '365', label: tx('12 meses') },
 ]
 
 function rangeDates(r: Range, today: string): [string, string] {
@@ -46,7 +47,7 @@ export default function Stats() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-extrabold">Estadísticas</h1>
+        <h1 className="text-2xl font-extrabold">{tx('Estadísticas')}</h1>
         <p className="text-slate-600">{shortDate(from)} – {shortDate(to)}</p>
       </div>
       <div className="flex flex-wrap gap-1.5">
@@ -99,29 +100,29 @@ function StatsBody({ s, cur, long, expensesLink }: { s: OwnerStats; cur: (n: num
   return (
     <>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Tile label="Ingresos" value={cur(t.revenue)} hint={t.expected > 0 ? `+ ${cur(t.expected)} por venir` : undefined} />
-        <Tile label="Gastos" value={cur(expenses)} link={expensesLink} hint={expenses ? undefined : 'Toca para apuntarlos'} />
-        <Tile label="Ganancia" value={cur(profit)} hint={margin === null ? undefined : `${margin}% de lo ingresado`} tone={profit < 0 ? 'bad' : 'good'} />
-        <Tile label="Citas atendidas" value={String(t.done)} hint={t.upcoming ? `${t.upcoming} por venir` : undefined} />
-        <Tile label="Clientes" value={String(t.customers)} hint={`${t.new_customers} nuevos`} />
-        <Tile label="Ticket medio" value={t.done ? cur(Math.round(avgTicket)) : '—'} />
-        <Tile label="Asistencia" value={showRate === null ? '—' : `${showRate}%`} hint={t.no_shows ? `${t.no_shows} no vinieron` : undefined} />
-        <Tile label="Canceladas" value={String(t.cancelled)} hint={cancelRate === null ? undefined : `${cancelRate}% de las reservas`} />
-        <Tile label="Reservas online" value={String(t.web)} hint={`${t.manual} añadidas por ti`} />
-        <Tile label="Día con más citas" value={t.bookings ? WEEKDAYS[busiestDay] : '—'} />
+        <Tile label={tx('Ingresos')} value={cur(t.revenue)} hint={t.expected > 0 ? tx('+ {cur} por venir', { cur: cur(t.expected) }) : undefined} />
+        <Tile label={tx('Gastos')} value={cur(expenses)} link={expensesLink} hint={expenses ? undefined : tx('Toca para apuntarlos')} />
+        <Tile label={tx('Ganancia')} value={cur(profit)} hint={margin === null ? undefined : tx('{margin}% de lo ingresado', { margin: margin })} tone={profit < 0 ? 'bad' : 'good'} />
+        <Tile label={tx('Citas atendidas')} value={String(t.done)} hint={t.upcoming ? tx('{upcoming} por venir', { upcoming: t.upcoming }) : undefined} />
+        <Tile label={tx('Clientes')} value={String(t.customers)} hint={tx('{new_customers} nuevos', { new_customers: t.new_customers })} />
+        <Tile label={tx('Ticket medio')} value={t.done ? cur(Math.round(avgTicket)) : '—'} />
+        <Tile label={tx('Asistencia')} value={showRate === null ? '—' : `${showRate}%`} hint={t.no_shows ? tx('{no_shows} no vinieron', { no_shows: t.no_shows }) : undefined} />
+        <Tile label={tx('Canceladas')} value={String(t.cancelled)} hint={cancelRate === null ? undefined : tx('{cancelRate}% de las reservas', { cancelRate: cancelRate })} />
+        <Tile label={tx('Reservas online')} value={String(t.web)} hint={tx('{manual} añadidas por ti', { manual: t.manual })} />
+        <Tile label={tx('Día con más citas')} value={t.bookings ? WEEKDAYS[busiestDay] : '—'} />
       </div>
 
       {expenses > 0 && (
         <div className="grid gap-4 md:grid-cols-2">
           <section className="card md:col-span-2">
-            <h2 className="font-bold">Ganancia {long ? 'por semana' : 'por día'}</h2>
-            <p className="text-sm text-slate-500">Ingresos menos gastos</p>
-            <BarChart bars={bars.map((b) => ({ label: b.label, value: Math.max(0, b.revenue - b.spent), tip: `${b.span} · ingresos ${cur(b.revenue)} · gastos ${cur(b.spent)} · ganancia ${cur(b.revenue - b.spent)}` }))} format={cur} labelEvery={every} />
+            <h2 className="font-bold">{tx('Ganancia')}{' '}{long ? tx('por semana') : tx('por día')}</h2>
+            <p className="text-sm text-slate-500">{tx('Ingresos menos gastos')}</p>
+            <BarChart bars={bars.map((b) => ({ label: b.label, value: Math.max(0, b.revenue - b.spent), tip: tx('{span} · ingresos {cur} · gastos {cur2} · ganancia {cur3}', { span: b.span, cur: cur(b.revenue), cur2: cur(b.spent), cur3: cur(b.revenue - b.spent) }) }))} format={cur} labelEvery={every} />
           </section>
           <section className="card md:col-span-2">
             <div className="flex items-baseline justify-between gap-2">
-              <h2 className="font-bold">Gastos por categoría</h2>
-              <Link to={expensesLink} className="text-sm font-semibold text-brand">Ver gastos</Link>
+              <h2 className="font-bold">{tx('Gastos por categoría')}</h2>
+              <Link to={expensesLink} className="text-sm font-semibold text-brand">{tx('Ver gastos')}</Link>
             </div>
             <div className="mt-3">
               <RankBars items={(s.expenses_by_category || []).map((x) => ({ label: x.category, value: Number(x.total) }))} format={cur} />
@@ -131,43 +132,43 @@ function StatsBody({ s, cur, long, expensesLink }: { s: OwnerStats; cur: (n: num
       )}
 
       {t.bookings === 0 && t.cancelled === 0 ? (
-        <div className="card text-center text-slate-600">No hay citas en este periodo.</div>
+        <div className="card text-center text-slate-600">{tx('No hay citas en este periodo.')}</div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           <section className="card md:col-span-2">
-            <h2 className="font-bold">Ingresos {long ? 'por semana' : 'por día'}</h2>
-            <p className="text-sm text-slate-500">Citas atendidas (o ya pasadas sin marcar)</p>
+            <h2 className="font-bold">{tx('Ingresos')}{' '}{long ? tx('por semana') : tx('por día')}</h2>
+            <p className="text-sm text-slate-500">{tx('Citas atendidas (o ya pasadas sin marcar)')}</p>
             <BarChart bars={bars.map((b) => ({ label: b.label, value: b.revenue, tip: `${b.span} · ${cur(b.revenue)}` }))} format={cur} labelEvery={every} />
           </section>
           <section className="card md:col-span-2">
-            <h2 className="font-bold">Citas {long ? 'por semana' : 'por día'}</h2>
-            <BarChart bars={bars.map((b) => ({ label: b.label, value: b.bookings, tip: `${b.span} · ${b.bookings} ${b.bookings === 1 ? 'cita' : 'citas'}` }))} labelEvery={every} />
+            <h2 className="font-bold">{tx('Citas')}{' '}{long ? tx('por semana') : tx('por día')}</h2>
+            <BarChart bars={bars.map((b) => ({ label: b.label, value: b.bookings, tip: `${b.span} · ${b.bookings === 1 ? tx('1 cita') : tx('{n} citas', { n: b.bookings })}` }))} labelEvery={every} />
           </section>
           <section className="card">
-            <h2 className="font-bold">Servicios más pedidos</h2>
+            <h2 className="font-bold">{tx('Servicios más pedidos')}</h2>
             <div className="mt-3">
-              {s.top_services.length === 0 ? <p className="text-slate-500">Sin servicios en este periodo.</p> : (
+              {s.top_services.length === 0 ? <p className="text-slate-500">{tx('Sin servicios en este periodo.')}</p> : (
                 <RankBars items={s.top_services.map((x) => ({ label: x.name, value: x.count, extra: cur(x.revenue) }))} />
               )}
             </div>
           </section>
           <section className="card">
-            <h2 className="font-bold">Días de la semana</h2>
+            <h2 className="font-bold">{tx('Días de la semana')}</h2>
             <BarChart
               height={110}
-              bars={weekdayOrder.map((d) => ({ label: WEEKDAYS_SHORT[d], value: s.by_weekday[d], tip: `${WEEKDAYS[d]} · ${s.by_weekday[d]} citas` }))}
+              bars={weekdayOrder.map((d) => ({ label: WEEKDAYS_SHORT[d], value: s.by_weekday[d], tip: tx('{v} · {v2} citas', { v: WEEKDAYS[d], v2: s.by_weekday[d] }) }))}
             />
           </section>
           {hours.length > 0 && (
             <section className="card md:col-span-2">
-              <h2 className="font-bold">Horas más pedidas</h2>
+              <h2 className="font-bold">{tx('Horas más pedidas')}</h2>
               <BarChart
                 height={110}
                 bars={hours.map((h) => {
                   const n = s.by_hour.find((x) => x.hour === h)?.count || 0
                   const hh = String(h).padStart(2, '0')
                   const h12 = h % 12 === 0 ? 12 : h % 12
-                  return { label: `${h12}${h < 12 ? 'a' : 'p'}`, value: n, tip: `${time12(`${hh}:00`)} – ${time12(`${hh}:59`)} · ${n} citas` }
+                  return { label: `${h12}${h < 12 ? 'a' : 'p'}`, value: n, tip: tx('{time12} – {time122} · {n} citas', { time12: time12(`${hh}:00`), time122: time12(`${hh}:59`), n: n }) }
                 })}
               />
             </section>

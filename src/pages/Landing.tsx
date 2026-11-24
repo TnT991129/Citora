@@ -13,34 +13,36 @@ import type { Prices } from '../lib/types'
 import { AgendaClean, BarsArt, ChatChaos, HeroPhone, Ico, NightArt, Phone, ScreenAgenda, ScreenCreate, ScreenShare, StarsArt } from './landing/Demos'
 import { spotlight, useCountUp, useInView, useReveal, useScrollProgress } from './landing/motion'
 import './landing/landing.css'
+import { t as tx } from '../lib/i18n'
+import { LangSwitch } from '../components/LangSwitch'
 
 const NAV = [
-  { href: '#como-funciona', label: 'Cómo funciona' },
-  { href: '#funciones', label: 'Funciones' },
-  { href: '#calculadora', label: 'Calculadora' },
-  { href: '#precio', label: 'Precio' },
-  { href: '#preguntas', label: 'Preguntas' },
+  { href: '#como-funciona', label: tx('Cómo funciona') },
+  { href: '#funciones', label: tx('Funciones') },
+  { href: '#calculadora', label: tx('Calculadora') },
+  { href: '#precio', label: tx('Precio') },
+  { href: '#preguntas', label: tx('Preguntas') },
 ]
 
 // Lo que hace el dueño mientras Citora le llena la agenda (va cambiando en el titular)
-const WHILE = ['mientras atiendes', 'mientras duermes', 'mientras cortas el pelo', 'mientras haces uñas', 'mientras descansas']
+const WHILE = [tx('mientras atiendes'), tx('mientras duermes'), tx('mientras cortas el pelo'), tx('mientras haces uñas'), tx('mientras descansas')]
 
 const STEPS = [
-  { title: 'Crea tu app en 5 minutos', text: 'Eliges tu tipo de negocio y te damos los servicios, precios y horarios ya puestos. Solo ajustas lo tuyo: nombre, colores y logo. Sin saber nada de tecnología.', screen: ScreenCreate },
-  { title: 'Comparte tu enlace', text: 'Ponlo en tu estado de WhatsApp, en tu Instagram o mándalo por mensaje. Tus clientes reservan desde ahí, sin instalar nada y sin crearse una cuenta.', screen: ScreenShare },
-  { title: 'Las reservas llegan solas', text: 'Te avisa el móvil con cada cita nueva. Ves tu día de un vistazo, confirmas con un toque y Citora le recuerda la cita al cliente para que no falte.', screen: ScreenAgenda },
+  { title: tx('Crea tu app en 5 minutos'), text: tx('Eliges tu tipo de negocio y te damos los servicios, precios y horarios ya puestos. Solo ajustas lo tuyo: nombre, colores y logo. Sin saber nada de tecnología.'), screen: ScreenCreate },
+  { title: tx('Comparte tu enlace'), text: tx('Ponlo en tu estado de WhatsApp, en tu Instagram o mándalo por mensaje. Tus clientes reservan desde ahí, sin instalar nada y sin crearse una cuenta.'), screen: ScreenShare },
+  { title: tx('Las reservas llegan solas'), text: tx('Te avisa el móvil con cada cita nueva. Ves tu día de un vistazo, confirmas con un toque y Citora le recuerda la cita al cliente para que no falte.'), screen: ScreenAgenda },
 ]
 
 const FAQ = [
-  ['¿Necesito saber de tecnología?', 'No. Al crear tu app te damos servicios, precios y horarios de ejemplo para tu tipo de negocio, y en el panel tienes un recorrido guiado y ayudas en cada pantalla.'],
-  ['¿Mis clientes tienen que instalar algo?', 'No. Reservan desde un enlace, en el navegador de su teléfono, sin cuenta ni contraseña. Si quieren, la añaden a su pantalla de inicio como una app.'],
-  ['¿Y si mis clientes prefieren escribirme por WhatsApp?', 'Pueden seguir haciéndolo: tu web tiene un botón directo a tu WhatsApp. La diferencia es que la mayoría ya no te escribirá para preguntar si tienes hueco: lo verán ellos mismos.'],
-  ['¿Qué diferencia hay entre Solo y Equipo?', 'Los dos traen todo: reservas, recordatorios, clientes, cobros, cupones, galería y opiniones. Equipo añade a las personas que trabajan contigo: cada una con sus servicios, su horario y su propio enlace para ver su agenda, y tus clientes eligen con quién reservar.'],
-  ['¿Qué pasa cuando acaba la prueba gratis?', 'Eliges el plan que te va mejor, pagas el mes y sigues igual, con todo lo que ya tenías. Si no pagas, tu web deja de aceptar reservas, y a los 5 días tu app se borra.'],
-  ['¿Cómo pago la mensualidad?', 'Por transferencia (Transfermóvil o EnZona). Subes la captura del comprobante desde tu panel y se activa enseguida.'],
-  ['¿Puedo cancelar cuando quiera?', 'Sí. No hay permanencia ni letra pequeña: pagas mes a mes y lo dejas cuando quieras. Si ya pagaste alguna vez, tus datos se quedan guardados por si vuelves.'],
-  ['¿Funciona con mala conexión?', 'Sí. Está hecha para gastar pocos datos y funciona bien con datos móviles normales.'],
-  ['¿Mis datos están seguros?', 'Sí. Cada negocio solo ve su propia información, protegida a nivel de base de datos, y nunca se comparte con otros negocios.'],
+  [tx('¿Necesito saber de tecnología?'), tx('No. Al crear tu app te damos servicios, precios y horarios de ejemplo para tu tipo de negocio, y en el panel tienes un recorrido guiado y ayudas en cada pantalla.')],
+  [tx('¿Mis clientes tienen que instalar algo?'), tx('No. Reservan desde un enlace, en el navegador de su teléfono, sin cuenta ni contraseña. Si quieren, la añaden a su pantalla de inicio como una app.')],
+  [tx('¿Y si mis clientes prefieren escribirme por WhatsApp?'), tx('Pueden seguir haciéndolo: tu web tiene un botón directo a tu WhatsApp. La diferencia es que la mayoría ya no te escribirá para preguntar si tienes hueco: lo verán ellos mismos.')],
+  [tx('¿Qué diferencia hay entre Solo y Equipo?'), tx('Los dos traen todo: reservas, recordatorios, clientes, cobros, cupones, galería y opiniones. Equipo añade a las personas que trabajan contigo: cada una con sus servicios, su horario y su propio enlace para ver su agenda, y tus clientes eligen con quién reservar.')],
+  [tx('¿Qué pasa cuando acaba la prueba gratis?'), tx('Eliges el plan que te va mejor, pagas el mes y sigues igual, con todo lo que ya tenías. Si no pagas, tu web deja de aceptar reservas, y a los 5 días tu app se borra.')],
+  [tx('¿Cómo pago la mensualidad?'), IS_INT ? tx('Con PayPal o con tarjeta, desde tu panel. Tu app se activa al momento.') : tx('Por transferencia (Transfermóvil o EnZona). Subes la captura del comprobante desde tu panel y se activa enseguida.')],
+  [tx('¿Puedo cancelar cuando quiera?'), tx('Sí. No hay permanencia ni letra pequeña: pagas mes a mes y lo dejas cuando quieras. Si ya pagaste alguna vez, tus datos se quedan guardados por si vuelves.')],
+  [tx('¿Funciona con mala conexión?'), tx('Sí. Está hecha para gastar pocos datos y funciona bien con datos móviles normales.')],
+  [tx('¿Mis datos están seguros?'), tx('Sí. Cada negocio solo ve su propia información, protegida a nivel de base de datos, y nunca se comparte con otros negocios.')],
 ]
 
 export default function Landing() {
@@ -53,7 +55,7 @@ export default function Landing() {
 
   useEffect(() => {
     setBrandColor(null)
-    document.title = 'Citora · La app de reservas de tu negocio'
+    document.title = tx('Citora · La app de reservas de tu negocio')
     track('visita', { page: 'portada' })
     supabase.rpc('get_public_prices').then(({ data }) => data && setPrices(data as Prices))
   }, [])
@@ -73,8 +75,8 @@ export default function Landing() {
 
   const trial = prices.trial_days ?? 5
   // Versión internacional (/int/): precios en USD (ver market.ts)
-  const price = IS_INT ? prices.int_basico ?? 10 : prices.basico
-  const freeLine = `${trial} días gratis · Sin tarjeta · Lista en 5 minutos`
+  const price = IS_INT ? prices.int_basico ?? 12.5 : prices.basico
+  const freeLine = tx('{trial} días gratis · Sin tarjeta · Lista en 5 minutos', { trial: trial })
 
   return (
     <div
@@ -100,7 +102,7 @@ export default function Landing() {
 
       <Calculator price={price} trial={trial} />
 
-      <Pricing price={price} teamPrice={IS_INT ? prices.int_ultra ?? 20 : prices.ultra || DEFAULT_TEAM_PRICE} trial={trial} />
+      <Pricing price={price} teamPrice={IS_INT ? prices.int_ultra ?? 23.5 : prices.ultra || DEFAULT_TEAM_PRICE} trial={trial} />
 
       <Faq />
 
@@ -111,9 +113,9 @@ export default function Landing() {
       {/* Móvil: el botón de crear siempre a mano */}
       <div className="lp-sticky fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur safe-bottom md:hidden" data-show={showSticky ? '' : undefined}>
         <Link to="/crear" className="lp-cta flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 font-bold text-white">
-          Crear mi app gratis <Ico name="arrow" className="h-5 w-5" />
+          {tx('Crear mi app gratis')}{' '}<Ico name="arrow" className="h-5 w-5" />
         </Link>
-        <p className="mt-1.5 text-center text-[11px] text-slate-500">{trial} días gratis · Sin tarjeta</p>
+        <p className="mt-1.5 text-center text-[11px] text-slate-500">{trial} {tx('días gratis · Sin tarjeta')}</p>
       </div>
     </div>
   )
@@ -135,12 +137,12 @@ function Header({ scrolled, menuOpen, setMenuOpen }: { scrolled: boolean; menuOp
           ))}
         </nav>
         <div className="flex items-center gap-2">
-          <div className={`hidden sm:block ${light ? 'text-white' : ''}`}><ThemeToggle onImage={light} /></div>
-          <Link to="/entrar" className={`hidden rounded-xl px-3 py-2 text-sm font-semibold sm:block ${light ? 'text-white/85 hover:bg-white/10' : 'text-slate-700 hover:bg-slate-100'}`}>Entrar</Link>
-          <Link to="/crear" className="lp-cta rounded-xl px-4 py-2 text-sm font-bold text-white">Crear mi app</Link>
+          <div className={`hidden items-center gap-1 sm:flex ${light ? 'text-white' : ''}`}><LangSwitch onImage={light} /><ThemeToggle onImage={light} /></div>
+          <Link to="/entrar" className={`hidden rounded-xl px-3 py-2 text-sm font-semibold sm:block ${light ? 'text-white/85 hover:bg-white/10' : 'text-slate-700 hover:bg-slate-100'}`}>{tx('Entrar')}</Link>
+          <Link to="/crear" className="lp-cta rounded-xl px-4 py-2 text-sm font-bold text-white">{tx('Crear mi app')}</Link>
           <button
             onClick={() => setMenuOpen((v) => !v)}
-            aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'}
+            aria-label={menuOpen ? tx('Cerrar menú') : tx('Abrir menú')}
             aria-expanded={menuOpen}
             className={`rounded-lg p-2 lg:hidden ${light ? 'text-white hover:bg-white/10' : 'text-slate-700 hover:bg-slate-100'}`}
           >
@@ -158,8 +160,8 @@ function Header({ scrolled, menuOpen, setMenuOpen }: { scrolled: boolean; menuOp
                 {n.label}
               </a>
             ))}
-            <Link to="/entrar" className="rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">Entrar a mi panel</Link>
-            <div className="px-3 pt-1"><ThemeToggle /></div>
+            <Link to="/entrar" className="rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">{tx('Entrar a mi panel')}</Link>
+            <div className="flex items-center gap-1 px-3 pt-1"><LangSwitch /><ThemeToggle /></div>
           </div>
         </nav>
       )}
@@ -194,11 +196,11 @@ function Hero({ trial }: { trial: number }) {
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
             </span>
-            Reservas online para negocios en Cuba
+            {IS_INT ? tx('Reservas online para tu negocio') : tx('Reservas online para negocios en Cuba')}
           </p>
           <h1 className="mt-6 text-[2.6rem] font-extrabold leading-[1.02] tracking-[-0.035em] sm:text-6xl lg:text-7xl">
-            <span className="lp-line"><span style={{ ['--i' as string]: 0 }}>Tu agenda</span></span>
-            <span className="lp-line"><span style={{ ['--i' as string]: 1 }}>se llena sola</span></span>
+            <span className="lp-line"><span style={{ ['--i' as string]: 0 }}>{tx('Tu agenda')}</span></span>
+            <span className="lp-line"><span style={{ ['--i' as string]: 1 }}>{tx('se llena sola')}</span></span>
             <span className="lp-line text-[0.62em] font-bold tracking-[-0.02em] sm:text-[0.55em]">
               <span style={{ ['--i' as string]: 2 }}>
                 <span key={w} className="lp-word">{WHILE[w]}</span>
@@ -206,19 +208,19 @@ function Hero({ trial }: { trial: number }) {
             </span>
           </h1>
           <p className="lp-fade-in mx-auto mt-6 max-w-xl text-lg text-white/70 lg:mx-0" style={{ ['--i' as string]: 0 }}>
-            Crea la app de reservas de tu negocio. Tus clientes eligen servicio, día y hora desde un enlace, y a ti te llega el aviso al móvil.{' '}
-            <span className="text-white">Sin llamadas, sin mensajes, sin citas cruzadas.</span>
+            {tx('Crea la app de reservas de tu negocio. Tus clientes eligen servicio, día y hora desde un enlace, y a ti te llega el aviso al móvil.')}{' '}
+            <span className="text-white">{tx('Sin llamadas, sin mensajes, sin citas cruzadas.')}</span>
           </p>
           <div className="lp-fade-in mt-8 flex flex-col items-center gap-3 sm:flex-row lg:justify-start" style={{ ['--i' as string]: 1 }}>
             <Link to="/crear" className="lp-cta inline-flex w-full items-center justify-center gap-2 rounded-2xl px-7 py-4 text-lg font-bold text-white sm:w-auto">
-              Crear mi app gratis <Ico name="arrow" />
+              {tx('Crear mi app gratis')}{' '}<Ico name="arrow" />
             </Link>
             <a href="#como-funciona" className="inline-flex w-full items-center justify-center gap-2 rounded-2xl px-6 py-4 font-semibold text-white/85 ring-1 ring-white/20 transition hover:bg-white/10 sm:w-auto">
-              Ver cómo funciona
+              {tx('Ver cómo funciona')}
             </a>
           </div>
           <ul className="lp-fade-in mt-5 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-white/60 lg:justify-start" style={{ ['--i' as string]: 2 }}>
-            {[`${trial} días gratis`, 'Sin tarjeta', 'Lista en 5 minutos', IS_INT ? 'Pagas en USD' : 'Pagas en CUP'].map((t) => (
+            {[tx('{trial} días gratis', { trial: trial }), tx('Sin tarjeta'), tx('Lista en 5 minutos'), IS_INT ? tx('Pagas en USD') : tx('Pagas en CUP')].map((t) => (
               <li key={t} className="flex items-center gap-1.5">
                 <Ico name="check" className="h-4 w-4 text-emerald-400" /> {t}
               </li>
@@ -239,9 +241,9 @@ function Hero({ trial }: { trial: number }) {
 /* ---- 2. Cinta infinita de tipos de negocio ---- */
 function Marquee() {
   const names = BUSINESS_TYPES.filter((t) => t.key !== 'otro').map((t) => t.name)
-  const row = [...names, 'Consultas', 'Clases', 'Fotografía']
+  const row = [...names, tx('Consultas'), tx('Clases'), tx('Fotografía')]
   return (
-    <section className="lp-marquee-wrap lp-fade-edges overflow-hidden border-y border-slate-100 bg-white py-6" aria-label="Tipos de negocio">
+    <section className="lp-marquee-wrap lp-fade-edges overflow-hidden border-y border-slate-100 bg-white py-6" aria-label={tx('Tipos de negocio')}>
       <div className="lp-marquee">
         {[0, 1].map((k) => (
           <div key={k} className="flex shrink-0 items-center" aria-hidden={k === 1}>
@@ -260,8 +262,8 @@ function Marquee() {
 
 /* ---- 3. La frase que se ilumina palabra a palabra ---- */
 function Statement() {
-  const text = 'Cada mensaje que contestas tarde es un cliente que reserva en otro sitio.'
-  const accent = 'Con Citora, tu negocio atiende solo, a cualquier hora.'
+  const text = tx('Cada mensaje que contestas tarde es un cliente que reserva en otro sitio.')
+  const accent = tx('Con Citora, tu negocio atiende solo, a cualquier hora.')
   const words = [...text.split(' ').map((t) => ({ t, a: false })), ...accent.split(' ').map((t) => ({ t, a: true }))]
   return (
     <section data-progress className="bg-white px-4 py-28 sm:py-36">
@@ -281,22 +283,22 @@ function BeforeAfter() {
   return (
     <section className="lp-lazy bg-slate-50 px-4 py-20 sm:py-28">
       <div className="mx-auto max-w-5xl">
-        <SectionHead eyebrow="El cambio" title="Del caos de mensajes a una agenda que se llena sola" />
+        <SectionHead eyebrow={tx('El cambio')} title={tx('Del caos de mensajes a una agenda que se llena sola')} />
         <div className="mt-12 grid gap-5 md:grid-cols-2">
           <div data-reveal="left" className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
             <p className="inline-flex items-center gap-2 rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-700">
-              <Ico name="x" className="h-3.5 w-3.5" /> Sin Citora
+              <Ico name="x" className="h-3.5 w-3.5" /> {tx('Sin Citora')}
             </p>
-            <p className="mt-4 text-xl font-extrabold">Contestas mensajes todo el día</p>
-            <p className="mt-1 text-sm text-slate-500">Y aun así se te escapan clientes, se te cruzan citas y otros no vienen.</p>
+            <p className="mt-4 text-xl font-extrabold">{tx('Contestas mensajes todo el día')}</p>
+            <p className="mt-1 text-sm text-slate-500">{tx('Y aun así se te escapan clientes, se te cruzan citas y otros no vienen.')}</p>
             <div className="mt-6 rounded-2xl bg-[#efeae2] p-4"><ChatChaos /></div>
           </div>
           <div data-reveal="right" className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-xl shadow-rose-500/5 sm:p-8">
             <p className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
-              <Ico name="check" className="h-3.5 w-3.5" /> Con Citora
+              <Ico name="check" className="h-3.5 w-3.5" /> {tx('Con Citora')}
             </p>
-            <p className="mt-4 text-xl font-extrabold">Tus clientes reservan solos</p>
-            <p className="mt-1 text-sm text-slate-500">Solo ven las horas libres, reciben su recordatorio y tú no escribes nada.</p>
+            <p className="mt-4 text-xl font-extrabold">{tx('Tus clientes reservan solos')}</p>
+            <p className="mt-1 text-sm text-slate-500">{tx('Solo ven las horas libres, reciben su recordatorio y tú no escribes nada.')}</p>
             <div className="mt-6 rounded-2xl bg-slate-50 p-4"><AgendaClean /></div>
           </div>
         </div>
@@ -324,7 +326,7 @@ function HowItWorks() {
   return (
     <section id="como-funciona" className="scroll-mt-16 bg-white px-4 py-20 sm:py-28">
       <div className="mx-auto max-w-6xl">
-        <SectionHead eyebrow="Cómo funciona" title="De cero a recibir reservas, hoy mismo" />
+        <SectionHead eyebrow={tx('Cómo funciona')} title={tx('De cero a recibir reservas, hoy mismo')} />
         <div className="mt-14 grid gap-12 lg:grid-cols-2 lg:gap-20">
           {/* Ordenador: el móvil se queda fijo y cambia de pantalla */}
           <div className="hidden lg:block">
@@ -362,36 +364,36 @@ function HowItWorks() {
 /* ---- 6. Funciones en mosaico ---- */
 function Features() {
   const small: [string, string, string, string?][] = [
-    ['users', 'Tu equipo', 'Cada profesional con su agenda, sus servicios y su propio enlace. El cliente elige con quién.', 'Plan Equipo'],
-    ['card', 'Ficha de clientes', 'Cuántas veces vino, cuánto gastó y tus notas privadas sobre cada uno.'],
-    ['ticket', 'Cupones y bonos', 'Promociones y paquetes de sesiones para que vuelvan más seguido.'],
-    ['image', 'Galería de trabajos', 'Tus mejores fotos en tu web, para que te elijan antes de reservar.'],
+    ['users', tx('Tu equipo'), tx('Cada profesional con su agenda, sus servicios y su propio enlace. El cliente elige con quién.'), tx('Plan Equipo')],
+    ['card', tx('Ficha de clientes'), tx('Cuántas veces vino, cuánto gastó y tus notas privadas sobre cada uno.')],
+    ['ticket', tx('Cupones y bonos'), tx('Promociones y paquetes de sesiones para que vuelvan más seguido.')],
+    ['image', tx('Galería de trabajos'), tx('Tus mejores fotos en tu web, para que te elijan antes de reservar.')],
   ]
   return (
     <section id="funciones" className="lp-lazy scroll-mt-16 bg-slate-50 px-4 py-20 sm:py-28">
       <div className="mx-auto max-w-6xl">
-        <SectionHead eyebrow="Todo incluido" title="Todo lo que tu negocio necesita, en un solo lugar" />
+        <SectionHead eyebrow={tx('Todo incluido')} title={tx('Todo lo que tu negocio necesita, en un solo lugar')} />
         <div className="mt-12 grid auto-rows-[minmax(0,auto)] gap-4 md:grid-cols-6">
           <div data-reveal="zoom" onPointerMove={spotlight} className="lp-spot relative overflow-hidden rounded-[28px] bg-[#0b0b14] p-7 text-white md:col-span-4 md:row-span-2 sm:p-9">
             <div className="lp-glow -right-20 -top-20 h-72 w-72 bg-rose-500/40" aria-hidden />
-            <p className="relative text-xs font-bold uppercase tracking-[0.18em] text-rose-300">Reservas 24/7</p>
-            <h3 className="relative mt-2 max-w-md text-3xl font-extrabold tracking-tight sm:text-4xl">Tu negocio abierto incluso cuando duermes</h3>
-            <p className="relative mt-3 max-w-md text-white/65">Tus clientes reservan a cualquier hora y solo ven las horas que de verdad tienes libres. Nunca más dos citas a la vez.</p>
+            <p className="relative text-xs font-bold uppercase tracking-[0.18em] text-rose-300">{tx('Reservas 24/7')}</p>
+            <h3 className="relative mt-2 max-w-md text-3xl font-extrabold tracking-tight sm:text-4xl">{tx('Tu negocio abierto incluso cuando duermes')}</h3>
+            <p className="relative mt-3 max-w-md text-white/65">{tx('Tus clientes reservan a cualquier hora y solo ven las horas que de verdad tienes libres. Nunca más dos citas a la vez.')}</p>
             <div className="relative mt-8"><NightArt /></div>
           </div>
-          <FeatureCard className="md:col-span-2" i={1} eyebrow="Menos ausencias" title="Recordatorios automáticos" text="El día antes, tus clientes reciben el aviso de su cita.">
+          <FeatureCard className="md:col-span-2" i={1} eyebrow={tx('Menos ausencias')} title={tx('Recordatorios automáticos')} text={tx('El día antes, tus clientes reciben el aviso de su cita.')}>
             <div className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3">
               <span className="lp-ring flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100 text-rose-600"><Ico name="bell" /></span>
-              <span className="text-sm leading-tight"><b className="block">Recuerda tu cita mañana</b><span className="text-slate-500">3:00 p.m. en Nails Studio</span></span>
+              <span className="text-sm leading-tight"><b className="block">{tx('Recuerda tu cita mañana')}</b><span className="text-slate-500">{tx('3:00 p.m. en Nails Studio')}</span></span>
             </div>
           </FeatureCard>
-          <FeatureCard className="md:col-span-2" i={2} eyebrow="Tus números" title="Sabes cuánto ganas" text="Ingresos, gastos y tus servicios estrella, sin sumar a mano.">
+          <FeatureCard className="md:col-span-2" i={2} eyebrow={tx('Tus números')} title={tx('Sabes cuánto ganas')} text={tx('Ingresos, gastos y tus servicios estrella, sin sumar a mano.')}>
             <BarsArt />
           </FeatureCard>
-          <FeatureCard className="md:col-span-3" i={0} eyebrow="Opiniones" title="Clientes que hablan bien de ti" text="Después de la cita dejan su opinión; tú respondes y ganas confianza.">
+          <FeatureCard className="md:col-span-3" i={0} eyebrow={tx('Opiniones')} title={tx('Clientes que hablan bien de ti')} text={tx('Después de la cita dejan su opinión; tú respondes y ganas confianza.')}>
             <StarsArt />
           </FeatureCard>
-          <FeatureCard className="md:col-span-3" i={1} eyebrow="Tu marca" title="Tu app, no una plantilla" text="Tu logo, tus colores, tu portada y tu enlace. Se instala en el móvil de tus clientes con tu nombre.">
+          <FeatureCard className="md:col-span-3" i={1} eyebrow={tx('Tu marca')} title={tx('Tu app, no una plantilla')} text={tx('Tu logo, tus colores, tu portada y tu enlace. Se instala en el móvil de tus clientes con tu nombre.')}>
             <div className="flex gap-2">
               {['from-rose-400 to-orange-400', 'from-sky-400 to-indigo-500', 'from-emerald-400 to-teal-500', 'from-violet-500 to-fuchsia-500', 'from-amber-300 to-orange-500'].map((g) => (
                 <span key={g} className={`h-10 w-10 rounded-2xl bg-gradient-to-br ${g} shadow-md`} />
@@ -447,34 +449,34 @@ function Calculator({ price, trial }: { price: number; trial: number }) {
   return (
     <section id="calculadora" className="scroll-mt-16 bg-white px-4 py-20 sm:py-28">
       <div className="mx-auto max-w-5xl">
-        <SectionHead eyebrow="Haz la cuenta" title="¿Cuánto dinero se te escapa cada mes?" sub="Clientes que escribieron y no contestaste a tiempo, que no encontraron hueco o que reservaron en otro sitio." />
+        <SectionHead eyebrow={tx('Haz la cuenta')} title={tx('¿Cuánto dinero se te escapa cada mes?')} sub={tx('Clientes que escribieron y no contestaste a tiempo, que no encontraron hueco o que reservaron en otro sitio.')} />
         <div ref={ref} data-reveal="clip" className="mt-12 grid overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-xl shadow-slate-900/5 md:grid-cols-2">
           <div className="space-y-8 p-7 sm:p-10">
             <label className="block">
               <span className="flex items-baseline justify-between gap-3 font-semibold">
-                Clientes que pierdes por semana <b className="text-2xl text-rose-500">{lost}</b>
+                {tx('Clientes que pierdes por semana')}{' '}<b className="text-2xl text-rose-500">{lost}</b>
               </span>
-              <input type="range" min={1} max={20} value={lost} onChange={(e) => setLost(Number(e.target.value))} className="mt-3 w-full" aria-label="Clientes que pierdes por semana" />
+              <input type="range" min={1} max={20} value={lost} onChange={(e) => setLost(Number(e.target.value))} className="mt-3 w-full" aria-label={tx('Clientes que pierdes por semana')} />
             </label>
             <label className="block">
               <span className="flex items-baseline justify-between gap-3 font-semibold">
-                Precio medio de tu servicio <b className="text-2xl text-rose-500">{money(avg, PAY)}</b>
+                {tx('Precio medio de tu servicio')}{' '}<b className="text-2xl text-rose-500">{money(avg, PAY)}</b>
               </span>
-              <input type="range" min={IS_INT ? 5 : 200} max={IS_INT ? 200 : 6000} step={IS_INT ? 5 : 100} value={avg} onChange={(e) => setAvg(Number(e.target.value))} className="mt-3 w-full" aria-label="Precio medio de tu servicio" />
+              <input type="range" min={IS_INT ? 5 : 200} max={IS_INT ? 200 : 6000} step={IS_INT ? 5 : 100} value={avg} onChange={(e) => setAvg(Number(e.target.value))} className="mt-3 w-full" aria-label={tx('Precio medio de tu servicio')} />
             </label>
           </div>
           <div className="relative flex flex-col justify-center overflow-hidden bg-[#0b0b14] p-7 text-white sm:p-10">
             <div className="lp-glow -bottom-24 -right-16 h-64 w-64 bg-rose-500/40" aria-hidden />
-            <p className="relative text-sm font-semibold text-white/60">Pierdes cada mes, más o menos</p>
+            <p className="relative text-sm font-semibold text-white/60">{tx('Pierdes cada mes, más o menos')}</p>
             <p className="relative mt-1 text-5xl font-extrabold tracking-tight sm:text-6xl"><span className="lp-gradient-text">{money(shownLoss, PAY)}</span></p>
             <p className="relative mt-5 text-white/75">
-              Citora cuesta <b className="text-white">{money(price, PAY)} al mes</b>: se paga sola con{' '}
-              <b className="text-white">{paysWith === 1 ? 'una sola cita' : `${paysWith} citas`}</b> que antes se te escapaban.
+              {tx('Citora cuesta')}{' '}<b className="text-white">{money(price, PAY)} {tx('al mes')}</b>{tx(': se paga sola con')}{' '}
+              <b className="text-white">{paysWith === 1 ? tx('una sola cita') : tx('{paysWith} citas', { paysWith: paysWith })}</b> {tx('que antes se te escapaban.')}
             </p>
             <Link to="/crear" className="lp-cta relative mt-7 inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3.5 font-bold text-white">
-              Dejar de perder clientes <Ico name="arrow" className="h-5 w-5" />
+              {tx('Dejar de perder clientes')}{' '}<Ico name="arrow" className="h-5 w-5" />
             </Link>
-            <p className="relative mt-2 text-center text-xs text-white/45">Pruébala {trial} días gratis</p>
+            <p className="relative mt-2 text-center text-xs text-white/45">{tx('Pruébala')}{' '}{trial} {tx('días gratis')}</p>
           </div>
         </div>
       </div>
@@ -486,19 +488,19 @@ function Calculator({ price, trial }: { price: number; trial: number }) {
 function Pricing({ price, teamPrice, trial }: { price: number; teamPrice: number; trial: number }) {
   const plans = [
     {
-      key: 'basico', name: PLANS.basico.name, who: 'Si atiendes tú solo', price, highlight: false,
-      items: ['Reservas online las 24 horas', 'Tu agenda con aviso de cada cita', 'Recordatorios por WhatsApp', 'Ficha de clientes y opiniones', 'Cobros, gastos y estadísticas', 'Tu web con tu logo, colores y enlace'],
+      key: 'basico', name: PLANS.basico.name, who: tx('Si atiendes tú solo'), price, highlight: false,
+      items: [tx('Reservas online las 24 horas'), tx('Tu agenda con aviso de cada cita'), tx('Recordatorios por WhatsApp'), tx('Ficha de clientes y opiniones'), tx('Cobros, gastos y estadísticas'), tx('Tu web con tu logo, colores y enlace')],
     },
     {
-      key: 'ultra', name: PLANS.ultra.name, who: 'Para salones con varias personas', price: teamPrice, highlight: true,
-      items: ['Todo lo de Solo', 'Tu equipo: cada persona con sus servicios y su horario', 'Tus clientes eligen con quién reservar', 'Cada persona con su enlace: su agenda y sus números', 'Repartes los servicios del salón entre tu equipo', 'Tú lo ves todo desde tu panel'],
+      key: 'ultra', name: PLANS.ultra.name, who: tx('Para salones con varias personas'), price: teamPrice, highlight: true,
+      items: [tx('Todo lo de Solo'), tx('Tu equipo: cada persona con sus servicios y su horario'), tx('Tus clientes eligen con quién reservar'), tx('Cada persona con su enlace: su agenda y sus números'), tx('Repartes los servicios del salón entre tu equipo'), tx('Tú lo ves todo desde tu panel')],
     },
   ]
-  const both = ['Cupones y bonos', 'Galería de trabajos', 'Lista de espera', 'Servicios extra', 'Copia de tus datos en Excel', 'App instalable en el móvil']
+  const both = [tx('Cupones y bonos'), tx('Galería de trabajos'), tx('Lista de espera'), tx('Servicios extra'), tx('Copia de tus datos en Excel'), tx('App instalable en el móvil')]
   return (
     <section id="precio" className="lp-lazy scroll-mt-16 bg-slate-50 px-4 py-20 sm:py-28">
       <div className="mx-auto max-w-5xl">
-        <SectionHead eyebrow="Precio" title="Dos planes. Todo incluido." sub={`Sin módulos escondidos ni cobros sorpresa. Pruébalo ${trial} días gratis con todo, equipo incluido.`} />
+        <SectionHead eyebrow={tx('Precio')} title={tx('Dos planes. Todo incluido.')} sub={tx('Sin módulos escondidos ni cobros sorpresa. Pruébalo {trial} días gratis con todo, equipo incluido.', { trial: trial })} />
         <div className="mx-auto mt-12 grid max-w-4xl gap-5 md:grid-cols-2">
           {plans.map((p, i) => (
             <div key={p.key} data-reveal="zoom" style={{ ['--i' as string]: i }} className={`${p.highlight ? 'lp-border shadow-2xl shadow-rose-500/20' : 'rounded-3xl ring-1 ring-slate-200'}`}>
@@ -506,7 +508,7 @@ function Pricing({ price, teamPrice, trial }: { price: number; teamPrice: number
                 <p className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-bold ${p.highlight ? 'bg-white/10 text-rose-200 ring-1 ring-white/15' : 'bg-slate-100 text-slate-600'}`}>{p.who}</p>
                 <p className="mt-4 text-lg font-extrabold">{p.name}</p>
                 <p className="mt-1 text-5xl font-extrabold tracking-tight">{money(p.price, PAY)}</p>
-                <p className={p.highlight ? 'text-white/60' : 'text-slate-500'}>al mes · unos <b className={p.highlight ? 'text-white' : 'text-slate-900'}>{money(IS_INT ? Math.round((p.price / 30) * 100) / 100 : Math.round(p.price / 30), PAY)} al día</b></p>
+                <p className={p.highlight ? 'text-white/60' : 'text-slate-500'}>{tx('al mes · unos')}{' '}<b className={p.highlight ? 'text-white' : 'text-slate-900'}>{money(IS_INT ? Math.round((p.price / 30) * 100) / 100 : Math.round(p.price / 30), PAY)} {tx('al día')}</b></p>
                 <ul className="mt-6 grid flex-1 content-start gap-2.5 text-sm">
                   {p.items.map((name) => (
                     <li key={name} className={`flex items-start gap-2 ${p.highlight ? 'text-white/85' : 'text-slate-700'}`}>
@@ -516,26 +518,26 @@ function Pricing({ price, teamPrice, trial }: { price: number; teamPrice: number
                   ))}
                 </ul>
                 <Link to="/crear" className={`mt-8 flex items-center justify-center gap-2 rounded-2xl py-4 text-lg font-bold ${p.highlight ? 'lp-cta text-white' : 'bg-slate-900 text-white hover:bg-slate-800'}`}>
-                  Empezar {trial} días gratis <Ico name="arrow" className="h-5 w-5" />
+                  {tx('Empezar')}{' '}{trial} {tx('días gratis')}{' '}<Ico name="arrow" className="h-5 w-5" />
                 </Link>
               </div>
             </div>
           ))}
         </div>
         <div data-reveal className="mx-auto mt-6 max-w-4xl rounded-3xl bg-white p-5 text-center ring-1 ring-slate-200 sm:p-6">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Y en los dos planes también</p>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{tx('Y en los dos planes también')}</p>
           <ul className="mt-3 flex flex-wrap justify-center gap-2">
             {both.map((t) => (
               <li key={t} className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700">{t}</li>
             ))}
           </ul>
         </div>
-        <p className="mt-4 text-center text-sm text-slate-500">Sin tarjeta · Sin permanencia · Al acabar la prueba eliges el plan que te va mejor</p>
+        <p className="mt-4 text-center text-sm text-slate-500">{tx('Sin tarjeta · Sin permanencia · Al acabar la prueba eliges el plan que te va mejor')}</p>
         <div className="mt-10 grid gap-4 text-sm sm:grid-cols-3">
           {[
-            ['phone', 'Pagas por Transfermóvil o EnZona', 'Subes la captura desde tu panel y listo.'],
-            ['shield', 'Sin riesgo', `${trial} días gratis y sin permanencia: lo dejas cuando quieras.`],
-            ['wifi', 'Pensada para Cuba', 'Gasta pocos datos y funciona con conexión normal.'],
+            IS_INT ? ['phone', tx('Pagas con PayPal o con tarjeta'), tx('Tu app se activa al momento.')] : ['phone', tx('Pagas por Transfermóvil o EnZona'), tx('Subes la captura desde tu panel y listo.')],
+            ['shield', tx('Sin riesgo'), tx('{trial} días gratis y sin permanencia: lo dejas cuando quieras.', { trial: trial })],
+            ['wifi', IS_INT ? tx('Pensada para negocios pequeños') : tx('Pensada para Cuba'), tx('Gasta pocos datos y funciona con conexión normal.')],
           ].map(([icon, t, d], i) => (
             <div key={t} data-reveal style={{ ['--i' as string]: i }} className="flex items-start gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-rose-500 shadow-sm ring-1 ring-slate-200"><Ico name={icon} /></span>
@@ -553,7 +555,7 @@ function Faq() {
   return (
     <section id="preguntas" className="lp-lazy scroll-mt-16 bg-white px-4 py-20 sm:py-28">
       <div className="mx-auto max-w-3xl">
-        <SectionHead eyebrow="Preguntas" title="Lo que todos preguntan antes de empezar" />
+        <SectionHead eyebrow={tx('Preguntas')} title={tx('Lo que todos preguntan antes de empezar')} />
         <div className="mt-10 divide-y divide-slate-200 border-y border-slate-200">
           {FAQ.map(([q, a], i) => (
             <details key={q} data-reveal style={{ ['--i' as string]: i }} className="group py-1">
@@ -581,11 +583,11 @@ function FinalCta({ freeLine }: { freeLine: string }) {
         <div className="lp-glow -left-20 top-0 h-80 w-80 bg-rose-500/40" aria-hidden />
         <div className="lp-glow -right-20 bottom-0 h-80 w-80 bg-orange-500/30" style={{ animationDelay: '-8s' }} aria-hidden />
         <h2 className="relative mx-auto max-w-3xl text-4xl font-extrabold leading-[1.05] tracking-[-0.03em] sm:text-6xl">
-          Tu próxima cita puede <span className="lp-gradient-text">reservarse sola</span> esta noche
+          {tx('Tu próxima cita puede')}{' '}<span className="lp-gradient-text">{tx('reservarse sola')}</span> {tx('esta noche')}
         </h2>
-        <p className="relative mx-auto mt-5 max-w-xl text-lg text-white/65">En 5 minutos tienes tu app lista para compartir con tus clientes.</p>
+        <p className="relative mx-auto mt-5 max-w-xl text-lg text-white/65">{tx('En 5 minutos tienes tu app lista para compartir con tus clientes.')}</p>
         <Link to="/crear" className="lp-cta relative mt-9 inline-flex items-center gap-2 rounded-2xl px-8 py-4 text-lg font-bold text-white">
-          Crear mi app gratis <Ico name="arrow" />
+          {tx('Crear mi app gratis')}{' '}<Ico name="arrow" />
         </Link>
         <p className="relative mt-4 text-sm text-white/45">{freeLine}</p>
       </div>
@@ -600,32 +602,32 @@ function Footer() {
       <div className="mx-auto grid max-w-6xl grid-cols-2 gap-x-6 gap-y-10 px-4 sm:grid-cols-3 lg:grid-cols-[1.6fr_1fr_1fr_1fr]">
         <div className="col-span-2 sm:col-span-3 lg:col-span-1">
           <CitoraLogo className="text-lg text-slate-900" />
-          <p className="mt-3 max-w-xs text-slate-500">La app de reservas para barberías, salones, uñas, spas y cualquier negocio que trabaje con citas en Cuba.</p>
+          <p className="mt-3 max-w-xs text-slate-500">{IS_INT ? tx('La app de reservas para barberías, salones, uñas, spas y cualquier negocio que trabaje con citas.') : tx('La app de reservas para barberías, salones, uñas, spas y cualquier negocio que trabaje con citas en Cuba.')}</p>
         </div>
-        <nav aria-label="Producto">
-          <p className="font-bold text-slate-900">Producto</p>
+        <nav aria-label={tx('Producto')}>
+          <p className="font-bold text-slate-900">{tx('Producto')}</p>
           <ul className="mt-3 space-y-2">
             {NAV.map((n) => <li key={n.href}><a href={n.href} className={link}>{n.label}</a></li>)}
           </ul>
         </nav>
-        <nav aria-label="Tu cuenta">
-          <p className="font-bold text-slate-900">Tu cuenta</p>
+        <nav aria-label={tx('Tu cuenta')}>
+          <p className="font-bold text-slate-900">{tx('Tu cuenta')}</p>
           <ul className="mt-3 space-y-2">
-            <li><Link to="/crear" className={link}>Crear mi app</Link></li>
-            <li><Link to="/entrar" className={link}>Entrar a mi panel</Link></li>
+            <li><Link to="/crear" className={link}>{tx('Crear mi app')}</Link></li>
+            <li><Link to="/entrar" className={link}>{tx('Entrar a mi panel')}</Link></li>
           </ul>
         </nav>
-        <nav aria-label="Legal">
-          <p className="font-bold text-slate-900">Legal</p>
+        <nav aria-label={tx('Legal')}>
+          <p className="font-bold text-slate-900">{tx('Legal')}</p>
           <ul className="mt-3 space-y-2">
-            <li><Link to="/terminos" className={link}>Términos de uso</Link></li>
-            <li><Link to="/privacidad" className={link}>Privacidad</Link></li>
+            <li><Link to="/terminos" className={link}>{tx('Términos de uso')}</Link></li>
+            <li><Link to="/privacidad" className={link}>{tx('Privacidad')}</Link></li>
           </ul>
         </nav>
       </div>
       <div className="mx-auto mt-12 flex max-w-6xl flex-col items-center justify-between gap-2 border-t border-slate-100 px-4 pt-6 text-xs text-slate-500 sm:flex-row">
-        <p>© {new Date().getFullYear()} Citora. Todos los derechos reservados.</p>
-        <p>Hecha para negocios en Cuba</p>
+        <p>© {new Date().getFullYear()} {tx('Citora. Todos los derechos reservados.')}</p>
+        <p>{IS_INT ? tx('Hecha para negocios como el tuyo') : tx('Hecha para negocios en Cuba')}</p>
       </div>
     </footer>
   )
