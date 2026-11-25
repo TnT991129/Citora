@@ -1403,6 +1403,9 @@ reset role;
 insert into ctx select 'mar_antes', jsonb_build_object('plan', plan, 'paid', paid_until, 'trial', trial_ends_at, 'cap', slot_capacity, 'comped', comped)::text
   from businesses where slug = 'spa-mar';
 update businesses set slot_capacity = 2, plan = 'ultra', paid_until = now() + interval '10 days', comped = false where slug = 'spa-mar';
+-- "Clientes por turno" es para los salones sin equipo: mientras tanto, su equipo se aparta
+create temp table mar_equipo as select id from staff where active and business_id = (select id from businesses where slug = 'spa-mar');
+update staff set active = false where id in (select id from mar_equipo);
 insert into appointments (business_id, token, starts_at, ends_at, customer_name, customer_phone, status, source)
 select id, 'silla1', date_trunc('hour', now()) + interval '300 days', date_trunc('hour', now()) + interval '300 days 1 hour',
        'Silla Uno', '5355550101', 'confirmada', 'manual' from businesses where slug = 'spa-mar';
@@ -1426,6 +1429,8 @@ do $$ declare b uuid := (select id from businesses where slug = 'spa-mar'); t ti
   assert _free_lane(b, null, t, t + interval '1 hour') is null, 'con equipo: la agenda del dueño, una a la vez';
 end $$;
 delete from staff where name = 'Ayudante' and business_id = (select id from businesses where slug = 'spa-mar');
+update staff set active = true where id in (select id from mar_equipo);
+drop table mar_equipo;
 delete from appointments where token = 'silla1';
 update businesses b set plan = x.v->>'plan', paid_until = (x.v->>'paid')::timestamptz, trial_ends_at = (x.v->>'trial')::timestamptz,
        slot_capacity = (x.v->>'cap')::int, comped = (x.v->>'comped')::boolean
