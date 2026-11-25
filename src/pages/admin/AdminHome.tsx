@@ -1,6 +1,7 @@
 // Inicio del administrador: un resumen de cómo va Citora. Arriba, el aviso de comprobantes por
-// revisar (si hay); luego 4 cifras (cobrado este mes, pagando, en prueba y nuevos) y, debajo, los
-// últimos pagos y los últimos negocios que se apuntaron.
+// revisar (si hay); luego 4 cifras (cobrado este mes, pagando, en prueba y nuevos); "Para escribir
+// hoy" (pruebas que acaban en 2 días o menos y negocios que no arrancan, con el WhatsApp listo) y,
+// debajo, los últimos pagos y los últimos negocios que se apuntaron.
 import { useEffect, useState } from 'react'
 import { Alert, Button, PageLoader } from '../../components/ui'
 import { serverNow } from '../../lib/clockSkew'
@@ -8,7 +9,8 @@ import { errorMessage } from '../../lib/errors'
 import { daysLeft, money } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import { Icon } from '../panel/Panel'
-import { ADMIN_TZ, agoShort, hasBusiness, shortDay, type AdminOwner } from './adminData'
+import { waLink } from '../../lib/whatsapp'
+import { ADMIN_TZ, agoShort, expiringMessage, hasBusiness, helpMessage, mergeRows, shortDay, stuckReason, trialLeft, type Activity, type AdminOwner, type AdminRow } from './adminData'
 import { BizAvatar, Kpi, SectionTitle, StateChip, StateDetail } from './adminUi'
 import type { AdminTab } from './Admin'
 import type { BizFilter } from './Businesses'
@@ -18,6 +20,7 @@ const SHOWN = 5
 
 export function AdminHome({ go }: { go: (t: AdminTab, filter?: BizFilter) => void }) {
   const [owners, setOwners] = useState<AdminOwner[] | null>(null)
+  const [activity, setActivity] = useState<Activity[]>([])
   const [stats, setStats] = useState<AdminStatsData | null>(null)
   const [pending, setPending] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -27,9 +30,11 @@ export function AdminHome({ go }: { go: (t: AdminTab, filter?: BizFilter) => voi
       supabase.rpc('admin_list_owners'),
       supabase.rpc('admin_stats'),
       supabase.from('payment_claims').select('id', { count: 'exact', head: true }).eq('status', 'pendiente'),
-    ]).then(([o, s, c]) => {
+      supabase.rpc('admin_business_activity'),
+    ]).then(([o, s, c, a]) => {
       if (o.error || s.error) return setError(errorMessage(o.error || s.error))
       setOwners(o.data as AdminOwner[])
+      if (!a.error) setActivity(a.data as Activity[])
       setStats(s.data as AdminStatsData)
       setPending(c.count || 0)
     })
@@ -54,6 +59,16 @@ export function AdminHome({ go }: { go: (t: AdminTab, filter?: BizFilter) => voi
     : `${thisMonth?.payments || 0} ${thisMonth?.payments === 1 ? 'pago' : 'pagos'} este mes`
   const signups = thisMonth?.signups || 0
   const prevSignups = lastMonth?.signups || 0
+
+  // ----- Para escribir hoy -----
+  const rows = mergeRows(owners, activity)
+  // Pruebas que acaban en 2 días o menos (la que antes acaba, primero)
+  const ending = rows
+    .filter((r) => r.id && r.name && !r.comped && r.status === 'prueba' && r.trial_ends_at
+      && new Date(r.trial_ends_at).getTime() - serverNow() <= 2 * 86400000)
+    .sort((a, b) => a.trial_ends_at!.localeCompare(b.trial_ends_at!))
+  // Negocios que no arrancan: llevan días sin ninguna reserva por la web (y no están ya en la lista de arriba)
+  const stuck = rows.filter((r) => stuckReason(r) && !ending.includes(r))
 
   // ----- Listas -----
   const payments = stats.recent_payments.slice(0, SHOWN)
@@ -92,6 +107,25 @@ export function AdminHome({ go }: { go: (t: AdminTab, filter?: BizFilter) => voi
         <Kpi label="En prueba" value={String(trial.length)} hint={endingSoon ? `${endingSoon} ${endingSoon === 1 ? 'acaba' : 'acaban'} esta semana` : 'ninguna acaba esta semana'} />
         <Kpi label="Nuevos este mes" value={String(signups)} hint={`${prevSignups} el mes pasado`} />
       </div>
+
+      {(ending.length > 0 || stuck.length > 0) && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <ToWrite
+            title="Su prueba acaba en 2 días o menos"
+            empty="Ninguna prueba acaba estos días."
+            rows={ending}
+            detail={(r) => `${trialLeft(r.trial_ends_at!)} de prueba`}
+            message={(r) => expiringMessage({ name: r.name!, kind: 'prueba', ends_at: r.trial_ends_at!, timezone: r.timezone })}
+          />
+          <ToWrite
+            title="Necesitan un empujón"
+            empty="Todos los negocios en prueba ya reciben reservas."
+            rows={stuck}
+            detail={(r) => stuckReason(r)!}
+            message={(r) => helpMessage(r.name!)}
+          />
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section>
@@ -146,4 +180,46 @@ export function AdminHome({ go }: { go: (t: AdminTab, filter?: BizFilter) => voi
 
 function LinkText({ onClick, children }: { onClick: () => void; children: string }) {
   return <button onClick={onClick} className="text-sm font-semibold text-brand hover:underline">{children}</button>
+}
+
+/** Negocios a los que conviene escribir hoy, cada uno con su WhatsApp y el mensaje ya escrito */
+function ToWrite({ title, empty, rows, detail, message }: {
+  title: string
+  empty: string
+  rows: AdminRow[]
+  detail: (r: AdminRow) => string
+  message: (r: AdminRow) => string
+}) {
+  return (
+    <section>
+      <SectionTitle title={`${title}${rows.length ? ` (${rows.length})` : ''}`} />
+      {rows.length === 0 ? (
+        <div className="card py-6 text-center text-sm text-slate-500">{empty}</div>
+      ) : (
+        <ul className="card divide-y divide-slate-100 overflow-hidden p-0 text-sm sm:p-0">
+          {rows.map((r) => (
+            <li key={r.user_id} className="grid grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
+              <BizAvatar owner={r} />
+              <span className="min-w-0">
+                <span className="block truncate font-semibold">{r.name}</span>
+                <span className="block text-xs text-slate-500">{detail(r)}</span>
+              </span>
+              {r.whatsapp ? (
+                <a
+                  href={waLink(r.whatsapp, message(r))}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-[#25D366] px-3 py-1.5 text-xs font-bold text-white"
+                >
+                  <Icon name="whatsapp" className="h-4 w-4" /> Escribir
+                </a>
+              ) : (
+                <span className="text-xs text-slate-400">Sin WhatsApp</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
 }
