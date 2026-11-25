@@ -1859,4 +1859,7 @@ export const EN: Record<string, string> = {
 
   // ----- Depósito al reservar -----
   "Después de reservar, sube la captura del pago desde la página de tu cita.": "After booking, upload the payment screenshot from your appointment page.",
+
+  // ----- Uno a la vez con equipo -----
+  "Tienes equipo: cada persona (tú también) atiende a 1 cliente a la vez. Para recibir a más clientes a la misma hora, añade a quien trabaje contigo en Equipo.": "You have a team: each person (you too) serves 1 client at a time. To take more clients at the same time, add whoever works with you in Team.",
 }

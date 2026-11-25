@@ -196,7 +196,12 @@ export default function Schedule() {
             </div>
             {!canMany && <span className="chip shrink-0 bg-brand/10 font-semibold text-brand">{t('Plan Equipo')}</span>}
           </div>
-          {canMany ? (
+          {canMany && hasTeam ? (
+            // Con equipo, cada persona atiende a una clienta a la vez (como en _free_lane)
+            <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+              {t('Tienes equipo: cada persona (tú también) atiende a 1 cliente a la vez. Para recibir a más clientes a la misma hora, añade a quien trabaje contigo en Equipo.')}
+            </div>
+          ) : canMany ? (
             <CapacityStepper value={capacity} onChange={(n) => { setDirty(true); setCapacity(n) }} />
           ) : (
             <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
@@ -208,11 +213,6 @@ export default function Schedule() {
               )}
               <Link to={link('plan')} className="mt-2 inline-block font-semibold text-brand">{t('Pasarme a Equipo →')}</Link>
             </div>
-          )}
-          {canMany && hasTeam && (
-            <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              {t('Tienes profesionales en Equipo: cada uno atiende a un cliente a la vez. Este número se aplica a las citas sin profesional asignado.')}
-            </p>
           )}
           {dirty && <p className="text-sm font-semibold text-brand">{t('Recuerda pulsar «Guardar cambios» abajo.')}</p>}
         </section>

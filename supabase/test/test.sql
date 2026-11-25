@@ -1420,6 +1420,12 @@ update businesses set paid_until = null, trial_ends_at = now() + interval '2 day
 do $$ declare b uuid := (select id from businesses where slug = 'spa-mar'); t timestamptz := date_trunc('hour', now()) + interval '300 days'; begin
   assert _free_lane(b, null, t, t + interval '1 hour') = 1, 'en la prueba: dos a la vez';
 end $$;
+-- Con equipo añadido, cada persona atiende a una sola clienta a la vez (también la agenda del dueño)
+insert into staff (business_id, name, active) select id, 'Ayudante', true from businesses where slug = 'spa-mar';
+do $$ declare b uuid := (select id from businesses where slug = 'spa-mar'); t timestamptz := date_trunc('hour', now()) + interval '300 days'; begin
+  assert _free_lane(b, null, t, t + interval '1 hour') is null, 'con equipo: la agenda del dueño, una a la vez';
+end $$;
+delete from staff where name = 'Ayudante' and business_id = (select id from businesses where slug = 'spa-mar');
 delete from appointments where token = 'silla1';
 update businesses b set plan = x.v->>'plan', paid_until = (x.v->>'paid')::timestamptz, trial_ends_at = (x.v->>'trial')::timestamptz,
        slot_capacity = (x.v->>'cap')::int, comped = (x.v->>'comped')::boolean

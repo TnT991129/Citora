@@ -1827,10 +1827,13 @@ declare
 begin
   if p_staff is null then
     -- Varios clientes a la vez es del plan Equipo (y de la prueba): con Solo, una sola silla aunque
-    -- tenga guardado más (se conserva por si vuelve a Equipo)
-    select case when plan_has(business_effective_plan(plan, trial_ends_at, paid_until), 'empleados')
-                then greatest(1, slot_capacity) else 1 end
-      into v_cap from businesses where id = p_business;
+    -- tenga guardado más (se conserva por si vuelve a Equipo). Con equipo añadido, cada persona
+    -- (también el dueño, en esta agenda) atiende a un cliente a la vez: "clientes por turno" es solo
+    -- para los salones que no han añadido a su equipo.
+    select case when plan_has(business_effective_plan(b.plan, b.trial_ends_at, b.paid_until), 'empleados')
+                     and not exists (select 1 from staff st where st.business_id = b.id and st.active)
+                then greatest(1, b.slot_capacity) else 1 end
+      into v_cap from businesses b where b.id = p_business;
   end if;
   for l in 0 .. coalesce(v_cap, 1) - 1 loop
     if not exists (
