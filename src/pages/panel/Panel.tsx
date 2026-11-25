@@ -42,7 +42,8 @@ import Team from './Team'
 import Waitlist from './Waitlist'
 import Today from './Today'
 import { GuidedTour, isMobileScreen, tourSteps, DEMO_PENDING_NAME } from './tutorial'
-import { LANG, t, tn } from '../../lib/i18n'
+import { LANG, LOCALE, t, tn } from '../../lib/i18n'
+import { cachePut, cacheUse, isNetworkError, useOffline } from '../../lib/offline'
 
 export default function Panel() {
   const session = useSession()
@@ -69,9 +70,17 @@ export default function Panel() {
       supabase.rpc('get_my_business_status'),
     ])
     if (e1 || e2) {
+      // Sin conexión: el negocio de la última vez, para poder ver la agenda (ver offline.ts)
+      const cached = isNetworkError(e1 || e2) ? cacheUse<{ b: Business | null; st: MyStatus | null }>('negocio') : null
+      if (cached) {
+        setBusiness(cached.b)
+        setStatus(cached.st)
+        return
+      }
       setError(errorMessage(e1 || e2))
       return
     }
+    cachePut('negocio', { b, st })
     // Negocio de la otra versión (Cuba o /int/): su panel está allí
     if (b && goToMarket((b as Business).market)) return
     // Versión internacional: los avisos push salen en el idioma en que el dueño usa su panel
@@ -88,12 +97,16 @@ export default function Panel() {
   }, [])
 
   const reloadServices = useCallback(async () => {
-    const { data } = await supabase.from('services').select('*').order('position').order('created_at')
+    const { data, error } = await supabase.from('services').select('*').order('position').order('created_at')
+    if (error && isNetworkError(error)) return setServices(cacheUse<Service[]>('servicios') || [])
+    if (!error) cachePut('servicios', data)
     setServices((data as Service[]) || [])
   }, [])
 
   const reloadStaff = useCallback(async () => {
-    const { data } = await supabase.from('staff').select('*').order('position').order('created_at')
+    const { data, error } = await supabase.from('staff').select('*').order('position').order('created_at')
+    if (error && isNetworkError(error)) return setStaff(cacheUse<Staff[]>('equipo') || [])
+    if (!error) cachePut('equipo', data)
     setStaff((data as Staff[]) || [])
   }, [])
 
@@ -291,6 +304,7 @@ export default function Panel() {
           </div>
         </header>
 
+        <OfflineBanner />
         <StatusBanner status={status} planLink={link('plan')} />
         {!blocked && <SurveyBanner />}
 
@@ -454,6 +468,23 @@ function SideLink({ to, label, icon, base, tour }: { to: string; label: string; 
       <Icon name={icon} className="h-5 w-5 shrink-0" />
       {label}
     </Link>
+  )
+}
+
+/** Aviso de que no hay conexión y de qué hora son los datos que se ven (ver offline.ts) */
+function OfflineBanner() {
+  const since = useOffline()
+  if (since === null) return null
+  const time = new Intl.DateTimeFormat(LOCALE, { hour: 'numeric', minute: '2-digit' }).format(new Date(since))
+  return (
+    <div className="mx-auto max-w-4xl px-4 pt-4 lg:px-8 lg:pt-6">
+      <div className="flex items-center gap-3 rounded-2xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-700">
+        <Icon name="ban" className="h-5 w-5 shrink-0" />
+        <span className="min-w-0 flex-1">
+          <b>{t('Sin conexión')}</b> · {t('estás viendo los datos de las {time}. Para apuntar o cambiar citas hace falta internet; cuando vuelva, se pone al día sola.', { time })}
+        </span>
+      </div>
+    </div>
   )
 }
 

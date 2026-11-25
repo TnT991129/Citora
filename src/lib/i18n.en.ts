@@ -1837,4 +1837,8 @@ export const EN: Record<string, string> = {
   "Te recomiendo Citora para que tus clientas reserven solas, sin escribirte. Crea tu app gratis con mi enlace y, cuando pagues tu primer mes, te regalan otro: {url}": "I recommend Citora so your clients can book on their own, without messaging you. Create your app for free with my link and, when you pay your first month, you get another one free: {url}",
   "{n} se apuntaron con tu enlace · {m} ya pagaron (ganaste {m} meses)": "{n} signed up with your link · {m} already paid (you earned {m} months)",
   "1 se apuntó con tu enlace · {m} ya pagó": "1 signed up with your link · {m} already paid",
+
+  // ----- Sin conexión -----
+  "Sin conexión": "Offline",
+  "estás viendo los datos de las {time}. Para apuntar o cambiar citas hace falta internet; cuando vuelva, se pone al día sola.": "you're seeing the data from {time}. You need internet to add or change appointments; once it's back, it updates on its own.",
 }

@@ -3,16 +3,24 @@ import { supabase } from './supabase'
 import type { Appointment, Business } from './types'
 import { bookingUrl, publicUrl } from './url'
 import { t } from './i18n'
+import { cachePut, cacheUse, isNetworkError } from './offline'
 
 /** Citas entre dos días (incluidos), en la zona horaria del negocio */
 export async function fetchAppointments(b: Business, fromKey: string, toKey: string): Promise<Appointment[]> {
+  const key = `citas:${b.id}:${fromKey}:${toKey}`
   const { data, error } = await supabase
     .from('appointments')
     .select('*, appointment_services(name, price, duration_min)')
     .gte('starts_at', zonedToIso(fromKey, '00:00', b.timezone))
     .lt('starts_at', zonedToIso(addDays(toKey, 1), '00:00', b.timezone))
     .order('starts_at')
-  if (error) throw error
+  if (error) {
+    // Sin conexión: las citas de la última vez que se vieron estos días (ver offline.ts)
+    const cached = isNetworkError(error) ? cacheUse<Appointment[]>(key) : null
+    if (cached) return cached
+    throw error
+  }
+  cachePut(key, data)
   return (data as Appointment[]) || []
 }
 
