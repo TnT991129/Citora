@@ -39,6 +39,8 @@ export interface Business {
   deposit_enabled: boolean
   deposit_amount: number | null
   deposit_instructions: string | null
+  /** Horas que tiene el cliente para subir la captura del depósito; si no, la cita se cancela sola. Null: no se cancela. */
+  deposit_hours?: number | null
   loyalty_enabled: boolean
   loyalty_every: number | null
   loyalty_reward: string | null
@@ -114,6 +116,8 @@ export interface Appointment {
   id: string
   business_id: string
   token: string
+  /** Captura del depósito que subió el cliente (almacén "deposit-proofs") */
+  deposit_proof_path?: string | null
   starts_at: string
   ends_at: string
   customer_name: string
@@ -378,6 +382,8 @@ export interface OwnerStats {
 
 export interface PublicBooking {
   token: string
+  /** Si el negocio pide depósito: importe, instrucciones, si ya subió la captura y hasta cuándo puede */
+  deposit?: { amount: number | null; instructions: string | null; sent: boolean; deadline: string | null } | null
   starts_at: string
   ends_at: string
   customer_name: string
@@ -398,6 +404,7 @@ export interface PublicBooking {
   review: { rating: number; comment: string | null; reply: string | null } | null
   customer: { visits: number; bookings: number; since: string | null } | null
   business: {
+    id?: string
     name: string
     slug: string
     market?: Market

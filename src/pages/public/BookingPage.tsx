@@ -7,11 +7,12 @@ import { setBrandColor } from '../../lib/brand'
 import { setAppManifest } from '../../lib/pwa'
 import { errorMessage } from '../../lib/errors'
 import { goToMarket } from '../../lib/market'
-import { cupRate, dateKey, duration, longDate, money, price, timeOf, todayKey, weekdayOf, dayTitle } from '../../lib/format'
+import { cupRate, dateKey, duration, fullDateFromIso, longDate, money, price, timeOf, todayKey, weekdayOf, dayTitle } from '../../lib/format'
 import { buildAppointmentIcs, downloadIcs } from '../../lib/ics'
 import { hasModule } from '../../lib/plans'
 import { keepStaff, MIXED_PEOPLE, ownerInfo, requiredIds, staffDoes, whoAttends } from '../../lib/staff'
 import { isPushSubscribed, pushProblemMessage, pushSupported, subscribeCustomerPush } from '../../lib/push'
+import { imageExt, shrinkImage } from '../../lib/image'
 import { rememberBooking } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
 import type { PublicBooking, PublicBusiness } from '../../lib/types'
@@ -183,6 +184,9 @@ export default function BookingPage() {
           <LinkButton href={waLink(b.whatsapp, waText)} variant="whatsapp" size="lg" block newTab>
             <WhatsAppIcon /> {t('Avisar al negocio por WhatsApp')}
           </LinkButton>
+        )}
+        {active && booking.deposit && booking.business.id && (
+          <DepositBox token={booking.token} businessId={booking.business.id} deposit={booking.deposit} currency={booking.business.currency} tz={booking.business.timezone} onSent={loadBooking} />
         )}
         {active && <Button variant="secondary" block onClick={addToCalendar}>{t('📅 Agregar al calendario')}</Button>}
 
@@ -487,5 +491,68 @@ function ReviewBox({ booking, onSaved }: { booking: PublicBooking; onSaved: () =
       {error && <div className="mt-3"><Alert>{error}</Alert></div>}
       <Button block className="mt-3" onClick={save} loading={busy} disabled={!rating}>{t('Enviar opinión')}</Button>
     </section>
+  )
+}
+
+/** Depósito: el cliente sube aquí la captura del pago (la ve el negocio en la cita) */
+function DepositBox({ token, businessId, deposit, currency, tz, onSent }: {
+  token: string
+  businessId: string
+  deposit: NonNullable<PublicBooking['deposit']>
+  currency: string
+  tz: string
+  onSent: () => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  if (deposit.sent) {
+    return <div className="rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-900 ring-1 ring-emerald-200">✓ {t('Captura del depósito enviada. El negocio la revisará y confirmará tu cita.')}</div>
+  }
+
+  const upload = async (file: File) => {
+    setBusy(true)
+    setError(null)
+    try {
+      const blob = await shrinkImage(file, 1280)
+      const path = `${businessId}/${token}/deposito-${Date.now()}.${imageExt(blob)}`
+      const { error: upErr } = await supabase.storage.from('deposit-proofs').upload(path, blob, { contentType: blob.type })
+      if (upErr) throw upErr
+      const { error: rpcErr } = await supabase.rpc('attach_deposit_proof', { p_token: token, p_path: path })
+      if (rpcErr) throw rpcErr
+      flash(t('Captura enviada'))
+      onSent()
+    } catch (e) {
+      setError(errorMessage(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900 ring-1 ring-amber-200">
+      <p className="font-bold">
+        {deposit.amount ? t('Este negocio pide un depósito de {amount} para asegurar la cita.', { amount: money(deposit.amount, currency) }) : t('Este negocio pide un depósito para asegurar la cita.')}
+      </p>
+      {deposit.instructions && <p className="whitespace-pre-line">{deposit.instructions}</p>}
+      {deposit.deadline && (
+        <p className="font-semibold">{t('Sube la captura antes del {day} a las {time}; si no, la cita se cancela sola.', { day: fullDateFromIso(deposit.deadline, tz), time: timeOf(deposit.deadline, tz, true) })}</p>
+      )}
+      <label className={`flex w-full cursor-pointer items-center justify-center rounded-btn bg-amber-500 px-4 py-3 font-bold text-white ${busy ? 'opacity-60' : ''}`}>
+        {busy ? t('Subiendo…') : t('Subir la captura del depósito')}
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          disabled={busy}
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            if (f) upload(f)
+            e.target.value = ''
+          }}
+        />
+      </label>
+      {error && <Alert>{error}</Alert>}
+    </div>
   )
 }

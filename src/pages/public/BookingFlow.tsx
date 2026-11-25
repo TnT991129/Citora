@@ -293,6 +293,7 @@ export default function BookingFlow() {
                     : t('Este negocio pide un depósito para asegurar la cita.')}
                 </p>
                 {business.deposit_instructions && <p className="mt-1 whitespace-pre-line">{business.deposit_instructions}</p>}
+                <p className="mt-1 font-semibold">{t('Después de reservar, sube la captura del pago desde la página de tu cita.')}</p>
               </div>
             )}
             <label className="flex items-start gap-3 rounded-xl bg-white p-3 ring-1 ring-slate-200">

@@ -416,6 +416,11 @@ alter table public.services add column if not exists multi_options boolean not n
 alter table public.businesses add column if not exists deposit_enabled boolean not null default false;
 alter table public.businesses add column if not exists deposit_amount numeric(10, 2) check (deposit_amount is null or deposit_amount >= 0);
 alter table public.businesses add column if not exists deposit_instructions text check (char_length(deposit_instructions) <= 500);
+-- Depósito con captura: el cliente sube la captura desde el enlace de su cita (ver attach_deposit_proof).
+-- deposit_hours: si en ese tiempo no la sube, la cita (aún por confirmar) se cancela sola
+-- (_cancel_unpaid_deposits). Null: no se cancela sola.
+alter table public.businesses add column if not exists deposit_hours int check (deposit_hours between 1 and 72);
+alter table public.appointments add column if not exists deposit_proof_path text;
 
 -- Tarjeta de cliente fiel: mensaje informativo cada N visitas (el dueño cumple el premio a mano,
 -- como con el depósito: no hay forma de aplicar descuentos automáticos a este nivel).
@@ -1679,6 +1684,10 @@ begin
     perform cron.unschedule('citora-limpiar-visitas');
   end if;
   perform cron.schedule('citora-limpiar-visitas', '15 8 * * *', $cron$select public._purge_analytics();$cron$);
+  if exists (select 1 from cron.job where jobname = 'citora-depositos') then
+    perform cron.unschedule('citora-depositos');
+  end if;
+  perform cron.schedule('citora-depositos', '20 * * * *', $cron$select public._cancel_unpaid_deposits();$cron$);
   if exists (select 1 from cron.job where jobname = 'citora-borrar-pruebas-vencidas') then
     perform cron.unschedule('citora-borrar-pruebas-vencidas');
   end if;
@@ -2253,6 +2262,64 @@ begin
 end;
 $$;
 
+-- ¿Puede subirse una captura de depósito a esta carpeta? "<negocio>/<token de la cita>/...": la cita
+-- existe, es de ese negocio, sigue activa y el negocio pide depósito. Lo usa la regla del almacén
+-- "deposit-proofs" (quien sube no tiene sesión: el token de su cita es su llave).
+create or replace function public._deposit_folder_ok(p_name text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from appointments a join businesses b on b.id = a.business_id
+    where b.id::text = split_part(p_name, '/', 1) and a.token = split_part(p_name, '/', 2)
+      and b.deposit_enabled and a.status in ('pendiente', 'confirmada'));
+$$;
+
+-- El cliente avisa de que subió la captura de su depósito (desde el enlace de su cita)
+create or replace function public.attach_deposit_proof(p_token text, p_path text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  a appointments;
+  b businesses;
+begin
+  select * into a from appointments where token = p_token;
+  if not found then raise exception 'CITA_NO_EXISTE'; end if;
+  select * into b from businesses where id = a.business_id;
+  if not b.deposit_enabled or a.status not in ('pendiente', 'confirmada') then raise exception 'CITA_NO_MODIFICABLE'; end if;
+  if p_path is null or p_path not like b.id::text || '/' || a.token || '/%' or p_path like '%..%' then
+    raise exception 'FALTA_COMPROBANTE';
+  end if;
+  update appointments set deposit_proof_path = p_path where id = a.id;
+  perform _notify_push(b.id, 'owner', null,
+    _l(b.lang, 'Depósito recibido: ', 'Deposit received: ') || a.customer_name,
+    _l(b.lang, 'Subió la captura del depósito de su cita del ', 'Uploaded the deposit screenshot for the appointment on ')
+      || to_char(a.starts_at at time zone b.timezone, _l(b.lang, 'DD/MM HH12:MI AM', 'MM/DD HH12:MI AM')) || '.');
+end;
+$$;
+
+-- Cancela las citas pedidas por la web que siguen sin la captura del depósito pasado el plazo del
+-- negocio (deposit_hours). Solo las que aún están por confirmar: si el dueño ya la confirmó, se queda.
+-- Se llama cada hora (tarea "citora-depositos").
+create or replace function public._cancel_unpaid_deposits()
+returns int language plpgsql volatile security definer set search_path = public as $$
+declare
+  r record;
+  n int := 0;
+begin
+  for r in
+    select a.id, a.business_id, a.customer_name, b.lang from appointments a join businesses b on b.id = a.business_id
+    where b.deposit_enabled and b.deposit_hours is not null and a.status = 'pendiente' and a.source = 'web'
+      and a.deposit_proof_path is null and a.created_at < now() - make_interval(hours => b.deposit_hours)
+  loop
+    update appointments set status = 'cancelada', cancelled_by = 'negocio' where id = r.id;
+    perform _notify_push(r.business_id, 'owner', null,
+      _l(r.lang, 'Cita cancelada sin depósito', 'Appointment cancelled: no deposit'),
+      _l(r.lang, r.customer_name || ' no subió la captura del depósito a tiempo. Su hueco vuelve a estar libre.',
+                 r.customer_name || ' didn''t upload the deposit screenshot in time. The spot is free again.'));
+    n := n + 1;
+  end loop;
+  return n;
+end;
+$$;
+
 -- Página privada de la cita (por enlace único)
 create or replace function public.get_booking(p_token text)
 returns jsonb language sql stable security definer set search_path = public as $$
@@ -2271,6 +2338,11 @@ returns jsonb language sql stable security definer set search_path = public as $
     'staff_name', (select st.name from staff st where st.id = a.staff_id),
     'status', a.status,
     'reschedule_count', a.reschedule_count,
+    -- Depósito: si lo pide el negocio, si ya subió la captura y hasta cuándo puede subirla
+    'deposit', case when b.deposit_enabled and a.status in ('pendiente', 'confirmada') then jsonb_build_object(
+       'amount', b.deposit_amount, 'instructions', b.deposit_instructions, 'sent', a.deposit_proof_path is not null,
+       'deadline', case when b.deposit_hours is not null and a.status = 'pendiente' and a.source = 'web' and a.deposit_proof_path is null
+                        then a.created_at + make_interval(hours => b.deposit_hours) end) end,
     'can_cancel', a.status in ('pendiente', 'confirmada')
        and a.starts_at > now() + make_interval(hours => b.cancel_notice_hours),
     'can_edit', a.status in ('pendiente', 'confirmada')
@@ -2291,7 +2363,7 @@ returns jsonb language sql stable security definer set search_path = public as $
                  from appointments x
                  where x.business_id = a.business_id and x.customer_phone = a.customer_phone),
     'business', jsonb_build_object(
-      'name', b.name, 'slug', b.slug, 'market', b.market, 'whatsapp', b.whatsapp, 'address', b.address,
+      'id', b.id, 'name', b.name, 'slug', b.slug, 'market', b.market, 'whatsapp', b.whatsapp, 'address', b.address,
       'logo_url', b.logo_url, 'color_primary', b.color_primary, 'timezone', b.timezone,
       'currency', b.currency, 'cancel_notice_hours', b.cancel_notice_hours,
       'reschedule_notice_hours', b.reschedule_notice_hours, 'max_reschedules', b.max_reschedules,
@@ -4195,6 +4267,8 @@ grant execute on function public.join_waitlist(text, date, text, text, text) to 
 grant execute on function public.save_customer_push_subscription(text, text, text, text) to anon, authenticated;
 grant execute on function public.delete_push_subscription(text) to anon, authenticated;
 grant execute on function public.get_booking(text) to anon, authenticated;
+grant execute on function public.attach_deposit_proof(text, text) to anon, authenticated;
+grant execute on function public._deposit_folder_ok(text) to anon, authenticated;
 grant execute on function public.cancel_booking(text) to anon, authenticated;
 grant execute on function public.reschedule_booking(text, date, text) to anon, authenticated;
 grant execute on function public.edit_booking(text, uuid[], date, text, text, text, uuid, jsonb) to anon, authenticated;
@@ -4302,6 +4376,7 @@ revoke execute on function public._purge_expired_trials() from anon, authenticat
 revoke execute on function public._replay_payments(uuid, timestamptz) from anon, authenticated;
 revoke execute on function public._activate_plan(uuid, text, int, numeric, text, uuid) from anon, authenticated;
 revoke execute on function public._reward_referral(uuid) from anon, authenticated;
+revoke execute on function public._cancel_unpaid_deposits() from anon, authenticated;
 revoke execute on function public.online_order_price(uuid, text, int) from anon, authenticated;
 revoke execute on function public.online_payment_complete(text, numeric, text, text) from anon, authenticated;
 revoke execute on function public.admin_update_payment(uuid, text, int, numeric, text) from anon;
@@ -4367,6 +4442,23 @@ begin
              and ((storage.foldername(name))[1] = public.my_business_id()::text or public.is_platform_admin()))$p$;
     execute $p$create policy "payment_proofs_insert" on storage.objects for insert to authenticated
       with check (bucket_id = 'payment-proofs' and (storage.foldername(name))[1] = public.my_business_id()::text)$p$;
+  end if;
+end;
+$$;
+-- Capturas de depósitos de los clientes: almacén privado. Sube el cliente (sin sesión) a la carpeta
+-- de su cita ("<negocio>/<token>/...", ver _deposit_folder_ok); las ve el dueño de ese negocio.
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_schema = 'storage' and table_name = 'buckets') then
+    insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+      values ('deposit-proofs', 'deposit-proofs', false, 3145728, array['image/jpeg', 'image/png', 'image/webp'])
+      on conflict (id) do update set public = false, file_size_limit = 3145728, allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp'];
+    execute 'drop policy if exists "deposit_proofs_insert" on storage.objects';
+    execute 'drop policy if exists "deposit_proofs_select" on storage.objects';
+    execute $p$create policy "deposit_proofs_insert" on storage.objects for insert to anon, authenticated
+      with check (bucket_id = 'deposit-proofs' and public._deposit_folder_ok(name))$p$;
+    execute $p$create policy "deposit_proofs_select" on storage.objects for select to authenticated
+      using (bucket_id = 'deposit-proofs' and (storage.foldername(name))[1] = public.my_business_id()::text)$p$;
   end if;
 end;
 $$;

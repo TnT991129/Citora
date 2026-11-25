@@ -1841,4 +1841,22 @@ export const EN: Record<string, string> = {
   // ----- Sin conexión -----
   "Sin conexión": "Offline",
   "estás viendo los datos de las {time}. Para apuntar o cambiar citas hace falta internet; cuando vuelva, se pone al día sola.": "you're seeing the data from {time}. You need internet to add or change appointments; once it's back, it updates on its own.",
+
+  // ----- Depósito con captura -----
+  "El cliente lo paga por su cuenta y sube la captura desde el enlace de su cita. Tú la ves en la cita y la confirmas como siempre.": "The client pays it on their own and uploads the screenshot from their appointment link. You see it in the appointment and confirm it as usual.",
+  "Si no sube la captura": "If they don't upload the screenshot",
+  "Solo para las citas pedidas por la web que aún están por confirmar. Al cancelarse, el hueco vuelve a quedar libre.": "Only for online bookings that are still unconfirmed. When cancelled, the spot is free again.",
+  "No cancelar la cita": "Don't cancel the appointment",
+  "Cancelarla a las {h} horas": "Cancel it after {h} hours",
+  "El cliente aún no ha subido la captura del depósito.": "The client hasn't uploaded the deposit screenshot yet.",
+  "Depósito: captura recibida": "Deposit: screenshot received",
+  "Ver la captura": "See the screenshot",
+  "Captura del depósito enviada. El negocio la revisará y confirmará tu cita.": "Deposit screenshot sent. The business will review it and confirm your appointment.",
+  "Captura enviada": "Screenshot sent",
+  "Sube la captura antes del {day} a las {time}; si no, la cita se cancela sola.": "Upload the screenshot before {day} at {time}; otherwise, the appointment is cancelled automatically.",
+  "Subiendo…": "Uploading…",
+  "Subir la captura del depósito": "Upload the deposit screenshot",
+
+  // ----- Depósito al reservar -----
+  "Después de reservar, sube la captura del pago desde la página de tu cita.": "After booking, upload the payment screenshot from your appointment page.",
 }

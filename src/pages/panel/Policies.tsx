@@ -21,6 +21,7 @@ export default function Policies() {
     deposit_enabled: business.deposit_enabled,
     deposit_amount: business.deposit_amount != null ? String(business.deposit_amount) : '',
     deposit_instructions: business.deposit_instructions || '',
+    deposit_hours: business.deposit_hours ?? null,
     loyalty_enabled: business.loyalty_enabled,
     loyalty_every: business.loyalty_every || 5,
     loyalty_reward: business.loyalty_reward || '',
@@ -45,6 +46,7 @@ export default function Policies() {
       deposit_enabled: form.deposit_enabled,
       deposit_amount: form.deposit_enabled && Number(form.deposit_amount) > 0 ? Number(form.deposit_amount) : null,
       deposit_instructions: form.deposit_enabled ? (form.deposit_instructions.trim() || null) : null,
+      deposit_hours: form.deposit_enabled ? form.deposit_hours : null,
       loyalty_enabled: form.loyalty_enabled,
       loyalty_every: form.loyalty_enabled ? form.loyalty_every : null,
       loyalty_reward: form.loyalty_enabled ? (form.loyalty_reward.trim() || null) : null,
@@ -166,7 +168,7 @@ export default function Policies() {
           <div>
             <h2 className="font-bold">{t('Depósito para reservar')}</h2>
             <p className="text-sm text-slate-500">
-              {business.market === 'int' ? t('Es informativo: el cliente paga el depósito por su cuenta y te manda la captura por WhatsApp. Tú confirmas la cita como siempre.') : t('No hay pasarela de pago para Cuba, así que es informativo: el cliente lo transfiere por su cuenta (Transfermóvil/EnZona) y te manda la captura por WhatsApp. Tú confirmas la cita como siempre.')}
+              {t('El cliente lo paga por su cuenta y sube la captura desde el enlace de su cita. Tú la ves en la cita y la confirmas como siempre.')}
             </p>
           </div>
           <Toggle checked={form.deposit_enabled} onChange={(v) => set({ deposit_enabled: v })} label={t('Pedir depósito')} />
@@ -184,6 +186,12 @@ export default function Policies() {
                 onChange={(e) => set({ deposit_instructions: e.target.value })}
                 placeholder={t('Ej. Transfiere a la tarjeta 9200 0000 0000 0000 y manda la captura por WhatsApp para confirmar tu cita.')}
               />
+            </Field>
+            <Field label={t('Si no sube la captura')} hint={t('Solo para las citas pedidas por la web que aún están por confirmar. Al cancelarse, el hueco vuelve a quedar libre.')}>
+              <select className="input" value={form.deposit_hours ?? ''} onChange={(e) => set({ deposit_hours: e.target.value ? Number(e.target.value) : null })}>
+                <option value="">{t('No cancelar la cita')}</option>
+                {[2, 6, 12, 24, 48].map((h) => <option key={h} value={h}>{t('Cancelarla a las {h} horas', { h })}</option>)}
+              </select>
             </Field>
           </>
         )}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { HelpTip } from '../../components/HelpTip'
 import { Alert, Button, Field, LinkButton, Modal, StatusBadge, WhatsAppIcon } from '../../components/ui'
 import { buildMessage, MESSAGE_LABELS, type MessageKind } from '../../lib/appointments'
@@ -152,11 +152,34 @@ export function AppointmentModal({ appointment, onClose, onChanged }: {
           </div>
         )}
 
+        {business.deposit_enabled && a.source === 'web' && <DepositProof path={a.deposit_proof_path || null} />}
+
         <Field label={t('Nota interna (solo la ves tú)')}>
           <textarea className="input min-h-[70px]" value={note} onChange={(e) => setNote(e.target.value)} />
         </Field>
         {note !== (a.internal_note || '') && <Button size="sm" variant="secondary" onClick={saveNote} loading={busy === 'note'}>{t('Guardar nota')}</Button>}
       </div>
     </Modal>
+  )
+}
+
+/** El depósito de la cita: la captura que subió el cliente (con un enlace firmado de un rato) o que aún no la subió */
+function DepositProof({ path }: { path: string | null }) {
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (!path) return
+    supabase.storage.from('deposit-proofs').createSignedUrl(path, 3600).then(({ data }) => setUrl(data?.signedUrl || null))
+  }, [path])
+  if (!path) {
+    return <Alert kind="warning">{t('El cliente aún no ha subido la captura del depósito.')}</Alert>
+  }
+  return (
+    <div className="flex items-center gap-3 rounded-xl bg-emerald-50 p-3 ring-1 ring-emerald-200">
+      {url ? <a href={url} target="_blank" rel="noreferrer"><img src={url} alt="" className="h-16 w-16 rounded-lg object-cover" /></a> : <span className="h-16 w-16 rounded-lg bg-emerald-100" />}
+      <span className="min-w-0 text-sm text-emerald-900">
+        <b>{t('Depósito: captura recibida')}</b>
+        {url && <a href={url} target="_blank" rel="noreferrer" className="block font-semibold underline">{t('Ver la captura')}</a>}
+      </span>
+    </div>
   )
 }

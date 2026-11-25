@@ -1556,6 +1556,36 @@ delete from businesses where slug in ('nails-miami', 'spa-habana');
 delete from auth.users where id in ('66666666-6666-6666-6666-666666666666', '77777777-7777-7777-7777-777777777777');
 set role authenticated;
 
+-- ===== Depósito con captura y cancelación si no llega =====
+reset role;
+update businesses set deposit_enabled = true, deposit_amount = 200, deposit_hours = 2 where slug = 'spa-mar';
+insert into appointments (business_id, token, starts_at, ends_at, customer_name, customer_phone, status, source, created_at)
+select id, 'deptoken1', now() + interval '200 days', now() + interval '200 days 1 hour', 'Con Depósito', '5355550301', 'pendiente', 'web', now()
+  from businesses where slug = 'spa-mar';
+insert into appointments (business_id, token, starts_at, ends_at, customer_name, customer_phone, status, source, created_at)
+select id, 'deptoken2', now() + interval '201 days', now() + interval '201 days 1 hour', 'Sin Depósito', '5355550302', 'pendiente', 'web', now() - interval '3 hours'
+  from businesses where slug = 'spa-mar';
+insert into ctx select 'mar_id', id::text from businesses where slug = 'spa-mar';
+set role anon;
+do $$ begin
+  assert (get_booking('deptoken1')->'deposit'->>'sent')::boolean = false, 'aún sin captura';
+  assert get_booking('deptoken1')->'deposit'->>'deadline' is not null, 'con plazo para subirla';
+  assert _deposit_folder_ok((select v from ctx where k = 'mar_id') || '/deptoken1/captura.jpg'), 'puede subir a la carpeta de su cita';
+  assert not _deposit_folder_ok((select v from ctx where k = 'mar_id') || '/otro-token/captura.jpg'), 'no a otra carpeta';
+end $$;
+select expect_error($$select attach_deposit_proof('deptoken1', 'x/deptoken1/a.jpg')$$, 'FALTA_COMPROBANTE');
+select attach_deposit_proof('deptoken1', (select v from ctx where k = 'mar_id') || '/deptoken1/a.jpg');
+do $$ begin assert (get_booking('deptoken1')->'deposit'->>'sent')::boolean, 'captura recibida'; end $$;
+reset role;
+do $$ begin
+  assert _cancel_unpaid_deposits() = 1, 'se cancela solo la que no subió la captura a tiempo';
+  assert (select status from appointments where token = 'deptoken2') = 'cancelada';
+  assert (select status from appointments where token = 'deptoken1') = 'pendiente', 'la que la subió sigue';
+end $$;
+delete from appointments where token in ('deptoken1', 'deptoken2');
+update businesses set deposit_enabled = false, deposit_amount = null, deposit_hours = null where slug = 'spa-mar';
+set role authenticated;
+
 -- ===== Invita a otro negocio y gana 1 mes =====
 reset role;
 insert into auth.users (id, email) values
