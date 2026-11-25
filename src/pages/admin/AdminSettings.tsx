@@ -23,6 +23,8 @@ interface Settings {
   trial_days: number
   price_int_basico: number
   price_int_ultra: number
+  discount_3m: number
+  discount_6m: number
   paypal_client_id: string
   push_function_url: string | null
   push_shared_secret: string | null
@@ -103,6 +105,14 @@ export default function AdminSettings() {
             </Field>
             <Field label="Prueba gratis" hint="Para los negocios nuevos.">
               <SuffixInput value={s.trial_days} suffix="días" min={0} max={60} onChange={(v) => setS({ ...s, trial_days: v })} />
+            </Field>
+          </div>
+          <div className="card mt-3 grid gap-4 sm:grid-cols-2">
+            <Field label="Descuento pagando 3 meses o más" hint="0 = sin descuento. Vale para Cuba y la versión internacional.">
+              <SuffixInput value={s.discount_3m ?? 10} suffix="%" min={0} max={50} onChange={(v) => setS({ ...s, discount_3m: v })} />
+            </Field>
+            <Field label="Descuento pagando 6 meses o más">
+              <SuffixInput value={s.discount_6m ?? 15} suffix="%" min={0} max={50} onChange={(v) => setS({ ...s, discount_6m: v })} />
             </Field>
           </div>
         </SettingsGroup>

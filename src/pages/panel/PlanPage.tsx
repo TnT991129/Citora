@@ -10,6 +10,7 @@ import { waLink } from '../../lib/whatsapp'
 import { usePanel } from './context'
 import { PayPalPay } from './PayPalPay'
 import { t } from '../../lib/i18n'
+import { monthsDiscount, monthsTotal } from '../../lib/plans'
 
 interface PaymentInfo {
   card_number: string
@@ -21,6 +22,9 @@ interface PaymentInfo {
   plus: number
   ultra: number
   currency?: 'CUP' | 'USD'
+  /** Descuento (%) por pagar 3 o más meses y 6 o más meses */
+  discount_3m?: number
+  discount_6m?: number
   /** Versión internacional: Client ID de PayPal para los botones de pago (vacío: aún no se puede pagar) */
   paypal_client_id?: string
 }
@@ -77,7 +81,10 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
   const cur = info.currency || 'CUP'
   const intl = cur === 'USD'
   const price = plan === 'ultra' ? info.ultra : info.basico
-  const amount = Math.round(price * months * 100) / 100
+  // Con descuento si paga varios meses de una vez (el mismo cálculo que hace la base de datos)
+  const amount = monthsTotal(price, months, info)
+  const fullAmount = Math.round(price * months * 100) / 100
+  const discount = monthsDiscount(months, info)
 
   // Pagado con PayPal: los meses ya están sumados (lo confirmó el servidor)
   const paidOnline = async (until: string) => {
@@ -271,11 +278,23 @@ export default function PlanPage({ blocked }: { blocked?: boolean }) {
         <div className="flex gap-2">
           {[1, 2, 3, 6].map((m) => (
             <button key={m} onClick={() => setMonths(m)} className={`flex-1 rounded-xl py-2.5 font-semibold ${months === m ? 'bg-brand text-white' : 'bg-white ring-1 ring-slate-300'}`}>
-              {m} {m === 1 ? t('mes') : t('meses')}
+              <span className="block">{m} {m === 1 ? t('mes') : t('meses')}</span>
+              {monthsDiscount(m, info) > 0 && (
+                <span className={`block text-xs font-bold ${months === m ? 'text-white/85' : 'text-emerald-600'}`}>−{monthsDiscount(m, info)} %</span>
+              )}
             </button>
           ))}
         </div>
-        <p className="text-lg">{t('Total a pagar:')}{' '}<b>{money(amount, cur)}</b></p>
+        <p className="text-lg">
+          {t('Total a pagar:')}{' '}<b>{money(amount, cur)}</b>
+          {discount > 0 && <span className="ml-2 text-sm text-slate-400 line-through">{money(fullAmount, cur)}</span>}
+        </p>
+        {discount > 0 && (
+          <p className="text-sm font-semibold text-emerald-700">{t('Ahorras {amount} por pagar {n} meses de una vez.', { amount: money(Math.round((fullAmount - amount) * 100) / 100, cur), n: months })}</p>
+        )}
+        {discount === 0 && Number(info.discount_3m) > 0 && (
+          <p className="text-sm text-slate-500">{t('Paga 3 meses o más de una vez y ahorra un {n} %.', { n: info.discount_3m })}</p>
+        )}
       </section>
 
       {intl ? (

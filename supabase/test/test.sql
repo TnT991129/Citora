@@ -1462,7 +1462,9 @@ select expect_error($$select online_order_price(my_business_id(), 'ultra', 2)$$,
 select expect_error($$select online_payment_complete('PEDIDO-1', 50, 'USD', 'CAP-1')$$, 'permission denied');
 reset role;
 do $$ declare b uuid := (select id from businesses where slug = 'nails-miami'); begin
-  assert online_order_price(b, 'ultra', 2) = 50 and online_order_price(b, 'basico', 3) = 36, 'precio en USD por meses';
+  assert online_order_price(b, 'ultra', 2) = 50, 'precio en USD por meses';
+  assert online_order_price(b, 'basico', 3) = 32.40, '3 meses: 10 % menos';
+  assert online_order_price(b, 'ultra', 6) = 127.50, '6 meses: 15 % menos';
   insert into online_orders (business_id, provider_order_id, plan, months, amount) values (b, 'PEDIDO-1', 'ultra', 2, 50);
 end $$;
 select expect_error($$select online_payment_complete('PEDIDO-1', 1, 'USD', 'CAP-1')$$, 'IMPORTE_INVALIDO');

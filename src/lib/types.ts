@@ -444,4 +444,7 @@ export interface Prices {
   /** Versión internacional: precios en USD */
   int_basico?: number
   int_ultra?: number
+  /** Descuento (%) por pagar 3 o más meses y 6 o más meses */
+  discount_3m?: number
+  discount_6m?: number
 }

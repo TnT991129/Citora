@@ -1823,4 +1823,8 @@ export const EN: Record<string, string> = {
 
   // ----- Cuenta -----
   "Cambiar mi contraseña": "Change my password",
+
+  // ----- Descuento por varios meses -----
+  "Ahorras {amount} por pagar {n} meses de una vez.": "You save {amount} by paying {n} months at once.",
+  "Paga 3 meses o más de una vez y ahorra un {n} %.": "Pay 3 months or more at once and save {n}%.",
 }

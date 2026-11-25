@@ -11,9 +11,10 @@ import { TIMEZONES, tzLabel, tzNow } from '../../lib/timezones'
 import type { PlanKey } from '../../lib/types'
 import { ADMIN_TZ, hasBusiness, type AdminOwner, type OwnerWithBusiness } from './adminData'
 import { BizAvatar, StateCell } from './adminUi'
+import { monthsTotal } from '../../lib/plans'
 
 /** Precios al mes: los de Cuba (CUP) y los de la versión internacional (USD) */
-export type Prices = Record<PlanKey, number> & { int_basico?: number; int_ultra?: number }
+export type Prices = Record<PlanKey, number> & { int_basico?: number; int_ultra?: number; discount_3m?: number; discount_6m?: number }
 
 /** Moneda de la mensualidad según la versión del negocio */
 export const payCurrency = (market?: string | null): 'CUP' | 'USD' => (market === 'int' ? 'USD' : 'CUP')
@@ -144,7 +145,7 @@ export function ActivateModal({ business, prices, onClose, onDone, plan: initial
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => setAmount(planPrice(prices, plan, business.market) * months), [months, prices, plan, business.market])
+  useEffect(() => setAmount(monthsTotal(planPrice(prices, plan, business.market), months, prices)), [months, prices, plan, business.market])
 
   const activate = async () => {
     setBusy(true)

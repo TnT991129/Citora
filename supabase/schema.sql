@@ -58,6 +58,13 @@ alter table public.platform_settings add column if not exists paypal_client_id t
   check (paypal_client_id ~ '^[A-Za-z0-9_-]*$');
 
 
+-- Descuento por pagar varios meses de una vez (en %): desde 3 meses y desde 6 meses. 0 = sin descuento.
+-- Igual en las dos versiones; el cálculo está en _months_total (y en monthsTotal, src/lib/plans.ts).
+alter table public.platform_settings add column if not exists discount_3m int not null default 10
+  check (discount_3m between 0 and 50);
+alter table public.platform_settings add column if not exists discount_6m int not null default 15
+  check (discount_6m between 0 and 50);
+
 -- Enlace al grupo de WhatsApp de los dueños (lo ven en su panel, en "Más"). Vacío: no se muestra.
 alter table public.platform_settings add column if not exists community_url text not null default ''
   check (community_url = '' or community_url ~ '^https://');
@@ -1680,6 +1687,7 @@ create or replace function public.get_public_prices()
 returns jsonb language sql stable security definer set search_path = public as $$
   select jsonb_build_object(
     'basico', price_basico, 'plus', price_plus, 'ultra', price_ultra, 'trial_days', trial_days,
+    'discount_3m', discount_3m, 'discount_6m', discount_6m,
     'int_basico', price_int_basico, 'int_ultra', price_int_ultra)
   from platform_settings where id = 1;
 $$;
@@ -2981,7 +2989,8 @@ begin
     'paypal_client_id', case when v_int then paypal_client_id else '' end,
     'basico', case when v_int then price_int_basico else price_basico end,
     'plus', case when v_int then price_int_basico else price_plus end,
-    'ultra', case when v_int then price_int_ultra else price_ultra end)
+    'ultra', case when v_int then price_int_ultra else price_ultra end,
+    'discount_3m', discount_3m, 'discount_6m', discount_6m)
     from platform_settings where id = 1);
 end;
 $$;
@@ -3413,6 +3422,13 @@ begin
 end;
 $$;
 
+-- Total de varios meses con el descuento de los ajustes (desde 3 y desde 6 meses), redondeado a céntimos
+create or replace function public._months_total(p_price numeric, p_months int)
+returns numeric language sql stable set search_path = public as $$
+  select round(p_price * p_months * (100 - case when p_months >= 6 then s.discount_6m when p_months >= 3 then s.discount_3m else 0 end) / 100.0, 2)
+  from platform_settings s where s.id = 1;
+$$;
+
 -- Precio de un pago en línea (versión internacional): plan y meses al precio en USD de los ajustes.
 -- Lo calcula siempre la base de datos: el navegador no puede elegir cuánto paga.
 create or replace function public.online_order_price(p_business uuid, p_plan text, p_months int)
@@ -3424,7 +3440,7 @@ begin
   if p_months is null or p_months not between 1 and 24 then raise exception 'MESES_INVALIDOS'; end if;
   if not exists (select 1 from businesses where id = p_business and market = 'int') then raise exception 'NEGOCIO_NO_EXISTE'; end if;
   select * into s from platform_settings where id = 1;
-  return round((case when p_plan = 'ultra' then s.price_int_ultra else s.price_int_basico end) * p_months, 2);
+  return _months_total(case when p_plan = 'ultra' then s.price_int_ultra else s.price_int_basico end, p_months);
 end;
 $$;
 

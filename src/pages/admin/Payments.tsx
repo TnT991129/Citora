@@ -12,6 +12,7 @@ import { ADMIN_TZ, agoShort, shortDay, type AdminOwner, type OwnerWithBusiness }
 import { PageTitle, SectionTitle } from './adminUi'
 import { PLANS, planName } from '../../lib/plans'
 import { ActivateModal, PickBusinessModal, planPrice, type Prices } from './OwnerModals'
+import { monthsTotal } from '../../lib/plans'
 
 interface AdminClaim {
   id: string
@@ -115,7 +116,7 @@ export function Payments({ onChanged }: { onChanged: () => void }) {
   if (!claims) return <PageLoader />
 
   // Lo que cuesta lo que declaró, en su moneda (USD si es de la versión internacional)
-  const claimCost = (c: AdminClaim) => planPrice(prices, c.plan || 'basico', c.currency === 'USD' ? 'int' : 'cu') * c.months
+  const claimCost = (c: AdminClaim) => monthsTotal(planPrice(prices, c.plan || 'basico', c.currency === 'USD' ? 'int' : 'cu'), c.months, prices)
   const pending = claims.filter((c) => c.status === 'pendiente')
   const reviewed = claims.filter((c) => c.status !== 'pendiente')
 

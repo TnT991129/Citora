@@ -30,6 +30,16 @@ export const PLANS: Record<PaidPlan, { name: string; short: string; desc: string
 }
 export const PLAN_LABEL = t('Plan Citora')
 export const DEFAULT_PRICE = 1500
+
+/** Descuento (%) por pagar varios meses de una vez: desde 3 y desde 6 meses (ver _months_total en schema.sql) */
+export function monthsDiscount(months: number, d: { discount_3m?: number; discount_6m?: number }): number {
+  return months >= 6 ? d.discount_6m ?? 0 : months >= 3 ? d.discount_3m ?? 0 : 0
+}
+
+/** Total de varios meses con su descuento, redondeado a céntimos (igual que en la base de datos) */
+export function monthsTotal(price: number, months: number, d: { discount_3m?: number; discount_6m?: number }): number {
+  return Math.round(price * months * (100 - monthsDiscount(months, d))) / 100
+}
 export const DEFAULT_TEAM_PRICE = 3000
 
 /** Nombre del plan para enseñarlo ("Citora Solo" / "Citora Equipo") */
