@@ -6,6 +6,7 @@ import { errorMessage } from '../../lib/errors'
 import { fullDateFromIso, money } from '../../lib/format'
 import { PLANS, type PaidPlan } from '../../lib/plans'
 import { supabase } from '../../lib/supabase'
+import { waLink } from '../../lib/whatsapp'
 import { TIMEZONES, tzLabel, tzNow } from '../../lib/timezones'
 import type { PlanKey } from '../../lib/types'
 import { ADMIN_TZ, hasBusiness, type AdminOwner, type OwnerWithBusiness } from './adminData'
@@ -203,6 +204,70 @@ export function ActivateModal({ business, prices, onClose, onDone, plan: initial
         <p className="text-xs text-slate-500">Si todavía tiene meses pagados, los nuevos se suman al final.</p>
         {error && <Alert>{error}</Alert>}
       </div>
+    </Modal>
+  )
+}
+
+/** Contraseña provisional para un dueño que no puede entrar: se genera, se ve y se le manda por WhatsApp */
+export function TempPasswordModal({ owner, onClose }: { owner: AdminOwner; onClose: () => void }) {
+  const [pass, setPass] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const name = owner.name || owner.email || ''
+
+  const create = async () => {
+    setBusy(true)
+    setError(null)
+    const { data, error } = await supabase.rpc('admin_set_temp_password', { p_user: owner.user_id })
+    setBusy(false)
+    if (error) return setError(errorMessage(error))
+    setPass(data as string)
+  }
+
+  const message = pass
+    ? `Hola, te escribo de Citora. Te puse una contraseña provisional para que puedas entrar a tu panel:\n\n*${pass}*\n\n` +
+      `Entra en citora-app.com/entrar con tu correo ${owner.email || ''} y esa contraseña. Después cámbiala por una tuya en Más → Ajustes y avisos → Cambiar mi contraseña.`
+    : ''
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={pass ? 'Contraseña provisional' : '¿Darle una contraseña provisional?'}
+      footer={
+        pass ? (
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={onClose}>Cerrar</Button>
+            {owner.whatsapp && (
+              <a href={waLink(owner.whatsapp, message)} target="_blank" rel="noreferrer" className="flex flex-1 items-center justify-center rounded-btn bg-[#25D366] px-4 py-3 font-bold text-white">
+                Mandársela por WhatsApp
+              </a>
+            )}
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={onClose} disabled={busy}>Cancelar</Button>
+            <Button block onClick={create} loading={busy}>Sí, crear contraseña</Button>
+          </div>
+        )
+      }
+    >
+      {pass ? (
+        <div className="space-y-3">
+          <p className="text-slate-600">La contraseña de <b>{name}</b> ahora es:</p>
+          <p className="rounded-xl bg-slate-100 py-4 text-center font-mono text-3xl font-extrabold tracking-[0.2em]">{pass}</p>
+          <p className="text-sm text-slate-500">
+            Entra con su correo <b>{owner.email}</b> y esta contraseña. Después puede cambiarla en su panel: Más → Ajustes y avisos → Cambiar mi contraseña.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-slate-600">
+            Para cuando <b>{name}</b> no puede entrar y no le llega el correo de «Olvidé mi contraseña». Se crea una contraseña nueva de 8 letras y números y la anterior deja de valer.
+          </p>
+          {error && <Alert>{error}</Alert>}
+        </div>
+      )}
     </Modal>
   )
 }

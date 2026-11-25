@@ -15,7 +15,7 @@ import {
 } from './adminData'
 import { BizAvatar, Drawer, FilterPills, PageTitle, StateCell, StateChip, StateDetail, StepsBar } from './adminUi'
 import { planName } from '../../lib/plans'
-import { ActivateModal, CONFIRM, ConfirmModal, DeleteModal, payCurrency, planPrice, TimezoneModal, type ConfirmKind, type Prices } from './OwnerModals'
+import { ActivateModal, CONFIRM, ConfirmModal, DeleteModal, payCurrency, planPrice, TempPasswordModal, TimezoneModal, type ConfirmKind, type Prices } from './OwnerModals'
 
 export type BizFilter = 'todos' | 'prueba' | 'activo' | 'vencido' | 'atascados' | 'cortesia' | 'sin_negocio'
 type Sort = 'recientes' | 'pago' | 'reservas'
@@ -175,6 +175,7 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
   const [activating, setActivating] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [zoning, setZoning] = useState(false)
+  const [password, setPassword] = useState(false)
   const [confirming, setConfirming] = useState<ConfirmKind | null>(null)
   const [acting, setActing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -185,6 +186,7 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
     setActivating(false)
     setDeleting(false)
     setZoning(false)
+    setPassword(false)
     setConfirming(null)
     setError(null)
   }, [id])
@@ -328,6 +330,7 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
             {biz && !r.comped && <MoreAction icon="gift" onClick={() => setConfirming('grant')}>Regalar para siempre (cortesía)</MoreAction>}
             {biz && r.comped && <MoreAction icon="gift" onClick={() => setConfirming('revoke')}>Quitar la cortesía</MoreAction>}
             {biz && <MoreAction icon="globe" onClick={() => setZoning(true)}>Cambiar zona horaria</MoreAction>}
+            <MoreAction icon="lock" onClick={() => setPassword(true)}>Darle una contraseña provisional</MoreAction>
             {biz && (
               <MoreAction icon="globe" onClick={() => setConfirming(r.market === 'int' ? 'to_cu' : 'to_int')}>
                 {r.market === 'int' ? 'Pasar a la versión de Cuba' : 'Pasar a la versión internacional'}
@@ -355,6 +358,7 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
       )}
       {activating && biz && <ActivateModal business={biz} plan={biz.plan === 'ultra' ? 'ultra' : 'basico'} prices={prices} onClose={() => setActivating(false)} onDone={changed} />}
       {zoning && biz && <TimezoneModal business={biz} onClose={() => setZoning(false)} onDone={changed} />}
+      {password && <TempPasswordModal owner={r} onClose={() => setPassword(false)} />}
       {deleting && (
         <DeleteModal
           owner={r}

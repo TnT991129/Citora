@@ -1820,4 +1820,7 @@ export const EN: Record<string, string> = {
   "No se pudieron activar en este navegador. Recarga la página y vuelve a intentarlo; si sigue igual, instala la app desde el menú del navegador («Añadir a pantalla de inicio») y actívalos desde ahí.": "They couldn't be turned on in this browser. Reload the page and try again; if it still fails, install the app from the browser menu (\"Add to Home Screen\") and turn them on from there.",
   "En iPhone, los avisos solo funcionan con la app instalada. Toca Compartir → «Añadir a pantalla de inicio», abre Citora desde ese icono y actívalos aquí.": "On iPhone, notifications only work with the app installed. Tap Share → \"Add to Home Screen\", open Citora from that icon and turn them on here.",
   "Cómo instalarla": "How to install it",
+
+  // ----- Cuenta -----
+  "Cambiar mi contraseña": "Change my password",
 }

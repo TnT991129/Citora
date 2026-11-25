@@ -179,7 +179,10 @@ export default function Settings() {
       <section className="card">
         <h2 className="font-bold">{tx('Cuenta')}</h2>
         <p className="mt-1 text-sm text-slate-500">{tx('Código de tu negocio:')}{' '}<b>{business.code}</b> {tx('(úsalo al pagar).')}</p>
-        <Button variant="secondary" className="mt-3" onClick={() => supabase.auth.signOut()}>{tx('Cerrar sesión')}</Button>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Link to="/restablecer" className="inline-flex items-center rounded-btn bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-slate-300">{tx('Cambiar mi contraseña')}</Link>
+          <Button variant="secondary" onClick={() => supabase.auth.signOut()}>{tx('Cerrar sesión')}</Button>
+        </div>
       </section>
     </div>
   )

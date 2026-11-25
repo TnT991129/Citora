@@ -1535,6 +1535,20 @@ do $$ begin
   assert (select whatsapp from businesses where slug = 'nails-miami') = '13055551234', 'aunque su número sea de fuera';
 end $$;
 reset role;
+-- Contraseña provisional: solo el administrador, y con ella se puede entrar
+set role authenticated;
+set request.jwt.claim.sub = '66666666-6666-6666-6666-666666666666';
+select expect_error($$select admin_set_temp_password('77777777-7777-7777-7777-777777777777')$$, 'NO_AUTORIZADO');
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+select expect_error($$select admin_set_temp_password('99999999-9999-9999-9999-999999999999')$$, 'NO_AUTORIZADO');
+select admin_set_temp_password('77777777-7777-7777-7777-777777777777') as temp_pass \gset
+insert into ctx values ('temp_pass', :'temp_pass');
+reset role;
+do $$ declare p text := (select v from ctx where k = 'temp_pass'); begin
+  assert p ~ '^[a-z2-9]{8}$' and p !~ '[01ilo]', 'contraseña de 8, fácil de dictar: ' || p;
+  assert (select encrypted_password = extensions.crypt(p, encrypted_password) from auth.users
+          where id = '77777777-7777-7777-7777-777777777777'), 'con esa contraseña se entra';
+end $$;
 update platform_settings set price_int_basico = 12.50, price_int_ultra = 23.50, paypal_client_id = '';
 delete from businesses where slug in ('nails-miami', 'spa-habana');
 delete from auth.users where id in ('66666666-6666-6666-6666-666666666666', '77777777-7777-7777-7777-777777777777');

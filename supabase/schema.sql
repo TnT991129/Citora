@@ -7,6 +7,8 @@
 
 create schema if not exists extensions;
 create extension if not exists btree_gist with schema extensions;
+-- Para cifrar las contraseñas provisionales (ver admin_set_temp_password)
+create extension if not exists pgcrypto with schema extensions;
 -- Para avisar a la función de notificaciones push desde la base de datos (ver sección 2 y 3)
 create extension if not exists pg_net with schema extensions;
 
@@ -3305,6 +3307,32 @@ begin
 end;
 $$;
 
+-- El administrador le pone una contraseña provisional a un dueño que no puede entrar (el correo de
+-- "Olvidé mi contraseña" no le llega). Devuelve la contraseña, de 8 letras y números fáciles de dictar
+-- (sin 0/o ni 1/l). El dueño entra con ella y la cambia en su panel (Ajustes → Cambiar mi contraseña).
+create or replace function public.admin_set_temp_password(p_user uuid)
+returns text language plpgsql volatile security definer set search_path = public, extensions as $$
+declare
+  v_chars text := 'abcdefghjkmnpqrstuvwxyz23456789';
+  v_bytes bytea := extensions.gen_random_bytes(8);
+  v_pass text := '';
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  -- A otro administrador no se le cambia la contraseña desde aquí
+  if exists (select 1 from platform_admins where user_id = p_user) then raise exception 'NO_AUTORIZADO'; end if;
+  for i in 0..7 loop
+    v_pass := v_pass || substr(v_chars, 1 + get_byte(v_bytes, i) % length(v_chars), 1);
+  end loop;
+  update auth.users
+     set encrypted_password = extensions.crypt(v_pass, extensions.gen_salt('bf')),
+         email_confirmed_at = coalesce(email_confirmed_at, now()),
+         updated_at = now()
+   where id = p_user;
+  if not found then raise exception 'NEGOCIO_NO_EXISTE'; end if;
+  return v_pass;
+end;
+$$;
+
 -- El administrador pasa un negocio a la otra versión ('cu' Cuba o 'int' internacional). Su web y su
 -- panel se abren desde entonces en la suya (los enlaces de la otra llevan allí solos).
 create or replace function public.admin_set_market(p_business uuid, p_market text)
@@ -4092,6 +4120,7 @@ grant execute on function public.check_slug_available(text) to anon, authenticat
 
 grant execute on function public.create_business(text, text, text, text, text, text, jsonb, jsonb, text, boolean, numeric, text, text) to authenticated;
 grant execute on function public.admin_set_market(uuid, text) to authenticated;
+grant execute on function public.admin_set_temp_password(uuid) to authenticated;
 grant execute on function public.get_my_business_status() to authenticated;
 grant execute on function public.get_my_progress() to authenticated;
 grant execute on function public.owner_staff_link(uuid, text) to authenticated;
