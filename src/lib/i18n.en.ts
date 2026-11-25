@@ -1811,4 +1811,13 @@ export const EN: Record<string, string> = {
   "Tu prueba gratis termina el {day} a las {time}. A partir de ese momento, tus clientes ya no podrán reservar.": "Your free trial ends on {day} at {time}. From then on, your clients won't be able to book.",
   "Elige tu plan y paga la mensualidad para seguir recibiendo reservas sin cortes. Todo lo que tienes se queda igual.": "Choose your plan and pay the monthly fee to keep getting bookings without interruption. Everything you have stays the same.",
   "Si no pagas, a los 5 días de terminar la prueba tu app se borra para siempre.": "If you don't pay, your app will be deleted forever 5 days after the trial ends.",
+
+  // ----- Avisos: qué hacer si no se activan -----
+  "Los avisos están bloqueados en este iPhone. Ve a Ajustes del iPhone → Notificaciones → Citora y activa «Permitir notificaciones». Luego vuelve a intentarlo.": "Notifications are blocked on this iPhone. Go to iPhone Settings → Notifications → Citora and turn on \"Allow Notifications\". Then try again.",
+  "El navegador tiene bloqueados los avisos de esta web. Toca el icono que hay a la izquierda de la dirección (citora-app.com) → Permisos → Notificaciones → Permitir. Luego recarga la página y vuelve a intentarlo.": "Your browser is blocking notifications for this site. Tap the icon to the left of the address (citora-app.com) → Permissions → Notifications → Allow. Then reload the page and try again.",
+  "No aceptaste el permiso. Vuelve a pulsar y, cuando el navegador pregunte, elige «Permitir».": "You didn't accept the permission. Tap again and, when the browser asks, choose \"Allow\".",
+  "Tu móvil aceptó los avisos, pero no se pudieron guardar. Revisa tu conexión y vuelve a intentarlo.": "Your phone accepted notifications, but they couldn't be saved. Check your connection and try again.",
+  "No se pudieron activar en este navegador. Recarga la página y vuelve a intentarlo; si sigue igual, instala la app desde el menú del navegador («Añadir a pantalla de inicio») y actívalos desde ahí.": "They couldn't be turned on in this browser. Reload the page and try again; if it still fails, install the app from the browser menu (\"Add to Home Screen\") and turn them on from there.",
+  "En iPhone, los avisos solo funcionan con la app instalada. Toca Compartir → «Añadir a pantalla de inicio», abre Citora desde ese icono y actívalos aquí.": "On iPhone, notifications only work with the app installed. Tap Share → \"Add to Home Screen\", open Citora from that icon and turn them on here.",
+  "Cómo instalarla": "How to install it",
 }

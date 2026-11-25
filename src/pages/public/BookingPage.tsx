@@ -11,7 +11,7 @@ import { cupRate, dateKey, duration, longDate, money, price, timeOf, todayKey, w
 import { buildAppointmentIcs, downloadIcs } from '../../lib/ics'
 import { hasModule } from '../../lib/plans'
 import { keepStaff, MIXED_PEOPLE, ownerInfo, requiredIds, staffDoes, whoAttends } from '../../lib/staff'
-import { isPushSubscribed, pushSupported, subscribeCustomerPush } from '../../lib/push'
+import { isPushSubscribed, pushProblemMessage, pushSupported, subscribeCustomerPush } from '../../lib/push'
 import { rememberBooking } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
 import type { PublicBooking, PublicBusiness } from '../../lib/types'
@@ -418,9 +418,9 @@ function PushReminderBox({ token }: { token: string }) {
 
   const activate = async () => {
     setBusy(true)
-    const ok = await subscribeCustomerPush(token)
+    const res = await subscribeCustomerPush(token)
     setBusy(false)
-    if (!ok) return flash(t('No se pudo activar. Revisa los permisos de notificaciones del navegador.'))
+    if (res !== true) return flash(pushProblemMessage(res))
     setOn(true)
     flash(t('Listo, te avisaremos en este dispositivo'))
   }

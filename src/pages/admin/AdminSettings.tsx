@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Alert, Button, Field, PageLoader, Toggle, flash } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
-import { isPushSubscribed, pushSupported, subscribeAdminPush, unsubscribePush } from '../../lib/push'
+import { isPushSubscribed, pushProblemMessage, pushSupported, subscribeAdminPush, unsubscribePush } from '../../lib/push'
 import { supabase } from '../../lib/supabase'
 import { Icon } from '../panel/Panel'
 import { ADMIN_TZ } from './adminData'
@@ -204,9 +204,9 @@ function AdminPushSection() {
 
   const toggle = async (v: boolean) => {
     setBusy(true)
-    const ok = v ? await subscribeAdminPush() : await unsubscribePush().then(() => true)
+    const res = v ? await subscribeAdminPush() : await unsubscribePush().then(() => true as const)
     setBusy(false)
-    if (!ok) return flash('No se pudo activar. Revisa los permisos de notificaciones del navegador.')
+    if (res !== true) return flash(pushProblemMessage(res))
     setOn(v)
     flash(v ? 'Avisos activados en este dispositivo' : 'Avisos desactivados en este dispositivo')
   }

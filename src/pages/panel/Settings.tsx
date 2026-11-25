@@ -4,7 +4,8 @@ import { Alert, BusinessAvatar, Button, Field, Toggle, flash } from '../../compo
 import { errorMessage } from '../../lib/errors'
 import { currencyFields, currencyMode, currencyOptions, slugify, type CurrencyMode } from '../../lib/format'
 import { imageExt, resizeImage } from '../../lib/image'
-import { isPushSubscribed, pushSupported, subscribeOwnerPush, unsubscribePush } from '../../lib/push'
+import { isPushSubscribed, pushProblemMessage, pushSupported, subscribeOwnerPush, unsubscribePush } from '../../lib/push'
+import { isIos, isStandalone } from '../../lib/pwa'
 import { supabase } from '../../lib/supabase'
 import { BUSINESS_TYPES } from '../../lib/templates'
 import { panelUrl, publicUrl } from '../../lib/url'
@@ -189,18 +190,38 @@ function PushSection() {
   const { markStep, refreshProgress } = usePanel()
   const [on, setOn] = useState<boolean | null>(null)
   const [busy, setBusy] = useState(false)
+  // Por qué no se pudieron activar: se queda a la vista con lo que hay que tocar
+  const [problem, setProblem] = useState<string | null>(null)
 
   useEffect(() => {
     if (pushSupported()) isPushSubscribed().then(setOn)
   }, [])
 
-  if (!pushSupported()) return null
+  // iPhone sin la app instalada: allí los avisos no existen hasta instalarla en la pantalla de inicio
+  if (!pushSupported()) {
+    if (!isIos() || isStandalone()) return null
+    return (
+      <section className="card bg-amber-50/70 ring-1 ring-amber-200">
+        <div className="flex items-start gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600"><Icon name="bell" className="h-6 w-6" /></span>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-bold">{tx('Avisos en este móvil')}</h2>
+            <p className="text-sm text-slate-600">
+              {tx('En iPhone, los avisos solo funcionan con la app instalada. Toca Compartir → «Añadir a pantalla de inicio», abre Citora desde ese icono y actívalos aquí.')}
+            </p>
+          </div>
+        </div>
+        <div className="mt-4"><InstallButton appName={tx('tu panel')} label={tx('Cómo instalarla')} block /></div>
+      </section>
+    )
+  }
 
   const toggle = async (v: boolean) => {
     setBusy(true)
-    const ok = v ? await subscribeOwnerPush() : await unsubscribePush().then(() => true)
+    setProblem(null)
+    const res = v ? await subscribeOwnerPush() : await unsubscribePush().then(() => true as const)
     setBusy(false)
-    if (!ok) return flash(tx('No se pudo activar. Revisa los permisos de notificaciones del navegador.'))
+    if (res !== true) return setProblem(pushProblemMessage(res))
     setOn(v)
     if (v) markStep('avisos')
     void refreshProgress()
@@ -225,6 +246,7 @@ function PushSection() {
       </div>
       {on === false && <Button block className="mt-4" onClick={() => toggle(true)} loading={busy}><Icon name="bell" className="h-4 w-4" /> {tx('Activar avisos')}</Button>}
       {busy && on !== false && <p className="mt-2 text-xs text-slate-400">{tx('Guardando…')}</p>}
+      {problem && <div className="mt-3"><Alert kind="warning">{problem}</Alert></div>}
     </section>
   )
 }
