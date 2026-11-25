@@ -3,7 +3,7 @@ import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, use
 import { ThemeToggle } from '../../components/ThemeToggle'
 import { LangSwitch } from '../../components/LangSwitch'
 import { WhatsNew } from '../../components/WhatsNew'
-import { Alert, BusinessAvatar, Button, CitoraLogo, PageLoader } from '../../components/ui'
+import { Alert, BusinessAvatar, Button, CitoraLogo, Modal, PageLoader } from '../../components/ui'
 import { useSession } from '../../lib/auth'
 import { setBrandColor } from '../../lib/brand'
 import { setAppManifest } from '../../lib/pwa'
@@ -14,7 +14,7 @@ import { goToMarket, IS_INT } from '../../lib/market'
 import { fetchProgress, mergeOnboarding, readOnboarding, saveOnboarding, type Onboarding, type Progress } from '../../lib/onboarding'
 import { load, save } from '../../lib/storage'
 import { APP_VERSION } from '../../lib/version'
-import { daysLeft, hoursLeft } from '../../lib/format'
+import { dateKey, daysLeft, fullDateFromIso, hoursLeft, timeOf, todayKey } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import type { Business, MyStatus, Service, Staff } from '../../lib/types'
 import { panelPath, publicUrl } from '../../lib/url'
@@ -340,6 +340,9 @@ export default function Panel() {
         <GuidedTour steps={steps} index={tourIndex} onNext={nextTutorial} onPrev={prevTutorial} onExit={exitTutorial} onFinish={finishTutorial} />
       )}
       {!blocked && <WhatsNew open={newsOpen && tourIndex === null} onClose={closeNews} />}
+      {!blocked && business && status && !newsOpen && tourIndex === null && (
+        <TrialEnding status={status} tz={business.timezone} onPlan={() => navigate(link('plan'))} />
+      )}
     </PanelContext.Provider>
   )
 }
@@ -453,6 +456,54 @@ function SideLink({ to, label, icon, base, tour }: { to: string; label: string; 
     </Link>
   )
 }
+
+/**
+ * Ventana al entrar al panel cuando a la prueba gratis le quedan 2 días o menos (una vez al día):
+ * el recuadro de arriba se pasa por alto con facilidad y los avisos push solo llegan a quien los activó.
+ */
+function TrialEnding({ status, tz, onPlan }: { status: MyStatus; tz: string; onPlan: () => void }) {
+  const { pathname } = useLocation()
+  const today = todayKey(tz)
+  const [seen, setSeen] = useState(() => load<string>(TRIAL_KEY, '') === today)
+  if (status.status !== 'prueba' || seen || pathname.endsWith('/plan')) return null
+  // Días que faltan en el calendario del negocio: 0 = hoy, 1 = mañana
+  const days = Math.round((Date.parse(dateKey(status.trial_ends_at, tz)) - Date.parse(today)) / 86400000)
+  if (days > 2 || hoursLeft(status.trial_ends_at) <= 0) return null
+  const close = () => {
+    save(TRIAL_KEY, today)
+    setSeen(true)
+  }
+  const title = days <= 0 ? t('Hoy termina tu prueba gratis') : days === 1 ? t('Mañana termina tu prueba gratis') : t('Te quedan 2 días de prueba gratis')
+  return (
+    <Modal
+      open
+      onClose={close}
+      title={title}
+      footer={
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={close}>{t('Más tarde')}</Button>
+          <Button block onClick={() => { close(); onPlan() }}>{t('Elegir mi plan')}</Button>
+        </div>
+      }
+    >
+      <div className="space-y-3 text-slate-700">
+        <p className="text-4xl" aria-hidden>⏳</p>
+        <p>
+          {t('Tu prueba gratis termina el {day} a las {time}. A partir de ese momento, tus clientes ya no podrán reservar.', {
+            day: fullDateFromIso(status.trial_ends_at, tz),
+            time: timeOf(status.trial_ends_at, tz, true),
+          })}
+        </p>
+        <p>{t('Elige tu plan y paga la mensualidad para seguir recibiendo reservas sin cortes. Todo lo que tienes se queda igual.')}</p>
+        <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">
+          {t('Si no pagas, a los 5 días de terminar la prueba tu app se borra para siempre.')}
+        </p>
+      </div>
+    </Modal>
+  )
+}
+
+const TRIAL_KEY = 'citora:aviso-fin-prueba'
 
 function StatusBanner({ status, planLink }: { status: MyStatus; planLink: string }) {
   const box = (cls: string, icon: string, text: ReactNode, action?: ReactNode) => (

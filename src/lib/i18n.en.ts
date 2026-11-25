@@ -1801,4 +1801,14 @@ export const EN: Record<string, string> = {
   "Saltar, uso USD": "Skip, I'll use USD",
   "Continuar · 35 USD": "Continue · 35 USD",
   "5 citas · 130 USD": "5 bookings · 130 USD",
+
+  // ----- Aviso de fin de prueba -----
+  "Hoy termina tu prueba gratis": "Your free trial ends today",
+  "Mañana termina tu prueba gratis": "Your free trial ends tomorrow",
+  "Te quedan 2 días de prueba gratis": "You have 2 days left in your free trial",
+  "Más tarde": "Later",
+  "Elegir mi plan": "Choose my plan",
+  "Tu prueba gratis termina el {day} a las {time}. A partir de ese momento, tus clientes ya no podrán reservar.": "Your free trial ends on {day} at {time}. From then on, your clients won't be able to book.",
+  "Elige tu plan y paga la mensualidad para seguir recibiendo reservas sin cortes. Todo lo que tienes se queda igual.": "Choose your plan and pay the monthly fee to keep getting bookings without interruption. Everything you have stays the same.",
+  "Si no pagas, a los 5 días de terminar la prueba tu app se borra para siempre.": "If you don't pay, your app will be deleted forever 5 days after the trial ends.",
 }
