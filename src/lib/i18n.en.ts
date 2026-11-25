@@ -1827,4 +1827,14 @@ export const EN: Record<string, string> = {
   // ----- Descuento por varios meses -----
   "Ahorras {amount} por pagar {n} meses de una vez.": "You save {amount} by paying {n} months at once.",
   "Paga 3 meses o más de una vez y ahorra un {n} %.": "Pay 3 months or more at once and save {n}%.",
+
+  // ----- Invitaciones -----
+  "Vienes invitado por otro negocio: cuando pagues tu primer mes, te regalamos otro.": "You were invited by another business: when you pay your first month, we'll give you another one free.",
+  "Invita a otro negocio y gana 1 mes gratis": "Invite another business and get 1 month free",
+  "Cuando un negocio crea su app con tu enlace y paga su primer mes, los dos ganan un mes gratis.": "When a business creates its app with your link and pays its first month, you both get a free month.",
+  "Tu enlace de invitación": "Your invitation link",
+  "Mandar por WhatsApp": "Send on WhatsApp",
+  "Te recomiendo Citora para que tus clientas reserven solas, sin escribirte. Crea tu app gratis con mi enlace y, cuando pagues tu primer mes, te regalan otro: {url}": "I recommend Citora so your clients can book on their own, without messaging you. Create your app for free with my link and, when you pay your first month, you get another one free: {url}",
+  "{n} se apuntaron con tu enlace · {m} ya pagaron (ganaste {m} meses)": "{n} signed up with your link · {m} already paid (you earned {m} months)",
+  "1 se apuntó con tu enlace · {m} ya pagó": "1 signed up with your link · {m} already paid",
 }

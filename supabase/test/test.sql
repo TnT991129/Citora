@@ -1556,6 +1556,57 @@ delete from businesses where slug in ('nails-miami', 'spa-habana');
 delete from auth.users where id in ('66666666-6666-6666-6666-666666666666', '77777777-7777-7777-7777-777777777777');
 set role authenticated;
 
+-- ===== Invita a otro negocio y gana 1 mes =====
+reset role;
+insert into auth.users (id, email) values
+  ('88888888-8888-8888-8888-888888888888', 'invita@test.com'),
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'invitada@test.com');
+set role authenticated;
+set request.jwt.claim.sub = '88888888-8888-8888-8888-888888888888';
+select create_business('Uñas Invita', 'unas-invita', 'unas', '55558881', '', '#db2777', '[]', '[]');
+reset role;
+insert into ctx select 'ref_code', code from businesses where slug = 'unas-invita';
+insert into ctx select 'ref_trial', trial_ends_at::text from businesses where slug = 'unas-invita';
+set role authenticated;
+set request.jwt.claim.sub = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+select create_business('Uñas Invitada', 'unas-invitada', 'unas', '55558882', '', '#db2777', '[]', '[]',
+  'CUP', false, null, 'cu', null, lower((select v from ctx where k = 'ref_code')));
+-- El dueño no puede quitarse la invitación ni darse el regalo
+update businesses set referred_by = null, referral_rewarded = true where slug = 'unas-invitada';
+reset role;
+do $$ begin
+  assert (select referred_by from businesses where slug = 'unas-invitada') = (select id from businesses where slug = 'unas-invita'), 'invitada por su código';
+  assert not (select referral_rewarded from businesses where slug = 'unas-invitada'), 'el regalo aún no';
+end $$;
+set role authenticated;
+set request.jwt.claim.sub = '88888888-8888-8888-8888-888888888888';
+do $$ begin
+  assert get_my_referrals() = '{"invited": 1, "rewarded": 0}'::jsonb, 'una invitada, sin pagar: ' || get_my_referrals()::text;
+end $$;
+-- Primer pago de la invitada: un mes más para ella y la prueba de quien invitó se alarga un mes
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+select admin_activate_plan((select id from businesses where slug = 'unas-invitada'), 'basico', 1, 1500);
+reset role;
+do $$ declare inv uuid := (select id from businesses where slug = 'unas-invitada'); begin
+  assert (select paid_until from businesses where id = inv) > now() + interval '55 days', 'pagó 1 mes y le regalan otro';
+  assert (select referral_rewarded from businesses where id = inv), 'regalo dado';
+  assert (select count(*) from payments where business_id = inv and bonus) = 1, 'el mes regalado queda apuntado';
+  assert (select trial_ends_at from businesses where slug = 'unas-invita') >= (select v from ctx where k = 'ref_trial')::timestamptz + interval '1 month',
+    'quien invitó (en prueba): un mes más de prueba';
+  assert (select count(*) from payments where business_id = (select id from businesses where slug = 'unas-invita')) = 0, 'en prueba no se le apunta un pago';
+end $$;
+-- Un segundo pago ya no regala nada
+set role authenticated;
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+select admin_activate_plan((select id from businesses where slug = 'unas-invitada'), 'basico', 1, 1500);
+reset role;
+do $$ begin
+  assert (select count(*) from payments where business_id = (select id from businesses where slug = 'unas-invitada') and bonus) = 1, 'el regalo es una sola vez';
+end $$;
+delete from businesses where slug in ('unas-invita', 'unas-invitada');
+delete from auth.users where id in ('88888888-8888-8888-8888-888888888888', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+set role authenticated;
+
 -- ===== Borrar dueños =====
 reset role;
 set role authenticated;

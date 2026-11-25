@@ -31,6 +31,11 @@ export function publicUrl(slug: string, sub?: 'reservar' | 'mis-citas'): string 
   return `${siteUrl()}?c=${encodeURIComponent(slug)}${sub ? `&v=${sub}` : ''}`
 }
 
+/** Enlace de invitación de un negocio: quien crea su app con él y paga, gana un mes (y el que invita, otro) */
+export function referralUrl(code: string): string {
+  return `${siteUrl()}?r=${encodeURIComponent(code)}`
+}
+
 /** Enlace para compartir del panel del dueño */
 export function panelUrl(slug: string): string {
   return `${siteUrl()}?p=${encodeURIComponent(slug)}`
@@ -53,7 +58,13 @@ export function openSharedLink(): void {
   const valid = (s: string | null): s is string => !!s && /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(s.toLowerCase())
   const c = q.get('c')
   const p = q.get('p')
+  const r = q.get('r')
   let path: string | null = null
+  // Invitación de otro negocio: a crear la app, con su código
+  if (r && /^[A-Za-z]{3}-\d{4}$/.test(r)) {
+    window.history.replaceState(null, '', `${base}/crear?ref=${encodeURIComponent(r.toUpperCase())}${window.location.hash}`)
+    return
+  }
   if (valid(c)) {
     const slug = c.toLowerCase()
     const cita = q.get('cita')

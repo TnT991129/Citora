@@ -24,6 +24,7 @@ export interface Draft {
   every: number
   capacity?: number // clientes por turno (los borradores antiguos no lo tienen: 1)
   skipped?: SkipKey[] // pasos que saltó (se le recuerdan en su panel)
+  ref?: string | null // código del negocio que lo invitó (enlace de invitación: ver referralUrl)
 }
 
 const KEY = 'citora:borrador'
@@ -101,6 +102,8 @@ export async function createBusinessFromDraft(d: Draft): Promise<{ id: string; s
     // Versión donde se crea (Cuba o /int/) y, fuera de Cuba, la hora del móvil
     p_market: MARKET,
     p_timezone: MARKET === 'int' ? browserTimezone() : null,
+    // Invitado por otro negocio: con su primer pago, un mes gratis para los dos
+    p_ref: d.ref || null,
   })
   if (error) throw error
   const created = data as { id: string; slug: string; code: string }

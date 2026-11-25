@@ -143,6 +143,12 @@ alter table public.businesses add column if not exists market text not null defa
 alter table public.businesses add column if not exists lang text not null default 'es'
   check (lang in ('es', 'en'));
 
+-- Invitaciones ("Invita a otro negocio y gana 1 mes"): quién invitó a este negocio (por su código, al
+-- crear la app) y si ya se dio el regalo (con su primer pago: ver _reward_referral). Solo los cambia la
+-- base de datos.
+alter table public.businesses add column if not exists referred_by uuid references public.businesses(id) on delete set null;
+alter table public.businesses add column if not exists referral_rewarded boolean not null default false;
+
 -- Servicios del negocio
 create table if not exists public.services (
   id uuid primary key default gen_random_uuid(),
@@ -565,6 +571,8 @@ alter table public.payment_claims add column if not exists plan text not null de
 -- pagar). Los pagos de antes son en CUP. Las cuentas nunca suman CUP con USD (ver admin_stats).
 alter table public.payments add column if not exists currency text not null default 'CUP'
   check (currency in ('CUP', 'USD'));
+-- Mes regalado (por invitar o por venir invitado): cuenta para la fecha pagada, no como pago en las cifras
+alter table public.payments add column if not exists bonus boolean not null default false;
 alter table public.payment_claims add column if not exists currency text not null default 'CUP'
   check (currency in ('CUP', 'USD'));
 
@@ -1157,6 +1165,8 @@ begin
     new.comped_prev_plan := old.comped_prev_plan;
     new.comped_prev_paid_until := old.comped_prev_paid_until;
     new.market := old.market;
+    new.referred_by := old.referred_by;
+    new.referral_rewarded := old.referral_rewarded;
   end if;
   -- Los negocios de Cuba tienen WhatsApp de Cuba (los de fuera usan la versión internacional, con
   -- su propio precio). Se mira al crear y cuando el dueño cambia el número; el administrador no.
@@ -2800,14 +2810,17 @@ drop function if exists public.create_business(text, text, text, text, text, tex
 -- p_market: 'cu' o 'int' (la versión donde se crea). p_timezone: la del móvil, solo para 'int'
 -- (en Cuba se usa la de los ajustes).
 drop function if exists public.create_business(text, text, text, text, text, text, jsonb, jsonb, text, boolean, numeric);
+-- p_ref: código del negocio que lo invitó (ver _reward_referral). Uno inventado se ignora.
+drop function if exists public.create_business(text, text, text, text, text, text, jsonb, jsonb, text, boolean, numeric, text, text);
 create or replace function public.create_business(
   p_name text, p_slug text, p_type text, p_whatsapp text, p_address text,
   p_color text, p_services jsonb, p_schedule jsonb,
   p_currency text default 'CUP', p_usd_prices boolean default false, p_usd_rate numeric default null,
-  p_market text default 'cu', p_timezone text default null)
+  p_market text default 'cu', p_timezone text default null, p_ref text default null)
 returns jsonb language plpgsql volatile security definer set search_path = public as $$
 declare
   v_uid uuid := auth.uid();
+  v_ref uuid := (select id from businesses where code = upper(btrim(coalesce(p_ref, ''))));
   v_id uuid;
   v_code text;
   v_prefix text;
@@ -2837,14 +2850,14 @@ begin
   end loop;
 
   insert into businesses (owner_id, slug, code, name, business_type, whatsapp, address,
-                          color_primary, trial_ends_at, policies, currency, usd_prices, usd_rate, timezone, market)
+                          color_primary, trial_ends_at, policies, currency, usd_prices, usd_rate, timezone, market, referred_by)
   values (v_uid, lower(p_slug), v_code, btrim(p_name), coalesce(nullif(p_type, ''), 'otro'),
           _clean_phone(p_whatsapp), nullif(btrim(coalesce(p_address, '')), ''),
           coalesce(nullif(p_color, ''), '#f0532e'),
           now() + make_interval(days => coalesce(v_trial, 3)),
           'Llega 5 minutos antes de tu cita. Si no puedes venir, cancela o cambia la fecha desde el enlace de tu cita.',
           coalesce(p_currency, 'CUP'), coalesce(p_usd_prices, false),
-          case when p_usd_rate > 0 then round(p_usd_rate, 2) end, v_tz, coalesce(p_market, 'cu'))
+          case when p_usd_rate > 0 then round(p_usd_rate, 2) end, v_tz, coalesce(p_market, 'cu'), v_ref)
   returning id into v_id;
 
   for v_item in select * from jsonb_array_elements(coalesce(p_services, '[]'::jsonb)) loop
@@ -3409,8 +3422,61 @@ begin
   insert into payments (business_id, plan, months, amount, note, paid_until, created_by, business_name, business_code, currency)
   values (b.id, p_plan, p_months, p_amount, nullif(btrim(coalesce(p_note, '')), ''), v_until, p_by, b.name, b.code,
           case when b.market = 'int' then 'USD' else 'CUP' end);
+  -- Vino invitado por otro negocio: con su primer pago, un mes gratis para los dos
+  if b.referred_by is not null and not b.referral_rewarded then
+    perform _reward_referral(b.id);
+    select paid_until into v_until from businesses where id = b.id;
+  end if;
   return v_until;
 end;
+$$;
+
+-- "Invita a otro negocio y gana 1 mes": cuando el invitado paga su primera mensualidad (una sola vez),
+--   el invitado: un mes más sobre lo que pagó
+--   quien invitó: si paga, un mes más; si está en prueba (o la acabó sin pagar), su prueba se alarga un
+--                 mes (así no pierde el plan Equipo de la prueba); con cortesía, nada (ya no paga)
+-- Los meses regalados se apuntan como pagos de 0 marcados "bonus": así no se pierden si se corrige un
+-- pago (_replay_payments) y no cuentan como pagos en las cifras.
+create or replace function public._reward_referral(p_business uuid)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  b businesses;
+  r businesses;
+  v_until timestamptz;
+begin
+  select * into b from businesses where id = p_business for update;
+  if not found or b.referred_by is null or b.referral_rewarded then return; end if;
+  update businesses set referral_rewarded = true where id = b.id;
+
+  v_until := greatest(now(), coalesce(b.paid_until, now())) + interval '1 month';
+  update businesses set paid_until = v_until where id = b.id;
+  insert into payments (business_id, plan, months, amount, note, paid_until, business_name, business_code, currency, bonus)
+  values (b.id, coalesce(b.plan, 'basico'), 1, 0, 'Mes gratis por venir invitado', v_until, b.name, b.code,
+          case when b.market = 'int' then 'USD' else 'CUP' end, true);
+
+  select * into r from businesses where id = b.referred_by for update;
+  if not found or r.comped then return; end if;
+  if business_status(r.plan, r.trial_ends_at, r.paid_until) = 'activo' then
+    v_until := r.paid_until + interval '1 month';
+    update businesses set paid_until = v_until where id = r.id;
+    insert into payments (business_id, plan, months, amount, note, paid_until, business_name, business_code, currency, bonus)
+    values (r.id, r.plan, 1, 0, 'Mes gratis por invitar a ' || b.name, v_until, r.name, r.code,
+            case when r.market = 'int' then 'USD' else 'CUP' end, true);
+  else
+    update businesses set trial_ends_at = greatest(r.trial_ends_at, now()) + interval '1 month' where id = r.id;
+  end if;
+  perform _notify_push(r.id, 'owner', null,
+    _l(r.lang, '¡Ganaste un mes gratis! 🎉', 'You earned a free month! 🎉'),
+    _l(r.lang, b.name || ' pagó su primera mensualidad con tu invitación. Ya tienes un mes más de Citora.',
+               b.name || ' paid their first month with your invitation. You now have one more month of Citora.'));
+end;
+$$;
+
+-- Las invitaciones del dueño: cuántos negocios se apuntaron con su enlace y cuántos ya pagaron
+create or replace function public.get_my_referrals()
+returns jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('invited', count(*), 'rewarded', count(*) filter (where referral_rewarded))
+  from businesses where referred_by = my_business_id();
 $$;
 
 create or replace function public.admin_activate_plan(
@@ -3799,7 +3865,7 @@ begin
         'revenue_usd', (select coalesce(sum(p.amount), 0) from payments p left join businesses b2 on b2.id = p.business_id
                     where p.created_at >= m at time zone v_tz and p.created_at < (m + interval '1 month') at time zone v_tz
                       and not coalesce(b2.comped, false) and p.currency = 'USD'),
-        'payments', (select count(*) from payments p left join businesses b2 on b2.id = p.business_id
+        'payments', (select count(*) filter (where not p.bonus) from payments p left join businesses b2 on b2.id = p.business_id
                      where p.created_at >= m at time zone v_tz and p.created_at < (m + interval '1 month') at time zone v_tz
                        and not coalesce(b2.comped, false)),
         'appointments', (select count(*) from appointments a
@@ -3821,7 +3887,7 @@ begin
         'purged_30d', (select count(*) from purged_trials where purged_at > now() - interval '30 days'),
         'converted', (select count(*) from businesses b
                       where b.trial_ends_at < now() and not b.comped
-                        and exists (select 1 from payments p where p.business_id = b.id)))),
+                        and exists (select 1 from payments p where p.business_id = b.id and not p.bonus)))),
     'by_plan', (select jsonb_build_object(
         'basico', count(*) filter (where business_status(plan, trial_ends_at, paid_until) = 'activo' and plan = 'basico' and not comped),
         'plus', count(*) filter (where business_status(plan, trial_ends_at, paid_until) = 'activo' and plan = 'plus' and not comped),
@@ -4134,7 +4200,8 @@ grant execute on function public.reschedule_booking(text, date, text) to anon, a
 grant execute on function public.edit_booking(text, uuid[], date, text, text, text, uuid, jsonb) to anon, authenticated;
 grant execute on function public.check_slug_available(text) to anon, authenticated;
 
-grant execute on function public.create_business(text, text, text, text, text, text, jsonb, jsonb, text, boolean, numeric, text, text) to authenticated;
+grant execute on function public.create_business(text, text, text, text, text, text, jsonb, jsonb, text, boolean, numeric, text, text, text) to authenticated;
+grant execute on function public.get_my_referrals() to authenticated;
 grant execute on function public.admin_set_market(uuid, text) to authenticated;
 grant execute on function public.admin_set_temp_password(uuid) to authenticated;
 grant execute on function public.get_my_business_status() to authenticated;
@@ -4234,6 +4301,7 @@ revoke execute on function public._purge_analytics() from anon, authenticated;
 revoke execute on function public._purge_expired_trials() from anon, authenticated;
 revoke execute on function public._replay_payments(uuid, timestamptz) from anon, authenticated;
 revoke execute on function public._activate_plan(uuid, text, int, numeric, text, uuid) from anon, authenticated;
+revoke execute on function public._reward_referral(uuid) from anon, authenticated;
 revoke execute on function public.online_order_price(uuid, text, int) from anon, authenticated;
 revoke execute on function public.online_payment_complete(text, numeric, text, text) from anon, authenticated;
 revoke execute on function public.admin_update_payment(uuid, text, int, numeric, text) from anon;

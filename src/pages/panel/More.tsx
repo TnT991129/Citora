@@ -2,14 +2,14 @@
 // nada, solo se esconde). Debajo, la cuenta (Mensualidad, Ajustes y avisos) y la ayuda.
 import { useEffect, useState } from 'react'
 import { InstallButton } from '../../components/InstallButton'
-import { Button, flash } from '../../components/ui'
+import { Button, CopyButton, flash } from '../../components/ui'
 import { daysLeft } from '../../lib/format'
 import { activeTools, TOOLS } from '../../lib/onboarding'
 import { isPushSubscribed, pushSupported } from '../../lib/push'
 import { supabase } from '../../lib/supabase'
-import { publicUrl } from '../../lib/url'
+import { publicUrl, referralUrl } from '../../lib/url'
 import { APP_VERSION } from '../../lib/version'
-import { waLink } from '../../lib/whatsapp'
+import { shareLink, waLink } from '../../lib/whatsapp'
 import { usePanel } from './context'
 import { Icon } from './Panel'
 import { Chip, Row, RowList, SectionTitle } from './rows'
@@ -95,6 +95,8 @@ export default function More() {
         </div>
       )}
 
+      <ReferralCard code={business.code} />
+
       <div>
         <SectionTitle>{tx('Tu cuenta')}</SectionTitle>
         <RowList>
@@ -144,5 +146,40 @@ export default function More() {
       )}
       <p className="-mt-3 text-center text-xs text-slate-400">{tx('Citora v')}{APP_VERSION}</p>
     </div>
+  )
+}
+
+/** "Invita a otro negocio y gana 1 mes gratis": su enlace, para copiar o mandar, y cuántos se apuntaron */
+function ReferralCard({ code }: { code: string }) {
+  const [stats, setStats] = useState<{ invited: number; rewarded: number } | null>(null)
+  useEffect(() => {
+    supabase.rpc('get_my_referrals').then(({ data }) => data && setStats(data as { invited: number; rewarded: number }))
+  }, [])
+  const url = referralUrl(code)
+  const text = tx('Te recomiendo Citora para que tus clientas reserven solas, sin escribirte. Crea tu app gratis con mi enlace y, cuando pagues tu primer mes, te regalan otro: {url}', { url })
+  return (
+    <section className="card space-y-3 bg-emerald-50/60 ring-1 ring-emerald-200">
+      <div>
+        <h2 className="font-bold">🎁 {tx('Invita a otro negocio y gana 1 mes gratis')}</h2>
+        <p className="mt-1 text-sm text-slate-600">{tx('Cuando un negocio crea su app con tu enlace y paga su primer mes, los dos ganan un mes gratis.')}</p>
+      </div>
+      <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+        <p className="text-xs font-semibold text-slate-500">{tx('Tu enlace de invitación')}</p>
+        <p className="mt-0.5 break-all font-mono text-sm">{url}</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <CopyButton text={url} />
+        <a href={shareLink(text)} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-btn bg-[#25D366] px-4 py-2 text-sm font-bold text-white">
+          {tx('Mandar por WhatsApp')}
+        </a>
+      </div>
+      {stats && stats.invited > 0 && (
+        <p className="text-sm font-semibold text-emerald-800">
+          {stats.invited === 1
+            ? tx('1 se apuntó con tu enlace · {m} ya pagó', { m: stats.rewarded })
+            : tx('{n} se apuntaron con tu enlace · {m} ya pagaron (ganaste {m} meses)', { n: stats.invited, m: stats.rewarded })}
+        </p>
+      )}
+    </section>
   )
 }

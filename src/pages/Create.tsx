@@ -41,7 +41,10 @@ export default function Create() {
   const navigate = useNavigate()
   // En la versión internacional se empieza en USD (y un borrador hecho en la de Cuba se pasa a USD)
   const [draft, setDraft] = useState<Draft>(() => {
-    const d = loadDraft() || newDraft('otro', IS_INT ? 'USD' : 'CUP')
+    const loaded = loadDraft() || newDraft('otro', IS_INT ? 'USD' : 'CUP')
+    // ?ref=CÓDIGO: viene invitado por otro negocio (ver referralUrl)
+    const ref = new URLSearchParams(window.location.search).get('ref')
+    const d = ref && /^[A-Za-z]{3}-\d{4}$/.test(ref) ? { ...loaded, ref: ref.toUpperCase() } : loaded
     const cur = d.currency || 'CUP'
     if (IS_INT && (cur === 'CUP' || cur === 'AMBAS')) return { ...d, currency: 'USD', usd_rate: null, services: changeCurrency(d.services, d.type, cur, 'USD') }
     if (!IS_INT && cur !== 'CUP' && cur !== 'USD' && cur !== 'AMBAS') return { ...d, currency: 'CUP', services: changeCurrency(d.services, d.type, cur, 'CUP') }
@@ -289,6 +292,11 @@ export default function Create() {
         </div>
       </div>
 
+      {step === 0 && draft.ref && (
+        <div className="mb-4 rounded-2xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-900 ring-1 ring-emerald-200">
+          🎁 {tx('Vienes invitado por otro negocio: cuando pagues tu primer mes, te regalamos otro.')}
+        </div>
+      )}
       {step === 0 && (
         <section>
           <h1 className="text-2xl font-bold">{tx('¿Qué tipo de negocio tienes?')}</h1>
