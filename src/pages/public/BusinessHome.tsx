@@ -292,7 +292,7 @@ export default function BusinessHome() {
       </div>
 
       {main.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur safe-bottom lg:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 [transform:translateZ(0)] backdrop-blur safe-bottom lg:hidden">
           <div className="mx-auto flex max-w-xl items-center gap-3">
             {showPrices && (
               <div className="shrink-0 leading-tight">

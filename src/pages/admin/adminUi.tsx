@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom'
 import { businessType } from '../../lib/templates'
 import { Icon } from '../panel/Panel'
 import { stateInfo, STEPS, type AdminOwner } from './adminData'
+import { lockScroll } from '../../lib/scrollLock'
 
 export function PageTitle({ title, sub, right }: { title: string; sub?: ReactNode; right?: ReactNode }) {
   return (
@@ -119,11 +120,11 @@ export function Drawer({ open, onClose, label, children }: { open: boolean; onCl
     if (!open) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     document.addEventListener('keydown', onKey)
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    // Sin dejar el menú de abajo a media pantalla en iPhone (ver scrollLock.ts)
+    const unlock = lockScroll()
     return () => {
       document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prev
+      unlock()
     }
   }, [open, onClose])
 

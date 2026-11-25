@@ -310,7 +310,7 @@ export default function BookingFlow() {
 
       </main>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur safe-bottom">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 [transform:translateZ(0)] backdrop-blur safe-bottom">
         {/* Los avisos, junto al botón: así se ven aunque la lista sea larga */}
         {error && <div className="ui-fade mx-auto mb-2 max-w-xl"><Alert>{error}</Alert></div>}
         <div className="mx-auto flex max-w-xl items-center gap-3">

@@ -345,7 +345,7 @@ export default function Panel() {
         </main>
 
         {!blocked && (
-          <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white/90 backdrop-blur-lg safe-bottom md:hidden">
+          <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white/90 backdrop-blur-lg safe-bottom [transform:translateZ(0)] md:hidden">
             {NAV.map((n) => <BottomLink key={n.sub} base={base} to={link(n.sub)} label={n.label} icon={n.icon} tour={n.tour} />)}
           </nav>
         )}

@@ -277,7 +277,7 @@ export default function StaffPortal() {
       </main>
 
       {scheduleDirty && tab === 'horario' && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur safe-bottom">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 [transform:translateZ(0)] backdrop-blur safe-bottom">
           <div className="mx-auto max-w-xl">
             <Button block size="lg" onClick={saveSchedule} loading={busy}>{t('Guardar horario')}</Button>
           </div>

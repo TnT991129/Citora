@@ -152,7 +152,7 @@ export default function Admin() {
         {tab === 'ajustes' && <AdminSettings />}
       </main>
 
-      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white/90 backdrop-blur-lg lg:hidden">
+      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white/90 backdrop-blur-lg [transform:translateZ(0)] lg:hidden">
         {TABS.map((t) => (
           <button
             key={t.key}

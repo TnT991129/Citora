@@ -1,6 +1,7 @@
 import { useEffect, useId, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { t } from '../lib/i18n'
+import { lockScroll } from '../lib/scrollLock'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'whatsapp'
 
@@ -118,11 +119,11 @@ export function Modal({ open, onClose, title, children, footer }: {
     if (!open) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     document.addEventListener('keydown', onKey)
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    // Sin dejar el menú de abajo a media pantalla en iPhone (ver scrollLock.ts)
+    const unlock = lockScroll()
     return () => {
       document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prev
+      unlock()
     }
   }, [open, onClose])
 
