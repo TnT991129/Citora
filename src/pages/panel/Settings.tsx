@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
-import { Alert, BusinessAvatar, Button, Field, Toggle, flash } from '../../components/ui'
+import { Alert, BusinessAvatar, Button, Field, Toggle, WhatsAppIcon, flash } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { currencyFields, currencyMode, currencyOptions, slugify, type CurrencyMode } from '../../lib/format'
 import { imageExt, resizeImage } from '../../lib/image'
@@ -10,6 +10,7 @@ import { supabase } from '../../lib/supabase'
 import { BUSINESS_TYPES } from '../../lib/templates'
 import { panelUrl, publicUrl } from '../../lib/url'
 import { InstallButton } from '../../components/InstallButton'
+import { getWaApp, isAndroid, setWaApp } from '../../lib/whatsapp'
 import { usePanel } from './context'
 import { Icon } from './Panel'
 import { t as tx } from '../../lib/i18n'
@@ -93,6 +94,7 @@ export default function Settings() {
       <h1 className="text-2xl font-extrabold">{tx('Ajustes')}</h1>
 
       <PushSection />
+      <WhatsAppAppSection />
       <InstallButton appName={tx('tu panel')} label={tx('Instalar el panel en este móvil')} block />
 
       <section className="card space-y-4">
@@ -250,6 +252,31 @@ function PushSection() {
       {on === false && <Button block className="mt-4" onClick={() => toggle(true)} loading={busy}><Icon name="bell" className="h-4 w-4" /> {tx('Activar avisos')}</Button>}
       {busy && on !== false && <p className="mt-2 text-xs text-slate-400">{tx('Guardando…')}</p>}
       {problem && <div className="mt-3"><Alert kind="warning">{problem}</Alert></div>}
+    </section>
+  )
+}
+
+/** Con qué WhatsApp se mandan los mensajes a los clientes desde este móvil (solo Android: en iPhone no se puede elegir) */
+function WhatsAppAppSection() {
+  const [business, setBusiness] = useState(() => getWaApp() === 'business')
+  if (!isAndroid()) return null
+  const toggle = (v: boolean) => {
+    setWaApp(v ? 'business' : 'normal')
+    setBusiness(v)
+    flash(v ? tx('Los mensajes saldrán por WhatsApp Business') : tx('Los mensajes saldrán por WhatsApp normal'))
+  }
+  return (
+    <section className="card">
+      <div className="flex items-start gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600"><WhatsAppIcon className="h-6 w-6" /></span>
+        <div className="min-w-0 flex-1">
+          <h2 className="font-bold">{tx('Enviar con WhatsApp Business')}</h2>
+          <p className="text-sm text-slate-600">
+            {tx('Si en este móvil tienes WhatsApp normal y WhatsApp Business, actívalo para que los mensajes a tus clientes salgan por el del negocio.')}
+          </p>
+        </div>
+        <Toggle checked={business} onChange={toggle} label={tx('Enviar con WhatsApp Business')} />
+      </div>
     </section>
   )
 }

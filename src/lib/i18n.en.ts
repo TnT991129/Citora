@@ -1862,4 +1862,10 @@ export const EN: Record<string, string> = {
 
   // ----- Uno a la vez con equipo -----
   "Tienes equipo: cada persona (tú también) atiende a 1 cliente a la vez. Para recibir a más clientes a la misma hora, añade a quien trabaje contigo en Equipo.": "You have a team: each person (you too) serves 1 client at a time. To take more clients at the same time, add whoever works with you in Team.",
+
+  // ----- WhatsApp Business -----
+  "Los mensajes saldrán por WhatsApp Business": "Messages will be sent from WhatsApp Business",
+  "Los mensajes saldrán por WhatsApp normal": "Messages will be sent from regular WhatsApp",
+  "Enviar con WhatsApp Business": "Send with WhatsApp Business",
+  "Si en este móvil tienes WhatsApp normal y WhatsApp Business, actívalo para que los mensajes a tus clientes salgan por el del negocio.": "If this phone has both regular WhatsApp and WhatsApp Business, turn this on so messages to your clients go out from the business one.",
 }
