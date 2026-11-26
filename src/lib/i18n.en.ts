@@ -1862,4 +1862,17 @@ export const EN: Record<string, string> = {
 
   // ----- Uno a la vez con equipo -----
   "Tienes equipo: cada persona (tú también) atiende a 1 cliente a la vez. Para recibir a más clientes a la misma hora, añade a quien trabaje contigo en Equipo.": "You have a team: each person (you too) serves 1 client at a time. To take more clients at the same time, add whoever works with you in Team.",
+
+  // ----- Dos WhatsApp -----
+  "Escribir por WhatsApp Business": "Write from WhatsApp Business",
+  "1. Número de la clienta": "1. Client's number",
+  "2. Mensaje": "2. Message",
+  "Copiar mensaje": "Copy message",
+  "Abre WhatsApp Business, toca el botón de chat nuevo, pega el número para encontrarla y pega el mensaje.": "Open WhatsApp Business, tap the new chat button, paste the number to find her and paste the message.",
+  "Compartir el mensaje (elige WhatsApp Business)": "Share the message (choose WhatsApp Business)",
+  "Abrir con el WhatsApp de siempre": "Open with my usual WhatsApp",
+  "Listo: al escribir a una clienta podrás copiar su número y el mensaje": "Done: when you write to a client you can copy her number and the message",
+  "Los mensajes se abren en WhatsApp como siempre": "Messages open in WhatsApp as usual",
+  "¿Tienes dos WhatsApp en este móvil?": "Do you have two WhatsApp apps on this phone?",
+  "Si los mensajes a tus clientas se abren en tu WhatsApp personal y quieres mandarlos desde WhatsApp Business, actívalo. Al tocar WhatsApp podrás copiar el número de la clienta y el mensaje para pegarlos en WhatsApp Business.": "If messages to your clients open in your personal WhatsApp and you want to send them from WhatsApp Business, turn this on. When you tap WhatsApp you can copy the client's number and the message to paste them in WhatsApp Business.",
 }

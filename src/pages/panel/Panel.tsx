@@ -41,6 +41,7 @@ import { SurveyBanner } from './Survey'
 import Team from './Team'
 import Waitlist from './Waitlist'
 import Today from './Today'
+import { WaBusinessCatcher } from './WaBusiness'
 import { GuidedTour, isMobileScreen, tourSteps, DEMO_PENDING_NAME } from './tutorial'
 import { LANG, LOCALE, t, tn } from '../../lib/i18n'
 import { cachePut, cacheUse, isNetworkError, useOffline } from '../../lib/offline'
@@ -354,6 +355,7 @@ export default function Panel() {
         <GuidedTour steps={steps} index={tourIndex} onNext={nextTutorial} onPrev={prevTutorial} onExit={exitTutorial} onFinish={finishTutorial} />
       )}
       {!blocked && <WhatsNew open={newsOpen && tourIndex === null} onClose={closeNews} />}
+      <WaBusinessCatcher />
       {!blocked && business && status && !newsOpen && tourIndex === null && (
         <TrialEnding status={status} tz={business.timezone} onPlan={() => navigate(link('plan'))} />
       )}

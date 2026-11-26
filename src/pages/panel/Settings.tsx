@@ -11,6 +11,7 @@ import { BUSINESS_TYPES } from '../../lib/templates'
 import { panelUrl, publicUrl } from '../../lib/url'
 import { InstallButton } from '../../components/InstallButton'
 import { usePanel } from './context'
+import { WaBusinessSetting } from './WaBusiness'
 import { Icon } from './Panel'
 import { t as tx } from '../../lib/i18n'
 
@@ -175,6 +176,8 @@ export default function Settings() {
 
       {error && <Alert>{error}</Alert>}
       <Button block size="lg" onClick={save} loading={busy}>{tx('Guardar cambios')}</Button>
+
+      <WaBusinessSetting />
 
       <section className="card">
         <h2 className="font-bold">{tx('Cuenta')}</h2>
