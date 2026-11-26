@@ -149,7 +149,7 @@ export default function More() {
   )
 }
 
-/** "Invita a otro negocio y gana 1 mes gratis": su enlace, para copiar o mandar, y cuántos se apuntaron */
+/** "Gana 1 mes gratis por cada negocio que invites": su enlace, para copiar o mandar, y cuántos se apuntaron */
 function ReferralCard({ code }: { code: string }) {
   const [stats, setStats] = useState<{ invited: number; rewarded: number } | null>(null)
   useEffect(() => {
@@ -160,8 +160,8 @@ function ReferralCard({ code }: { code: string }) {
   return (
     <section className="card space-y-3 bg-emerald-50/60 ring-1 ring-emerald-200">
       <div>
-        <h2 className="font-bold">🎁 {tx('Invita a otro negocio y gana 1 mes gratis')}</h2>
-        <p className="mt-1 text-sm text-slate-600">{tx('Cuando un negocio crea su app con tu enlace y paga su primer mes, los dos ganan un mes gratis.')}</p>
+        <h2 className="font-bold">🎁 {tx('Gana 1 mes gratis por cada negocio que invites (sin límite)')}</h2>
+        <p className="mt-1 text-sm text-slate-600">{tx('Cuando un negocio crea su app con tu enlace y paga su primer mes, los dos ganan un mes gratis. Cuantos más negocios invites, más meses ganas.')}</p>
       </div>
       <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
         <p className="text-xs font-semibold text-slate-500">{tx('Tu enlace de invitación')}</p>
