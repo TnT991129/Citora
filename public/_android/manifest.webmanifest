@@ -1,0 +1,18 @@
+{
+  "name": "Citora",
+  "short_name": "Citora",
+  "description": "La app de reservas de tu negocio: agenda, clientas y avisos.",
+  "id": "/android-app",
+  "start_url": "/entrar",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8fafc",
+  "theme_color": "#f0532e",
+  "lang": "es",
+  "icons": [
+    { "src": "/_android/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/_android/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/_android/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
