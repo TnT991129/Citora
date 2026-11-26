@@ -3,6 +3,7 @@
 // admin_business_activity (ver schema.sql).
 import { serverNow } from '../../lib/clockSkew'
 import { daysLeft, fullDateFromIso, MONTHS } from '../../lib/format'
+import { marketBase } from '../../lib/market'
 import type { BusinessStatus, PlanKey } from '../../lib/types'
 
 /** Hora de Cuba: la del administrador */
@@ -222,12 +223,26 @@ export function agoShort(iso: string | null): string {
 // ---------------------------------------------------------------------
 
 /** Para un dueño cuyo plan vence o cuya prueba termina pronto, con la fecha en la hora de su negocio */
-export function expiringMessage(b: { name: string; kind: 'activo' | 'prueba'; ends_at: string; timezone?: string | null }): string {
-  const day = fullDateFromIso(b.ends_at, b.timezone || ADMIN_TZ)
-  return b.kind === 'activo'
-    ? `Hola, te escribo de Citora. El plan de ${b.name} vence el ${day}. Para renovarlo entra en tu panel > Mensualidad. ¡Gracias!`
-    : `Hola, te escribo de Citora. Tu prueba gratis de ${b.name} termina el ${day}. Para seguir recibiendo reservas entra en tu panel > Mensualidad. ¿Te ayudo con algo?`
+/** Enlace al panel de un negocio, en su versión (Cuba o /int/). Con ?p= para que abra bien desde WhatsApp. */
+export function ownerPanelUrl(slug: string | null | undefined, market?: 'cu' | 'int' | null): string | null {
+  if (!slug) return null
+  return `${window.location.origin}${marketBase(market === 'int' ? 'int' : 'cu')}?p=${encodeURIComponent(slug)}`
 }
+
+export function expiringMessage(b: { name: string; kind: 'activo' | 'prueba'; ends_at: string; timezone?: string | null; slug?: string | null; market?: 'cu' | 'int' | null }): string {
+  const day = fullDateFromIso(b.ends_at, b.timezone || ADMIN_TZ)
+  const link = ownerPanelUrl(b.slug, b.market)
+  if (b.kind === 'activo') {
+    return `Hola, te escribo de Citora. El plan de ${b.name} vence el ${day}. Para renovarlo entra en tu panel > Mensualidad${link ? `: ${link}` : ''}. ¡Gracias!`
+  }
+  return `Hola 👋, te escribo de Citora. La prueba gratis de ${b.name} termina el ${day}.\n\n` +
+    `Para que tus clientas puedan seguir reservando sin cortes, activa tu plan en tu panel > Mensualidad${link ? `: ${link}` : '.'}\n\n` +
+    'Todo lo que ya tienes (servicios, horario, citas y clientas) se queda igual. Si tienes alguna duda, dime y te ayudo.'
+}
+
+/** ¿La prueba gratis acaba en 7 días o menos? (para ofrecer el mensaje de aviso) */
+export const trialEndingSoon = (r: AdminOwner) =>
+  !r.comped && r.status === 'prueba' && !!r.trial_ends_at && daysLeft(r.trial_ends_at) <= 7
 
 export const helpMessage = (name: string) =>
   `Hola, te escribo de Citora. Vi que ${name} todavía no ha recibido su primera reserva. ¿Te ayudo a dejar tu app lista o a compartir tu enlace con tus clientes?`

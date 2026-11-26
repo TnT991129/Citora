@@ -115,7 +115,7 @@ export function AdminHome({ go }: { go: (t: AdminTab, filter?: BizFilter) => voi
             empty="Ninguna prueba acaba estos días."
             rows={ending}
             detail={(r) => `${trialLeft(r.trial_ends_at!)} de prueba`}
-            message={(r) => expiringMessage({ name: r.name!, kind: 'prueba', ends_at: r.trial_ends_at!, timezone: r.timezone })}
+            message={(r) => expiringMessage({ name: r.name!, kind: 'prueba', ends_at: r.trial_ends_at!, timezone: r.timezone, slug: r.slug, market: r.market })}
           />
           <ToWrite
             title="Necesitan un empujón"

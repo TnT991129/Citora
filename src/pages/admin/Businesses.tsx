@@ -10,8 +10,8 @@ import { publicUrl } from '../../lib/url'
 import { waLink } from '../../lib/whatsapp'
 import { Icon } from '../panel/Panel'
 import {
-  ADMIN_TZ, agoShort, contactMessage, expiredMessage, hasBusiness, helpMessage, mergeRows, purgeAt, rowState, STEPS, stepsCount, stepsDone,
-  stuckReason, trialLeft, trialUsed, type Activity, type AdminOwner, type AdminRow, type OwnerWithBusiness,
+  ADMIN_TZ, agoShort, contactMessage, expiredMessage, expiringMessage, hasBusiness, helpMessage, mergeRows, purgeAt, rowState, STEPS, stepsCount, stepsDone,
+  stuckReason, trialEndingSoon, trialLeft, trialUsed, type Activity, type AdminOwner, type AdminRow, type OwnerWithBusiness,
 } from './adminData'
 import { BizAvatar, Drawer, FilterPills, PageTitle, StateCell, StateChip, StateDetail, StepsBar } from './adminUi'
 import { planName } from '../../lib/plans'
@@ -275,8 +275,13 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
 
         <div className="mt-5 space-y-2.5">
           {r.whatsapp && (
-            <LinkButton href={waLink(r.whatsapp, purgeAt(r) ? expiredMessage(name, true) : stuck ? helpMessage(name) : contactMessage(name))} variant="whatsapp" block newTab>
-              <WhatsAppIcon className="h-4 w-4" /> {stuck ? 'Ofrecerle ayuda por WhatsApp' : 'Escribir por WhatsApp'}
+            <LinkButton
+              href={waLink(r.whatsapp, purgeAt(r) ? expiredMessage(name, true)
+                : trialEndingSoon(r) ? expiringMessage({ name, kind: 'prueba', ends_at: r.trial_ends_at!, timezone: r.timezone, slug: r.slug, market: r.market })
+                : stuck ? helpMessage(name) : contactMessage(name))}
+              variant="whatsapp" block newTab
+            >
+              <WhatsAppIcon className="h-4 w-4" /> {trialEndingSoon(r) && !purgeAt(r) ? 'Avisar que acaba su prueba' : stuck ? 'Ofrecerle ayuda por WhatsApp' : 'Escribir por WhatsApp'}
             </LinkButton>
           )}
           {biz && (
