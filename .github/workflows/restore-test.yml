@@ -55,8 +55,9 @@ jobs:
 
       - name: Restaurar (como indica backup-db.yml)
         env:
-          PGURI: postgresql://postgres:postgres@127.0.0.1:54322/postgres
-        # Si falla, solo se muestra la primera línea del error: los detalles (DETAIL, CONTEXT) pueden
+          PGURI: postgresql://supabase_admin:postgres@127.0.0.1:54322/postgres
+        # Con supabase_admin (el superusuario del Supabase local): roles.sql trae ajustes que el usuario
+        # postgres no puede aplicar. Si falla, solo se muestra la primera línea del error: los detalles (DETAIL, CONTEXT) pueden
         # traer una fila de datos, y estos registros son públicos
         run: |
           if ! psql "$PGURI" --single-transaction --variable ON_ERROR_STOP=1 \
@@ -70,7 +71,7 @@ jobs:
 
       - name: Comprobar que están los datos
         env:
-          PGURI: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+          PGURI: postgresql://supabase_admin:postgres@127.0.0.1:54322/postgres
         run: |
           count() { psql "$PGURI" -tA -c "select count(*) from $1"; }
           NEG=$(count public.businesses)
