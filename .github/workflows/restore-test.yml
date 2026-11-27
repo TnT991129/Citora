@@ -23,9 +23,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # La última versión: el sistema de cuentas (auth) del local tiene que ser tan nuevo como el de
+      # Supabase en la nube, o los datos de las cuentas no entran (columnas que el local no tiene)
       - uses: supabase/setup-cli@v1
         with:
-          version: 2.122.0
+          version: latest
 
       - name: Descargar el último respaldo
         env:
