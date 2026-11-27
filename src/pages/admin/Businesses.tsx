@@ -1,7 +1,7 @@
 // Pestaña "Negocios" (antes "Dueños"): todos los dueños con su negocio, su estado, sus primeros
 // pasos y sus reservas. Al tocar uno se abre su ficha con las acciones.
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Alert, Button, LinkButton, PageLoader, WhatsAppIcon, flash } from '../../components/ui'
+import { Alert, Button, CopyButton, LinkButton, PageLoader, WhatsAppIcon, flash } from '../../components/ui'
 import { errorMessage } from '../../lib/errors'
 import { fullDateFromIso, money } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
@@ -10,8 +10,8 @@ import { publicUrl } from '../../lib/url'
 import { waLink } from '../../lib/whatsapp'
 import { Icon } from '../panel/Panel'
 import {
-  ADMIN_TZ, agoShort, contactMessage, expiredMessage, expiringMessage, hasBusiness, helpMessage, mergeRows, purgeAt, rowState, STEPS, stepsCount, stepsDone,
-  stuckReason, trialEndingSoon, trialLeft, trialUsed, type Activity, type AdminOwner, type AdminRow, type OwnerWithBusiness,
+  ADMIN_TZ, agoShort, hasBusiness, mergeRows, messageOptions, purgeAt, rowState, STEPS, stepsCount, stepsDone,
+  stuckReason, trialLeft, trialUsed, type Activity, type AdminOwner, type AdminRow, type MessageKind, type OwnerWithBusiness,
 } from './adminData'
 import { BizAvatar, Drawer, FilterPills, PageTitle, StateCell, StateChip, StateDetail, StepsBar } from './adminUi'
 import { planName } from '../../lib/plans'
@@ -274,16 +274,7 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
         )}
 
         <div className="mt-5 space-y-2.5">
-          {r.whatsapp && (
-            <LinkButton
-              href={waLink(r.whatsapp, purgeAt(r) ? expiredMessage(name, true)
-                : trialEndingSoon(r) ? expiringMessage({ name, kind: 'prueba', ends_at: r.trial_ends_at!, timezone: r.timezone, slug: r.slug, market: r.market })
-                : stuck ? helpMessage(name) : contactMessage(name))}
-              variant="whatsapp" block newTab
-            >
-              <WhatsAppIcon className="h-4 w-4" /> {trialEndingSoon(r) && !purgeAt(r) ? 'Avisar que acaba su prueba' : stuck ? 'Ofrecerle ayuda por WhatsApp' : 'Escribir por WhatsApp'}
-            </LinkButton>
-          )}
+          {r.whatsapp && <MessagePicker row={r} phone={r.whatsapp} prices={prices} />}
           {biz && (
             <div className="grid grid-cols-2 gap-2.5">
               {!r.comped && <Button onClick={() => setActivating(true)}><Icon name="card" className="h-[18px] w-[18px]" /> Registrar pago</Button>}
@@ -376,6 +367,57 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
         />
       )}
     </>
+  )
+}
+
+/**
+ * Mensajes de WhatsApp para el dueño: eliges el tipo (días que le quedan de prueba, ayuda para
+ * configurar...), lo ves y lo puedes retocar antes de enviarlo.
+ */
+function MessagePicker({ row, phone, prices }: { row: AdminRow; phone: string; prices: Prices }) {
+  const price = (plan: 'basico' | 'ultra') => money(planPrice(prices, plan, row.market), payCurrency(row.market))
+  const options = messageOptions(row, { solo: price('basico'), equipo: price('ultra'), discount: Boolean(prices.discount_3m || prices.discount_6m) })
+  const [kind, setKind] = useState<MessageKind>(options[0].id)
+  const [text, setText] = useState(options[0].text)
+
+  // Al abrir otro negocio, empieza por el mensaje que más le hace falta
+  const first = options[0]
+  useEffect(() => {
+    setKind(first.id)
+    setText(first.text)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [row.user_id])
+
+  const pick = (id: MessageKind) => {
+    setKind(id)
+    setText(options.find((o) => o.id === id)?.text || '')
+  }
+
+  return (
+    <section className="rounded-2xl border border-slate-200 p-3">
+      <p className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-500">Mensaje por WhatsApp</p>
+      <div className="mt-2 flex flex-wrap gap-1.5" role="radiogroup" aria-label="Tipo de mensaje">
+        {options.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            role="radio"
+            aria-checked={kind === o.id}
+            onClick={() => pick(o.id)}
+            className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${kind === o.id ? 'bg-brand text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+      <textarea className="input mt-2.5 text-sm" rows={6} value={text} onChange={(e) => setText(e.target.value)} aria-label="Texto del mensaje" />
+      <div className="mt-2.5 flex gap-2">
+        <LinkButton href={waLink(phone, text)} variant="whatsapp" block newTab>
+          <WhatsAppIcon className="h-4 w-4" /> Enviar por WhatsApp
+        </LinkButton>
+        <CopyButton text={text} />
+      </div>
+    </section>
   )
 }
 

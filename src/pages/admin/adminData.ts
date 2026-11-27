@@ -244,6 +244,83 @@ export function expiringMessage(b: { name: string; kind: 'activo' | 'prueba'; en
 export const trialEndingSoon = (r: AdminOwner) =>
   !r.comped && r.status === 'prueba' && !!r.trial_ends_at && daysLeft(r.trial_ends_at) <= 7
 
+/** Página de reservas de un negocio, en su versión (Cuba o /int/) */
+export function ownerPublicUrl(slug: string | null | undefined, market?: 'cu' | 'int' | null): string | null {
+  if (!slug) return null
+  return `${window.location.origin}${marketBase(market === 'int' ? 'int' : 'cu')}?c=${encodeURIComponent(slug)}`
+}
+
+/** Precios ya escritos ("1.500 CUP"), para ponerlos en los mensajes */
+export interface PlanPrices { solo: string; equipo: string; discount: boolean }
+
+/** "le quedan 3 días", "le queda 1 día", "le quedan menos de 24 horas" */
+function trialDaysText(endsAt: string): string {
+  if (new Date(endsAt).getTime() - serverNow() < 86400000) return 'le quedan menos de 24 horas'
+  const d = daysLeft(endsAt)
+  return d === 1 ? 'le queda 1 día' : `le quedan ${d} días`
+}
+
+/** Aviso de cuántos días le quedan de prueba, para que elija un plan antes de que se acabe */
+export function trialReminderMessage(b: {
+  name: string; ends_at: string; timezone?: string | null; slug?: string | null; market?: 'cu' | 'int' | null; prices?: PlanPrices
+}): string {
+  const day = fullDateFromIso(b.ends_at, b.timezone || ADMIN_TZ)
+  const link = ownerPanelUrl(b.slug, b.market)
+  const p = b.prices
+  return `Hola 👋, te escribo de Citora. A la prueba gratis de ${b.name} ${trialDaysText(b.ends_at)} (termina el ${day}).\n\n` +
+    'Para que tus clientas puedan seguir reservando sin cortes, elige tu plan antes de esa fecha:\n' +
+    `• Citora Solo${p ? `: ${p.solo} al mes` : ''}. Para quien atiende sola.\n` +
+    `• Citora Equipo${p ? `: ${p.equipo} al mes` : ''}. Para salones con varias personas.\n` +
+    (p?.discount ? 'Si pagas 3 o 6 meses de una vez, te sale más barato.\n' : '') +
+    `\nLo activas en tu panel > Más > Mensualidad${link ? `: ${link}` : '.'}\n\n` +
+    'Todo lo que ya tienes (servicios, horario, citas y clientas) se queda igual. Si quieres, te ayudo a elegir el plan.'
+}
+
+/**
+ * Ayuda para dejar la app lista: los pasos en orden, con dónde está cada cosa en el panel.
+ * Si sabemos qué ha hecho ya (act), no le pedimos lo que ya hizo.
+ */
+export function setupHelpMessage(b: { name: string; slug?: string | null; market?: 'cu' | 'int' | null; act?: Activity | null }): string {
+  const a = b.act
+  const pub = ownerPublicUrl(b.slug, b.market)
+  const steps = [
+    'Revisa tus servicios y precios (los que salen son de ejemplo): Mi negocio > Servicios.',
+    'Pon tus días y horas de trabajo: Mi negocio > Horario.',
+    !a?.push_on && 'Activa los avisos para que te suene el móvil cuando alguien reserve: Más > Ajustes.',
+    !a?.customized && 'Sube tu logo o una foto de tu trabajo: Mi negocio > Apariencia.',
+    `Haz una reserva de prueba desde tu enlace, para ver lo que verán tus clientas${pub ? `: ${pub}` : '.'}`,
+    'Comparte ese enlace con tus clientas por WhatsApp, en tu estado, en Instagram o en Facebook. Desde ahí reservan solas.',
+  ].filter((s): s is string => Boolean(s))
+  const panel = ownerPanelUrl(b.slug, b.market)
+  return `Hola 👋, te escribo de Citora. ¡Bienvenida! Te dejo los pasos para que ${b.name} empiece a recibir reservas. Te toma unos 10 minutos:\n\n` +
+    steps.map((s, i) => `${i + 1}. ${s}`).join('\n') +
+    (panel ? `\n\nEntra en tu panel desde aquí: ${panel}` : '') +
+    '\n\nSi te trabas en algún paso, escríbeme y te ayudo.'
+}
+
+/** Mensajes que se le pueden mandar a un dueño desde su ficha. El primero es el que más le hace falta. */
+export type MessageKind = 'prueba' | 'configurar' | 'vencida' | 'renovar' | 'ayuda' | 'saludo'
+
+export function messageOptions(r: AdminRow, prices?: PlanPrices): { id: MessageKind; label: string; text: string }[] {
+  const name = r.name || r.email || ''
+  const list: { id: MessageKind; label: string; text: string }[] = []
+  const inTrial = !r.comped && r.status === 'prueba' && !!r.trial_ends_at
+  const purge = purgeAt(r)
+  if (purge) list.push({ id: 'vencida', label: 'Se le acabó la prueba', text: expiredMessage(name, true) })
+  else if (!r.comped && r.status === 'vencido') list.push({ id: 'vencida', label: 'Se le acabó el plan', text: expiredMessage(name, false) })
+  if (inTrial) list.push({ id: 'prueba', label: 'Días que le quedan de prueba', text: trialReminderMessage({ name, ends_at: r.trial_ends_at!, timezone: r.timezone, slug: r.slug, market: r.market, prices }) })
+  if (!r.comped && r.status === 'activo' && r.paid_until) list.push({ id: 'renovar', label: 'Su plan vence pronto', text: expiringMessage({ name, kind: 'activo', ends_at: r.paid_until, timezone: r.timezone, slug: r.slug, market: r.market }) })
+  if (hasBusiness(r)) list.push({ id: 'configurar', label: 'Ayuda para configurar la app', text: setupHelpMessage({ name, slug: r.slug, market: r.market, act: r.act }) })
+  if (stuckReason(r)) list.push({ id: 'ayuda', label: 'Todavía no le reservan', text: helpMessage(name) })
+  list.push({ id: 'saludo', label: 'Mensaje en blanco', text: contactMessage(name) })
+  // Recién creada y con mucha prueba por delante: lo que más le sirve es la ayuda para configurar
+  if (inTrial && !purge && !trialEndingSoon(r)) {
+    const i = list.findIndex((m) => m.id === 'configurar')
+    if (i > 0) list.unshift(...list.splice(i, 1))
+  }
+  return list
+}
+
 export const helpMessage = (name: string) =>
   `Hola, te escribo de Citora. Vi que ${name} todavía no ha recibido su primera reserva. ¿Te ayudo a dejar tu app lista o a compartir tu enlace con tus clientes?`
 

@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.citoraapp.app",
+      "sha256_cert_fingerprints": [
+        "30:7E:B9:53:05:14:60:71:A3:29:52:05:EB:C2:76:C3:04:B1:3A:F1:30:E8:BD:1B:E9:D0:2E:36:17:AD:07:58"
+      ]
+    }
+  }
+]
