@@ -33,6 +33,10 @@ describe('mensajes para los dueños', () => {
     const act = { push_on: true, customized: false } as Activity
     const text = setupHelpMessage({ name: 'Salón Ana', slug: 'salon-ana', act })
     expect(text).not.toContain('Activa los avisos')
+    expect(text).toContain('Añadir a pantalla de inicio')
+    // Anclar la app va antes que los avisos (en iPhone, los avisos solo funcionan con la app anclada)
+    const all = setupHelpMessage({ name: 'Salón Ana', slug: 'salon-ana' })
+    expect(all.indexOf('pantalla de inicio')).toBeLessThan(all.indexOf('Activa los avisos'))
     expect(text).toContain('Mi negocio > Apariencia')
     expect(text).toContain('?c=salon-ana')
   })
