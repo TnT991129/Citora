@@ -46,6 +46,13 @@ export function FirstSteps() {
   }
 
   const warnPrices = pricesUnreviewed(onboarding)
+  // Lo mismo que los avisos push de los días 3 y 6 (ver _trial_nudges), para quien no los tiene activados
+  const days = Math.floor((Date.now() - new Date(business.created_at).getTime()) / 86400000)
+  const tip = days >= 6
+    ? t('Aún no te han reservado por la web. Manda tu enlace por WhatsApp a tus clientes de siempre y pídeles que reserven su próxima cita desde ahí: así se acostumbran.')
+    : days >= 3 && progress.visits_7d === 0
+      ? t('Nadie ha abierto tu enlace todavía. Ponlo en tu estado de WhatsApp: toca «Comparte tu enlace en WhatsApp» y el mensaje ya sale escrito.')
+      : null
   const act = (id: StepId) => {
     if (id === 'precios') navigate(link('servicios'))
     else if (id === 'avisos') navigate(link('ajustes'))
@@ -79,6 +86,12 @@ export function FirstSteps() {
       </button>
       {open && (
         <div className="space-y-1 border-t border-slate-100 p-2">
+          {tip && (
+            <p className="flex gap-2 rounded-xl bg-sky-50 p-3 text-sm text-sky-900 ring-1 ring-sky-100">
+              <span aria-hidden>💡</span>
+              <span>{tip}</span>
+            </p>
+          )}
           {FIRST_STEPS.map((s) => {
             const ok = done[s.id]
             const warn = s.id === 'precios' && warnPrices

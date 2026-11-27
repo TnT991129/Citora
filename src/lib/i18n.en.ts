@@ -1362,6 +1362,8 @@ export const EN: Record<string, string> = {
   "Abrir menú": "Open menu",
   "Entrar a mi panel": "Sign in to my panel",
   "Descargar la app para Android": "Download the Android app",
+  "Aún no te han reservado por la web. Manda tu enlace por WhatsApp a tus clientes de siempre y pídeles que reserven su próxima cita desde ahí: así se acostumbran.": "No online bookings yet. Send your link on WhatsApp to your regular clients and ask them to book their next appointment there: that is how they get used to it.",
+  "Nadie ha abierto tu enlace todavía. Ponlo en tu estado de WhatsApp: toca «Comparte tu enlace en WhatsApp» y el mensaje ya sale escrito.": "Nobody has opened your link yet. Post it on your WhatsApp status: tap «Share your link on WhatsApp» and the message is ready.",
   "Para entrar a tu panel con un toque · 1,3 MB": "Open your panel with one tap · 1.3 MB",
   "App para Android": "Android app",
   "Reservas online para negocios en Cuba": "Online booking for your business",

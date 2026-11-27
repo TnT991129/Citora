@@ -1775,6 +1775,55 @@ delete from businesses where slug = 'unas-turnos';
 delete from auth.users where id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 set role authenticated;
 
+-- ===== Avisos durante la prueba gratis y planes con precio (versión 1.5) =====
+reset role;
+do $$ begin
+  assert _thousands(500) = '500' and _thousands(1500) = '1.500' and _thousands(150000) = '150.000', 'miles con punto';
+  assert _plans_push_line('cu', 'es') like 'Planes: Solo % CUP/mes · Equipo % CUP/mes.', 'planes en CUP: ' || _plans_push_line('cu', 'es');
+  assert _plans_push_line('int', 'en') like 'Plans: Solo $%/mo · Team $%/mo.', 'planes en USD, en inglés: ' || _plans_push_line('int', 'en');
+  assert _plans_push_line('int', 'es') like '% USD/mes%', 'planes en USD, en español';
+end $$;
+insert into auth.users (id, email) values ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'empujon@test.com');
+set role authenticated;
+set request.jwt.claim.sub = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+select create_business('Uñas Empujón', 'unas-empujon', 'unas', '55556661', '', '#db2777', '[{"name":"Mani","price":800,"duration_min":60}]', '[]');
+reset role;
+-- "Ahora" para la prueba: hoy a las 10:30 en la hora del negocio
+insert into ctx select 'e_now', (((now() at time zone timezone)::date + time '10:30') at time zone timezone)::text from businesses where slug = 'unas-empujon';
+insert into ctx select 'e_biz', id::text from businesses where slug = 'unas-empujon';
+create or replace function public.e_title(p_days int, p_hours int default 0) returns text language plpgsql as $$
+declare t timestamptz := (select v from ctx where k = 'e_now')::timestamptz; b uuid := (select v from ctx where k = 'e_biz')::uuid; begin
+  update businesses set created_at = t - make_interval(days => p_days) where id = b;
+  return (select n.title from _trial_nudges(t + make_interval(hours => p_hours)) n where n.business_id = b);
+end $$;
+do $$ begin
+  assert e_title(1) = 'Tu app está lista: consigue tu primera reserva', 'día 1: primeros pasos';
+  assert e_title(1, 1) is null, 'solo a las 10:00 de su hora (una vez al día)';
+  assert e_title(2) is null and e_title(4) is null and e_title(5) is null, 'los demás días, nada';
+  assert e_title(3) = 'Nadie ha abierto tu enlace todavía', 'día 3: nadie abrió su enlace';
+  assert e_title(6) = 'Aún no te han reservado por la web', 'día 6: sin reservas';
+end $$;
+-- Si alguien ya abrió su enlace, el día 3 no se le dice que nadie lo abrió
+insert into analytics_events (visitor_id, session_id, name, slug) values (gen_random_uuid(), gen_random_uuid(), 'visita', 'unas-empujon');
+do $$ begin assert e_title(3) is null, 'día 3 con visitas: nada'; end $$;
+-- Una reserva suya (con su propio teléfono) no cuenta; la de un cliente sí: ya no se le empuja
+insert into appointments (business_id, token, starts_at, ends_at, customer_name, customer_phone, status, source)
+values ((select v from ctx where k = 'e_biz')::uuid, 'empujon1', now() + interval '10 days', now() + interval '10 days 1 hour', 'Yo', '+53 5555 6661', 'pendiente', 'web');
+do $$ begin assert e_title(6) is not null, 'su propia reserva de prueba no cuenta'; end $$;
+insert into appointments (business_id, token, starts_at, ends_at, customer_name, customer_phone, status, source)
+values ((select v from ctx where k = 'e_biz')::uuid, 'empujon2', now() + interval '11 days', now() + interval '11 days 1 hour', 'Clienta', '5355550999', 'pendiente', 'web');
+do $$ begin assert e_title(6) is null and e_title(1) is null, 'ya le reservan: no se le empuja'; end $$;
+delete from appointments where token = 'empujon2';
+-- En inglés (versión internacional) y nunca a una cortesía
+update businesses set lang = 'en' where slug = 'unas-empujon';
+do $$ begin assert e_title(6) = 'No online bookings yet', 'en inglés: ' || coalesce(e_title(6), 'nada'); end $$;
+update businesses set comped = true where slug = 'unas-empujon';
+do $$ begin assert e_title(6) is null, 'una cortesía no recibe empujones'; end $$;
+drop function public.e_title(int, int);
+delete from businesses where slug = 'unas-empujon';
+delete from auth.users where id = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+set role authenticated;
+
 -- ===== Borrar dueños =====
 reset role;
 set role authenticated;

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 // Las pruebas corren sin navegador: los enlaces necesitan window.location.origin
 vi.stubGlobal('window', { location: { origin: 'https://citora-app.com', pathname: '/' } })
 
-import { messageOptions, setupHelpMessage, trialReminderMessage, type Activity, type AdminRow } from './adminData'
+import { messageOptions, setupHelpMessage, trialFunnel, trialReminderMessage, type Activity, type AdminRow } from './adminData'
 
 const DAY = 86400000
 const base: AdminRow = {
@@ -47,6 +47,25 @@ describe('mensajes para los dueños', () => {
     expect(messageOptions(fresh, prices)[0].id).toBe('configurar')
     expect(messageOptions(base, prices)[0].id).toBe('prueba')
     expect(messageOptions(base, prices).map((o) => o.id)).toContain('configurar')
+  })
+
+  it('el embudo cuenta solo los negocios nuevos del periodo, sin cortesías', () => {
+    const now = Date.parse('2026-12-01T12:00:00Z')
+    const act = (days: number, extra: Partial<Activity> = {}) => ({
+      created_at: new Date(now - days * DAY).toISOString(), comped: false, status: 'prueba',
+      push_on: false, link_visits: 0, web_total: 0, paid: false, ...extra,
+    }) as Activity
+    const acts = [
+      act(5, { push_on: true, link_visits: 3, web_total: 2 }),
+      act(10, { push_on: true, link_visits: 1 }),
+      act(20, { push_on: true, link_visits: 4, web_total: 6, paid: true, status: 'activo' }),
+      act(60, { paid: true, status: 'activo' }), // fuera de los 30 días
+      act(3, { comped: true, push_on: true }), // cortesía: no cuenta
+    ]
+    const { steps, inTrial } = trialFunnel(acts, 30, now)
+    expect(steps.map((s) => s.count)).toEqual([3, 3, 3, 2, 1])
+    expect(inTrial).toBe(2)
+    expect(trialFunnel(acts, 90, now).steps[0].count).toBe(4)
   })
 
   it('a quien paga no le sale el aviso de la prueba', () => {

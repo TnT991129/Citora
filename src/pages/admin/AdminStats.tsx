@@ -10,7 +10,7 @@ import { supabase } from '../../lib/supabase'
 import { businessType } from '../../lib/templates'
 import type { PlanKey } from '../../lib/types'
 import { Icon } from '../panel/Panel'
-import { int } from './adminData'
+import { int, trialFunnel, type Activity } from './adminData'
 import { Kpi, PageTitle, SectionTitle } from './adminUi'
 import type { RecentPayment } from './Payments'
 import { Traffic } from './Traffic'
@@ -153,6 +153,7 @@ export default function AdminStats() {
             <Line label="Borrados por no pagar" value={String(t.purged_30d || 0)} hint={`en 30 días · ${t.purged || 0} en total`} />
           </div>
         </div>
+        <TrialFunnel />
       </section>
 
       {/* ----- Reservas ----- */}
@@ -196,6 +197,75 @@ export default function AdminStats() {
           <Traffic />
         </div>
       </details>
+    </div>
+  )
+}
+
+const FUNNEL_DAYS = [30, 90, 365] as const
+
+/**
+ * Del registro al pago: de los que crearon su app en los últimos 30/90/365 días, cuántos dieron
+ * cada paso. Se ve dónde se quedan (y a quién escribir: lista "Necesitan un empujón" en Inicio).
+ */
+function TrialFunnel() {
+  const [acts, setActs] = useState<Activity[] | null>(null)
+  const [days, setDays] = useState<(typeof FUNNEL_DAYS)[number]>(90)
+  useEffect(() => {
+    supabase.rpc('admin_business_activity').then(({ data }) => setActs((data as Activity[]) || []))
+  }, [])
+  if (!acts) return null
+  const { steps, inTrial } = trialFunnel(acts, days)
+  const total = steps[0].count
+  return (
+    <div className="card mt-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-bold">Del registro al pago</h3>
+        <div className="flex gap-1" role="radiogroup" aria-label="Periodo">
+          {FUNNEL_DAYS.map((d) => (
+            <button
+              key={d}
+              type="button"
+              role="radio"
+              aria-checked={days === d}
+              onClick={() => setDays(d)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition ${days === d ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+            >
+              {d === 365 ? '1 año' : `${d} días`}
+            </button>
+          ))}
+        </div>
+      </div>
+      {total === 0 ? (
+        <p className="mt-3 text-sm text-slate-500">Nadie creó su app en este periodo.</p>
+      ) : (
+        <>
+          <ol className="mt-4 space-y-3">
+            {steps.map((s, i) => {
+              const p = Math.round((s.count / total) * 100)
+              // Cuántos se quedaron por el camino respecto al paso anterior
+              const lost = i > 0 ? steps[i - 1].count - s.count : 0
+              return (
+                <li key={s.label}>
+                  <div className="flex items-baseline justify-between gap-3 text-sm">
+                    <span className="min-w-0 truncate font-semibold" title={s.hint}>{s.label}</span>
+                    <span className="shrink-0 tabular-nums">
+                      <b>{s.count}</b> <span className="text-slate-500">· {p} %</span>
+                      {lost > 0 && <span className="ml-2 text-xs text-red-500">−{lost}</span>}
+                    </span>
+                  </div>
+                  <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-slate-100">
+                    <div className={`h-full rounded-full ${i === steps.length - 1 ? 'bg-emerald-500' : 'bg-citora-500'}`} style={{ width: `${Math.max(p, s.count > 0 ? 2 : 0)}%` }} />
+                  </div>
+                </li>
+              )
+            })}
+          </ol>
+          <p className="mt-3 text-xs text-slate-500">
+            Sin contar cortesías. {inTrial > 0 && <>{inTrial} {inTrial === 1 ? 'sigue' : 'siguen'} en prueba y aún {inTrial === 1 ? 'puede' : 'pueden'} pagar. </>}
+            En rojo, los que se quedaron en ese paso.
+          </p>
+        </>
+      )}
     </div>
   )
 }

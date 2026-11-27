@@ -1097,7 +1097,7 @@ declare
   v_text text[];
 begin
   for r in
-    select b.id, b.name, b.timezone, b.lang, business_status(b.plan, b.trial_ends_at, b.paid_until) as st,
+    select b.id, b.name, b.timezone, b.lang, b.market, business_status(b.plan, b.trial_ends_at, b.paid_until) as st,
       case when business_status(b.plan, b.trial_ends_at, b.paid_until) = 'activo' then b.paid_until else b.trial_ends_at end as expires_at
     from businesses b
     where business_effective_plan(b.plan, b.trial_ends_at, b.paid_until) is not null
@@ -1106,8 +1106,92 @@ begin
     if r.expires_at between now() and now() + interval '3 days' then
       v_text := case when r.lang = 'en' then _expiry_push_text_en(r.st, r.expires_at, r.timezone, r.name)
                      else _expiry_push_text(r.st, r.expires_at, r.timezone, r.name) end;
+      -- En la prueba, con los planes y su precio: que elija sin tener que ir a mirarlo
+      if r.st = 'prueba' then v_text[2] := v_text[2] || ' ' || _plans_push_line(r.market, r.lang); end if;
       perform _notify_push(r.id, 'owner', null, v_text[1], v_text[2]);
     end if;
+  end loop;
+end;
+$$;
+
+-- "1500" → "1.500" (en español los miles llevan punto)
+create or replace function public._thousands(p numeric)
+returns text language sql immutable as $$
+  select regexp_replace(round(p)::text, '(\d)(?=(\d{3})+$)', '\1.', 'g');
+$$;
+
+-- Los dos planes con su precio, en la moneda de la versión del negocio, para los avisos push
+create or replace function public._plans_push_line(p_market text, p_lang text)
+returns text language sql stable security definer set search_path = public as $$
+  select case when p_market = 'int'
+    then _l(p_lang,
+      'Planes: Solo ' || to_char(s.price_int_basico, 'FM990.00') || ' USD/mes · Equipo ' || to_char(s.price_int_ultra, 'FM990.00') || ' USD/mes.',
+      'Plans: Solo $' || to_char(s.price_int_basico, 'FM990.00') || '/mo · Team $' || to_char(s.price_int_ultra, 'FM990.00') || '/mo.')
+    else 'Planes: Solo ' || _thousands(s.price_basico) || ' CUP/mes · Equipo ' || _thousands(s.price_ultra) || ' CUP/mes.'
+  end
+  from platform_settings s where s.id = 1;
+$$;
+
+-- Avisos push durante la prueba gratis (versión 1.5), para que llegue a su primera reserva y acabe
+-- pagando. Solo a quien todavía no recibe reservas por la web (las suyas de prueba no cuentan), a las
+-- 10:00 de su zona horaria:
+--   día 1: los primeros pasos que le faltan
+--   día 3: si nadie ha abierto su enlace, que lo comparta
+--   día 6: si sigue sin reservas, cómo conseguir las primeras
+-- Los 3 últimos días ya avisa _send_expiry_reminders (a las 9:00). Esta función solo dice a quién y
+-- qué (así se puede probar); _send_trial_nudges los envía.
+create or replace function public._trial_nudges(p_now timestamptz default now())
+returns table (business_id uuid, title text, body text)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  r record;
+  v_day int;
+  v_phone text;
+begin
+  for r in
+    select b.* from businesses b
+    where not b.comped
+      and business_status(b.plan, b.trial_ends_at, b.paid_until) = 'prueba'
+      and extract(hour from p_now at time zone b.timezone) = 10
+  loop
+    v_day := (p_now at time zone r.timezone)::date - (r.created_at at time zone r.timezone)::date;
+    continue when v_day not in (1, 3, 6);
+    -- Ya le reservan por la web: no hace falta empujar (igual que get_my_progress: sin las suyas)
+    v_phone := right(regexp_replace(coalesce(r.whatsapp, ''), '\D', '', 'g'), 8);
+    continue when exists (
+      select 1 from appointments a
+      where a.business_id = r.id and a.source = 'web' and a.status <> 'cancelada'
+        and (v_phone = '' or right(regexp_replace(a.customer_phone, '\D', '', 'g'), 8) <> v_phone));
+    business_id := r.id;
+    if v_day = 1 then
+      title := _l(r.lang, 'Tu app está lista: consigue tu primera reserva', 'Your app is ready: get your first booking');
+      body := _l(r.lang,
+        'Te faltan unos pasos: revisa tus precios, haz una reserva de prueba y comparte tu enlace. Los tienes en Hoy → Primeros pasos.',
+        'A few steps left: check your prices, make a test booking and share your link. Find them in Today → First steps.');
+    elsif v_day = 3 then
+      continue when exists (select 1 from analytics_events e where e.slug = r.slug and e.name = 'visita');
+      title := _l(r.lang, 'Nadie ha abierto tu enlace todavía', 'Nobody has opened your link yet');
+      body := _l(r.lang,
+        'Ponlo en tu estado de WhatsApp y en tus redes: el mensaje ya está escrito en Hoy → Primeros pasos → Comparte tu enlace.',
+        'Post it on your WhatsApp status and social media: the message is ready in Today → First steps → Share your link.');
+    else
+      title := _l(r.lang, 'Aún no te han reservado por la web', 'No online bookings yet');
+      body := _l(r.lang,
+        'Manda tu enlace por WhatsApp a tus clientes de siempre y pídeles que reserven su próxima cita desde ahí. Así se acostumbran.',
+        'Send your link on WhatsApp to your regular clients and ask them to book their next appointment there. That is how they get used to it.');
+    end if;
+    return next;
+  end loop;
+end;
+$$;
+
+create or replace function public._send_trial_nudges()
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  n record;
+begin
+  for n in select * from _trial_nudges() loop
+    perform _notify_push(n.business_id, 'owner', null, n.title, n.body);
   end loop;
 end;
 $$;
@@ -1680,6 +1764,11 @@ begin
   end if;
   -- Cada hora: a cada negocio le llega a las 9:00 de su zona horaria
   perform cron.schedule('citora-vencimiento', '0 * * * *', $cron$select public._send_expiry_reminders();$cron$);
+  if exists (select 1 from cron.job where jobname = 'citora-empujones-prueba') then
+    perform cron.unschedule('citora-empujones-prueba');
+  end if;
+  -- Cada hora: a cada negocio en prueba le llega a las 10:00 de su zona horaria (días 1, 3 y 6)
+  perform cron.schedule('citora-empujones-prueba', '5 * * * *', $cron$select public._send_trial_nudges();$cron$);
   if exists (select 1 from cron.job where jobname = 'citora-limpiar-visitas') then
     perform cron.unschedule('citora-limpiar-visitas');
   end if;
@@ -4370,6 +4459,9 @@ revoke execute on function public._auto_mark_no_shows() from anon, authenticated
 revoke execute on function public._send_expiry_reminders() from anon, authenticated;
 revoke execute on function public._expiry_push_text(text, timestamptz, text, text, timestamptz) from anon, authenticated;
 revoke execute on function public._expiry_push_text_en(text, timestamptz, text, text, timestamptz) from anon, authenticated;
+revoke execute on function public._plans_push_line(text, text) from anon, authenticated;
+revoke execute on function public._trial_nudges(timestamptz) from anon, authenticated;
+revoke execute on function public._send_trial_nudges() from anon, authenticated;
 revoke execute on function public._move_business_timezone(uuid, text, boolean) from anon, authenticated;
 revoke execute on function public._notify_moderation(uuid, text) from anon, authenticated;
 revoke execute on function public._notify_admin_push(text, text) from anon, authenticated;

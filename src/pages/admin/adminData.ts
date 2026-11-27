@@ -95,6 +95,27 @@ export function stepsDone(a: Activity | null): boolean[] {
 export const stepsCount = (a: Activity | null) => stepsDone(a).filter(Boolean).length
 
 // ---------------------------------------------------------------------
+// Embudo: de los que crearon su app en los últimos días, cuántos dieron cada paso y cuántos pagaron
+// ---------------------------------------------------------------------
+export interface FunnelStep { label: string; hint: string; count: number }
+
+export function trialFunnel(acts: Activity[], days: number, now = Date.now()): { steps: FunnelStep[]; inTrial: number } {
+  const since = now - days * 86400000
+  const c = acts.filter((a) => !a.comped && new Date(a.created_at).getTime() >= since)
+  const n = (f: (a: Activity) => boolean) => c.filter(f).length
+  return {
+    steps: [
+      { label: 'Crearon su app', hint: 'Empezaron la prueba gratis', count: c.length },
+      { label: 'Activaron los avisos', hint: 'Les suena el móvil cuando alguien reserva', count: n((a) => a.push_on) },
+      { label: 'Compartieron su enlace', hint: 'Alguien abrió su página de reservas', count: n((a) => a.link_visits > 0) },
+      { label: 'Recibieron reservas por la web', hint: 'Al menos un cliente reservó solo', count: n((a) => a.web_total > 0) },
+      { label: 'Pagaron', hint: 'Al menos un pago registrado', count: n((a) => a.paid) },
+    ],
+    inTrial: n((a) => a.status === 'prueba'),
+  }
+}
+
+// ---------------------------------------------------------------------
 // Atascados: en prueba, con la app creada hace días y ninguna reserva por la web
 // ---------------------------------------------------------------------
 export const STUCK_AFTER_DAYS = 3
