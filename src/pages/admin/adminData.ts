@@ -286,7 +286,9 @@ export function setupHelpMessage(b: { name: string; slug?: string | null; market
   const steps = [
     'Revisa tus servicios y precios (los que salen son de ejemplo): Mi negocio > Servicios.',
     'Pon tus días y horas de trabajo: Mi negocio > Horario.',
-    'Ancla la app a la pantalla de inicio de tu móvil para abrirla como cualquier otra app. Abre tu panel y, en el menú del navegador, elige «Añadir a pantalla de inicio». En iPhone, desde Safari: botón Compartir > «Añadir a pantalla de inicio».',
+    'Ancla la app a la pantalla de inicio de tu móvil para abrirla como cualquier otra app:\n' +
+      '   • Android: abre tu panel en Chrome, ve a Más y pulsa «Instalar el panel en este móvil». Si no te sale, toca los tres puntos (⋮) de arriba a la derecha y elige «Instalar aplicación» o «Agregar a la pantalla principal».\n' +
+      '   • iPhone: abre tu panel en Safari, pulsa el botón Compartir (el cuadrado con la flecha) y elige «Añadir a pantalla de inicio».',
     !a?.push_on && 'Activa los avisos para que te suene el móvil cuando alguien reserve: Más > Ajustes.',
     !a?.customized && 'Sube tu logo o una foto de tu trabajo: Mi negocio > Apariencia.',
     `Haz una reserva de prueba desde tu enlace, para ver lo que verán tus clientas${pub ? `: ${pub}` : '.'}`,
