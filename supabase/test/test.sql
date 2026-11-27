@@ -1648,6 +1648,133 @@ delete from businesses where slug in ('unas-invita', 'unas-invitada');
 delete from auth.users where id in ('88888888-8888-8888-8888-888888888888', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
 set role authenticated;
 
+-- ===== Turnos: servicios largos, antelación, días por delante, días cerrados y cambios de hora =====
+-- Un salón de uñas con turnos a las 8:00, 10:00 y 14:00 todos los días y servicios de 2 h y 2 h 30 min
+-- (como Happy Glaze Salon: una cita larga a las 8:00 también ocupa el turno de las 10:00).
+reset role;
+insert into auth.users (id, email) values ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'turnos@test.com');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+select create_business('Uñas Turnos', 'unas-turnos', 'unas', '55557771', '', '#db2777',
+  '[{"name":"Pedi Spa","price":1000,"duration_min":150},{"name":"Manicura","price":800,"duration_min":120}]',
+  (select jsonb_agg(jsonb_build_object('weekday', d, 'is_open', true, 'slots', jsonb_build_array('08:00','10:00','14:00'))) from generate_series(0,6) d));
+reset role;
+update businesses set min_notice_hours = 0, max_days_ahead = 30, max_pending_bookings = 10, max_daily_bookings = 10 where slug = 'unas-turnos';
+insert into ctx select 't_biz', id::text from businesses where slug = 'unas-turnos';
+insert into ctx select 't_today', ((now() at time zone timezone)::date)::text from businesses where slug = 'unas-turnos';
+insert into ctx select 't_pedi', s.id::text from services s join businesses b on b.id = s.business_id where b.slug = 'unas-turnos' and s.name = 'Pedi Spa';
+insert into ctx select 't_mani', s.id::text from services s join businesses b on b.id = s.business_id where b.slug = 'unas-turnos' and s.name = 'Manicura';
+-- Ayudante: ¿está libre este turno para una manicura (2 h)?
+create or replace function public.t_free(p_days int, p_slot text) returns boolean language sql as $$
+  select available from get_available_slots('unas-turnos', (select v from ctx where k = 't_today')::date + p_days, 120,
+    null, null, array[(select v from ctx where k = 't_mani')::uuid]) where slot = p_slot;
+$$;
+grant execute on function public.t_free(int, text) to anon, authenticated;
+
+set role anon;
+-- Pedi Spa (2 h 30 min) a las 8:00, dentro de 3 días: ocupa de 8:00 a 10:30
+insert into ctx select 't_tok1', create_booking('unas-turnos', array[(select v from ctx where k = 't_pedi')::uuid],
+  (select v from ctx where k = 't_today')::date + 3, '08:00', 'Ana Pedi', '5355557001');
+do $$ begin
+  assert not t_free(3, '08:00'), '8:00 ocupado por el Pedi Spa';
+  assert not t_free(3, '10:00'), 'el Pedi Spa de 8:00 a 10:30 también ocupa el turno de las 10:00';
+  assert t_free(3, '14:00'), '14:00 sigue libre';
+end $$;
+select expect_error($$select create_booking('unas-turnos', array[(select v from ctx where k = 't_mani')::uuid],
+  (select v from ctx where k = 't_today')::date + 3, '10:00', 'Bea Mani', '5355557002')$$, 'TURNO_OCUPADO');
+-- Una hora que no es uno de sus turnos, o que no es una hora
+select expect_error($$select create_booking('unas-turnos', array[(select v from ctx where k = 't_mani')::uuid],
+  (select v from ctx where k = 't_today')::date + 3, '09:00', 'Bea Mani', '5355557002')$$, 'TURNO_INVALIDO');
+select expect_error($$select create_booking('unas-turnos', array[(select v from ctx where k = 't_mani')::uuid],
+  (select v from ctx where k = 't_today')::date + 3, 'mañana', 'Bea Mani', '5355557002')$$, 'TURNO_INVALIDO');
+-- Un día que ya pasó
+select expect_error($$select create_booking('unas-turnos', array[(select v from ctx where k = 't_mani')::uuid],
+  (select v from ctx where k = 't_today')::date - 1, '14:00', 'Bea Mani', '5355557002')$$, 'TURNO_INVALIDO');
+
+-- Días por delante (30): el día 30 se puede reservar, el 31 no
+do $$ declare d date := (select v from ctx where k = 't_today')::date; begin
+  assert (select count(*) from get_available_slots('unas-turnos', d + 30, 120)) = 3, 'el día 30 muestra sus 3 turnos';
+  assert (select count(*) from get_available_slots('unas-turnos', d + 31, 120)) = 0, 'el día 31 no muestra turnos';
+end $$;
+select expect_error($$select create_booking('unas-turnos', array[(select v from ctx where k = 't_mani')::uuid],
+  (select v from ctx where k = 't_today')::date + 31, '14:00', 'Bea Mani', '5355557002')$$, 'TURNO_INVALIDO');
+
+-- Día cerrado (vacaciones): sin turnos y sin reservas
+reset role;
+insert into closed_days (business_id, day) select (select v from ctx where k = 't_biz')::uuid, (select v from ctx where k = 't_today')::date + 4;
+set role anon;
+do $$ begin
+  assert (select count(*) from get_available_slots('unas-turnos', (select v from ctx where k = 't_today')::date + 4, 120)) = 0, 'día cerrado: sin turnos';
+end $$;
+select expect_error($$select create_booking('unas-turnos', array[(select v from ctx where k = 't_mani')::uuid],
+  (select v from ctx where k = 't_today')::date + 4, '14:00', 'Bea Mani', '5355557002')$$, 'TURNO_INVALIDO');
+
+-- Antelación mínima de 48 h: mañana no se puede, dentro de 3 días sí
+reset role;
+update businesses set min_notice_hours = 48 where slug = 'unas-turnos';
+set role anon;
+do $$ begin
+  assert (select count(*) from get_available_slots('unas-turnos', (select v from ctx where k = 't_today')::date + 1, 120) where available) = 0,
+    'con 48 h de antelación, mañana no hay turnos libres';
+  assert t_free(3, '14:00'), 'dentro de 3 días, sí';
+end $$;
+select expect_error($$select create_booking('unas-turnos', array[(select v from ctx where k = 't_mani')::uuid],
+  (select v from ctx where k = 't_today')::date + 1, '14:00', 'Bea Mani', '5355557002')$$, 'TURNO_INVALIDO');
+reset role;
+update businesses set min_notice_hours = 0 where slug = 'unas-turnos';
+set role anon;
+
+-- La clienta cambia su cita: no a un turno ocupado; al moverla, deja libres los turnos que ocupaba
+insert into ctx select 't_tok2', create_booking('unas-turnos', array[(select v from ctx where k = 't_mani')::uuid],
+  (select v from ctx where k = 't_today')::date + 3, '14:00', 'Bea Mani', '5355557002');
+select expect_error($$select reschedule_booking((select v from ctx where k = 't_tok1'), (select v from ctx where k = 't_today')::date + 3, '14:00')$$, 'TURNO_OCUPADO');
+select reschedule_booking((select v from ctx where k = 't_tok1'), (select v from ctx where k = 't_today')::date + 5, '08:00');
+do $$ begin
+  assert t_free(3, '08:00') and t_free(3, '10:00'), 'al moverse el Pedi Spa, quedan libres las 8:00 y las 10:00';
+  assert not t_free(5, '10:00'), 'y ahora ocupa las 8:00 y las 10:00 del nuevo día';
+end $$;
+-- Al cancelar, el turno queda libre
+select cancel_booking((select v from ctx where k = 't_tok2'));
+do $$ begin assert t_free(3, '14:00'), 'cita cancelada: las 14:00 vuelven a estar libres'; end $$;
+
+-- La dueña cambia la hora desde su agenda: no encima de otra cita; otro negocio no puede tocarla
+insert into ctx select 't_tok3', create_booking('unas-turnos', array[(select v from ctx where k = 't_mani')::uuid],
+  (select v from ctx where k = 't_today')::date + 5, '14:00', 'Cris Mani', '5355557003');
+reset role;
+insert into ctx select 't_id1', id::text from appointments where token = (select v from ctx where k = 't_tok1');
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select expect_error($$select owner_reschedule_appointment((select v from ctx where k = 't_id1')::uuid, (select v from ctx where k = 't_today')::date + 3, '08:00')$$, 'CITA_NO_EXISTE');
+do $$ begin
+  assert (select count(*) from appointments where business_id = (select v from ctx where k = 't_biz')::uuid) = 0, 'otro dueño no ve sus citas';
+end $$;
+-- Intenta cancelarle las citas: o no le deja o no encuentra ninguna (se comprueba abajo que no cambió nada)
+do $$ begin
+  update appointments set status = 'cancelada' where business_id = (select v from ctx where k = 't_biz')::uuid;
+exception when insufficient_privilege then null;
+end $$;
+set request.jwt.claim.sub = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+select expect_error($$select owner_reschedule_appointment((select v from ctx where k = 't_id1')::uuid, (select v from ctx where k = 't_today')::date + 5, '14:00')$$, 'TURNO_OCUPADO');
+select owner_reschedule_appointment((select v from ctx where k = 't_id1')::uuid, (select v from ctx where k = 't_today')::date + 3, '10:00');
+reset role;
+do $$ begin
+  assert (select count(*) from appointments where business_id = (select v from ctx where k = 't_biz')::uuid and status = 'cancelada') = 1,
+    'solo la que canceló la clienta: el otro dueño no pudo cancelar nada';
+  assert (select ends_at - starts_at from appointments where token = (select v from ctx where k = 't_tok1')) = interval '150 minutes',
+    'al moverla, la cita conserva su duración';
+end $$;
+set role anon;
+do $$ begin
+  assert t_free(5, '08:00'), 'el día de antes queda libre';
+  assert not t_free(3, '10:00'), 'ahora ocupa las 10:00 del día 3 (de 10:00 a 12:30)';
+  assert t_free(3, '08:00') and t_free(3, '14:00'), 'y deja libres las 8:00 y las 14:00';
+end $$;
+reset role;
+drop function public.t_free(int, text);
+delete from businesses where slug = 'unas-turnos';
+delete from auth.users where id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+set role authenticated;
+
 -- ===== Borrar dueños =====
 reset role;
 set role authenticated;
