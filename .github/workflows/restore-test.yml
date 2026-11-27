@@ -1,0 +1,99 @@
+# Comprueba una vez al mes que el último respaldo (ver backup-db.yml) se puede restaurar de verdad.
+# Un respaldo que nunca se ha restaurado no se sabe si sirve.
+#
+# Descarga el último respaldo, lo descifra, lo restaura en un Supabase de usar y tirar (dentro de
+# GitHub, nunca encima del real) y comprueba que están los negocios, las citas y las cuentas.
+# El repositorio es público: aquí solo se escriben cantidades, nunca datos de nadie.
+#
+# Usa el mismo secreto que el respaldo: BACKUP_ENCRYPTION_KEY.
+name: Probar el respaldo
+
+on:
+  schedule:
+    - cron: '0 11 2 * *' # el día 2 de cada mes, después del respaldo del domingo
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.122.0
+
+      - name: Descargar el último respaldo
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN=$(gh run list --workflow backup-db.yml --status success --limit 1 --json databaseId -q '.[0].databaseId')
+          if [ -z "$RUN" ]; then
+            echo "::error::No hay ningún respaldo hecho."
+            exit 1
+          fi
+          echo "Respaldo del run $RUN"
+          gh run download "$RUN" --dir descarga
+          find descarga -name 'respaldo.tar.gz.enc' -exec mv {} respaldo.tar.gz.enc \;
+          test -f respaldo.tar.gz.enc
+
+      - name: Descifrar
+        env:
+          BACKUP_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: |
+          openssl enc -d -aes-256-cbc -pbkdf2 -in respaldo.tar.gz.enc -out respaldo.tar.gz -pass env:BACKUP_KEY
+          mkdir respaldo
+          tar -xzf respaldo.tar.gz -C respaldo
+          ls -la respaldo
+
+      - name: Levantar Supabase de usar y tirar
+        run: supabase start --ignore-health-check
+
+      - name: Restaurar (como indica backup-db.yml)
+        env:
+          PGURI: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        # Si falla, solo se muestra la primera línea del error: los detalles (DETAIL, CONTEXT) pueden
+        # traer una fila de datos, y estos registros son públicos
+        run: |
+          if ! psql "$PGURI" --single-transaction --variable ON_ERROR_STOP=1 \
+            --file respaldo/roles.sql --file respaldo/schema.sql \
+            --command 'SET session_replication_role = replica' --file respaldo/data.sql \
+            > /dev/null 2> restaurar.log; then
+            echo "::error::No se pudo restaurar el respaldo."
+            grep -m1 'ERROR' restaurar.log | sed -E 's/(ERROR: +[^:(]{0,120}).*/\1/' || true
+            exit 1
+          fi
+
+      - name: Comprobar que están los datos
+        env:
+          PGURI: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: |
+          count() { psql "$PGURI" -tA -c "select count(*) from $1"; }
+          NEG=$(count public.businesses)
+          CITAS=$(count public.appointments)
+          CUENTAS=$(count auth.users)
+          PAGOS=$(count public.payments)
+          SERV=$(count public.services)
+          echo "Negocios: $NEG · Citas: $CITAS · Servicios: $SERV · Pagos: $PAGOS · Cuentas: $CUENTAS"
+          echo "### Respaldo restaurado ✅" >> "$GITHUB_STEP_SUMMARY"
+          echo "Negocios: $NEG · Citas: $CITAS · Servicios: $SERV · Pagos: $PAGOS · Cuentas: $CUENTAS" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$NEG" -eq 0 ] || [ "$CITAS" -eq 0 ] || [ "$SERV" -eq 0 ]; then
+            echo "::error::El respaldo se restauró pero le faltan datos (negocios, citas o servicios en 0)."
+            exit 1
+          fi
+          if [ "$CUENTAS" -eq 0 ]; then
+            echo "::error::El respaldo no trae las cuentas de los dueños: al restaurarlo tendrían que volver a registrarse."
+            exit 1
+          fi
+          # Que la app funcione con lo restaurado: la página pública de un negocio se puede leer
+          SLUG=$(psql "$PGURI" -tA -c "select slug from public.businesses order by created_at limit 1")
+          psql "$PGURI" -tA -v ON_ERROR_STOP=1 -c "select get_public_business('$SLUG') is not null" | grep -q t
+          echo "La página pública de un negocio se lee bien."
+
+      - name: Apagar Supabase
+        if: always()
+        run: supabase stop --no-backup
