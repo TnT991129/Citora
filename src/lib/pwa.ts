@@ -35,6 +35,11 @@ export function isStandalone(): boolean {
   return window.matchMedia?.('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true
 }
 
+/** Móvil o tablet Android (para ofrecer el APK) */
+export function isAndroid(): boolean {
+  return /Android/i.test(navigator.userAgent)
+}
+
 export function isIos(): boolean {
   return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 }

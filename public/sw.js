@@ -23,6 +23,8 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return
   const url = new URL(req.url)
   if (url.origin !== self.location.origin) return
+  // Descargas (el APK de Android): directas, sin guardarlas como si fueran la app
+  if (url.pathname.includes('/descargas/')) return
 
   if (req.mode === 'navigate') {
     event.respondWith(

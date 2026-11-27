@@ -8,6 +8,7 @@ import { money } from '../lib/format'
 import { DEFAULT_PRICE, DEFAULT_TEAM_PRICE, PLANS } from '../lib/plans'
 import { supabase } from '../lib/supabase'
 import { IS_INT } from '../lib/market'
+import { isAndroid, isStandalone } from '../lib/pwa'
 import { BUSINESS_TYPES } from '../lib/templates'
 import type { Prices } from '../lib/types'
 import { AgendaClean, BarsArt, ChatChaos, HeroPhone, Ico, NightArt, Phone, ScreenAgenda, ScreenCreate, ScreenShare, StarsArt } from './landing/Demos'
@@ -138,8 +139,9 @@ function Header({ scrolled, menuOpen, setMenuOpen }: { scrolled: boolean; menuOp
         </nav>
         <div className="flex items-center gap-2">
           <div className={`hidden items-center gap-1 sm:flex ${light ? 'text-white' : ''}`}><LangSwitch onImage={light} /><ThemeToggle onImage={light} /></div>
-          <Link to="/entrar" className={`hidden rounded-xl px-3 py-2 text-sm font-semibold sm:block ${light ? 'text-white/85 hover:bg-white/10' : 'text-slate-700 hover:bg-slate-100'}`}>{tx('Entrar')}</Link>
-          <Link to="/crear" className="lp-cta rounded-xl px-4 py-2 text-sm font-bold text-white">{tx('Crear mi app')}</Link>
+          {/* Entrar siempre a la vista (también en el móvil): quien ya tiene su app no la busca en el menú */}
+          <Link to="/entrar" className={`whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold ring-1 transition ${light ? 'text-white ring-white/30 hover:bg-white/10' : 'text-slate-700 ring-slate-300 hover:bg-slate-100'}`}>{tx('Entrar')}</Link>
+          <Link to="/crear" className="lp-cta whitespace-nowrap rounded-xl px-3.5 py-2 text-sm font-bold text-white sm:px-4">{tx('Crear mi app')}</Link>
           <button
             onClick={() => setMenuOpen((v) => !v)}
             aria-label={menuOpen ? tx('Cerrar menú') : tx('Abrir menú')}
@@ -160,7 +162,6 @@ function Header({ scrolled, menuOpen, setMenuOpen }: { scrolled: boolean; menuOp
                 {n.label}
               </a>
             ))}
-            <Link to="/entrar" className="rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">{tx('Entrar a mi panel')}</Link>
             <div className="flex items-center gap-1 px-3 pt-1"><LangSwitch /><ThemeToggle /></div>
           </div>
         </nav>
@@ -226,6 +227,20 @@ function Hero({ trial }: { trial: number }) {
               </li>
             ))}
           </ul>
+          {showApk() && (
+            <a
+              href={APK_URL}
+              download="Citora.apk"
+              className="lp-fade-in mt-6 inline-flex items-center gap-3 rounded-2xl bg-white/10 px-4 py-3 text-left ring-1 ring-white/20 transition hover:bg-white/15"
+              style={{ ['--i' as string]: 3 }}
+            >
+              <AndroidIcon className="h-7 w-7 shrink-0 text-emerald-400" />
+              <span>
+                <span className="block font-bold">{tx('Descargar la app para Android')}</span>
+                <span className="block text-xs text-white/60">{tx('Para entrar a tu panel con un toque · 1,3 MB')}</span>
+              </span>
+            </a>
+          )}
         </div>
 
         <div className="lp-par" style={{ ['--speed' as string]: -60 }}>
@@ -615,6 +630,7 @@ function Footer() {
           <ul className="mt-3 space-y-2">
             <li><Link to="/crear" className={link}>{tx('Crear mi app')}</Link></li>
             <li><Link to="/entrar" className={link}>{tx('Entrar a mi panel')}</Link></li>
+            {showApk() && <li><a href={APK_URL} download="Citora.apk" className={link}>{tx('App para Android')}</a></li>}
           </ul>
         </nav>
         <nav aria-label={tx('Legal')}>
@@ -630,6 +646,23 @@ function Footer() {
         <p>{IS_INT ? tx('Hecha para negocios como el tuyo') : tx('Hecha para negocios en Cuba')}</p>
       </div>
     </footer>
+  )
+}
+
+/** APK de Citora para Android (ver citora-android/crear-apk.mjs). Abre el panel del dueño. */
+const APK_URL = `${import.meta.env.BASE_URL}descargas/citora.apk`
+
+/**
+ * El APK solo se ofrece en Android, en la versión de Cuba (la app abre el panel en español), y no
+ * dentro de la propia app o de la web ya instalada.
+ */
+const showApk = () => !IS_INT && isAndroid() && !isStandalone()
+
+function AndroidIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
+      <path d="M17.6 9.48l1.84-3.18a.38.38 0 0 0-.66-.38l-1.86 3.22a11.4 11.4 0 0 0-9.84 0L5.22 5.92a.38.38 0 0 0-.66.38L6.4 9.48A10.8 10.8 0 0 0 1 18h22a10.8 10.8 0 0 0-5.4-8.52zM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z" />
+    </svg>
   )
 }
 
