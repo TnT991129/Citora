@@ -274,18 +274,25 @@ export function TempPasswordModal({ owner, onClose }: { owner: AdminOwner; onClo
 }
 
 /** Elegir a qué negocio registrarle un pago a mano (desde Cobros) */
-export function PickBusinessModal({ owners, onClose, onPick }: { owners: AdminOwner[]; onClose: () => void; onPick: (o: OwnerWithBusiness) => void }) {
+export function PickBusinessModal({ owners, onClose, onPick, title = '¿A qué negocio?', withComped, exclude }: {
+  owners: AdminOwner[]; onClose: () => void; onPick: (o: OwnerWithBusiness) => void
+  title?: string
+  /** Mostrar también las cortesías (para apuntar quién invitó: una cortesía también puede invitar) */
+  withComped?: boolean
+  /** Negocio que no se puede elegir (ej. el mismo) */
+  exclude?: string
+}) {
   const [q, setQ] = useState('')
   const list = useMemo(() => {
     const term = q.trim().toLowerCase()
     return owners
       .filter(hasBusiness)
-      .filter((o) => !o.comped)
+      .filter((o) => (withComped || !o.comped) && o.id !== exclude)
       .filter((o) => !term || [o.name, o.code, o.email, o.slug, o.whatsapp].some((x) => (x || '').toLowerCase().includes(term)))
-  }, [owners, q])
+  }, [owners, q, withComped, exclude])
 
   return (
-    <Modal open onClose={onClose} title="¿A qué negocio?">
+    <Modal open onClose={onClose} title={title}>
       <div className="space-y-3">
         <input className="input" autoFocus placeholder="Nombre, código o WhatsApp" value={q} onChange={(e) => setQ(e.target.value)} />
         <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl ring-1 ring-slate-200">

@@ -1824,6 +1824,66 @@ delete from businesses where slug = 'unas-empujon';
 delete from auth.users where id = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
 set role authenticated;
 
+-- ===== Invitaciones: con el enlace y apuntadas a mano por el administrador =====
+reset role;
+insert into auth.users (id, email) values
+  ('dddddddd-0000-0000-0000-000000000001', 'invita@test.com'),
+  ('dddddddd-0000-0000-0000-000000000002', 'invitado1@test.com'),
+  ('dddddddd-0000-0000-0000-000000000003', 'invitado2@test.com');
+set role authenticated;
+set request.jwt.claim.sub = 'dddddddd-0000-0000-0000-000000000001';
+select create_business('Ninfas Test', 'ninfas-test', 'unas', '55558881', '', '#db2777', '[]', '[]');
+reset role;
+insert into ctx select 'r_code', code from businesses where slug = 'ninfas-test';
+set role authenticated;
+-- Con el enlace de invitación (?r=CÓDIGO): queda apuntado quién lo invitó
+set request.jwt.claim.sub = 'dddddddd-0000-0000-0000-000000000002';
+select create_business('Invitado Uno', 'invitado-uno', 'unas', '55558882', '', '#db2777', '[]', '[]',
+  'CUP', false, null, 'cu', null, lower((select v from ctx where k = 'r_code')));
+-- Sin el enlace (lo abrió en otro móvil): no queda apuntado
+set request.jwt.claim.sub = 'dddddddd-0000-0000-0000-000000000003';
+select create_business('Invitado Dos', 'invitado-dos', 'unas', '55558883', '', '#db2777', '[]', '[]');
+-- Solo el administrador lo apunta a mano
+select expect_error($$select admin_set_referrer((select id from businesses where slug='invitado-dos'), (select id from businesses where slug='ninfas-test'))$$, 'NO_AUTORIZADO');
+reset role;
+do $$ begin
+  assert (select referred_by from businesses where slug = 'invitado-uno') = (select id from businesses where slug = 'ninfas-test'), 'con el enlace queda apuntado';
+  assert (select referred_by from businesses where slug = 'invitado-dos') is null, 'sin el enlace, no';
+end $$;
+insert into ctx select 'r_trial', trial_ends_at::text from businesses where slug = 'ninfas-test';
+set role authenticated;
+set request.jwt.claim.sub = '99999999-9999-9999-9999-999999999999';
+-- La lista de dueños del admin dice quién invitó a quién (árbol de invitaciones)
+do $$ begin
+  assert exists (select 1 from jsonb_array_elements(admin_list_owners()) o
+                 where o->>'slug' = 'invitado-uno' and o->>'referred_by' = (select id::text from businesses where slug = 'ninfas-test')
+                   and (o->>'referral_rewarded')::boolean = false), 'admin_list_owners trae referred_by';
+end $$;
+-- El invitado dos ya pagó; al apuntar a mano quién lo invitó, los dos ganan su mes en ese momento
+select admin_activate_plan((select id from businesses where slug = 'invitado-dos'), 'basico', 1, 1500);
+select expect_error($$select admin_set_referrer((select id from businesses where slug='invitado-dos'), (select id from businesses where slug='invitado-dos'))$$, 'INVITADO_A_SI_MISMO');
+-- Sin círculos: ninfas-test no puede venir invitada por quien ella invitó
+select expect_error($$select admin_set_referrer((select id from businesses where slug='ninfas-test'), (select id from businesses where slug='invitado-uno'))$$, 'INVITACION_EN_CIRCULO');
+do $$ begin
+  assert (admin_set_referrer((select id from businesses where slug = 'invitado-dos'), (select id from businesses where slug = 'ninfas-test')) ->> 'rewarded')::boolean, 'ya pagó: meses dados';
+  -- Quien aún no paga solo queda apuntado (el mes llega con su primer pago)
+  assert not (admin_set_referrer((select id from businesses where slug = 'invitado-uno'), (select id from businesses where slug = 'ninfas-test')) ->> 'rewarded')::boolean, 'sin pagar: solo apuntado';
+end $$;
+select expect_error($$select admin_set_referrer((select id from businesses where slug='invitado-dos'), (select id from businesses where slug='invitado-uno'))$$, 'INVITACION_YA_PREMIADA');
+reset role;
+do $$
+declare d businesses := (select b from businesses b where slug = 'invitado-dos');
+begin
+  assert d.referral_rewarded, 'marcado como premiado';
+  assert d.paid_until > now() + interval '57 days', 'el invitado: su mes pagado y uno gratis';
+  assert exists (select 1 from payments where business_id = d.id and bonus and note = 'Mes gratis por venir invitado'), 'su mes gratis apuntado';
+  -- Quien invitó está en prueba: su prueba se alarga un mes
+  assert (select trial_ends_at from businesses where slug = 'ninfas-test') >= (select v from ctx where k = 'r_trial')::timestamptz + interval '28 days', 'a quien invitó se le alarga la prueba';
+end $$;
+delete from businesses where slug in ('invitado-uno', 'invitado-dos', 'ninfas-test');
+delete from auth.users where id::text like 'dddddddd-0000-0000-0000-00000000000%';
+set role authenticated;
+
 -- ===== Borrar dueños =====
 reset role;
 set role authenticated;

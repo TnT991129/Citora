@@ -3638,6 +3638,40 @@ begin
 end;
 $$;
 
+-- El administrador apunta a mano quién invitó a un negocio (la invitación se pierde si abrió el enlace
+-- en un móvil o navegador y creó la app en otro, o si se apuntó sin el enlace). Si ya pagó, se le
+-- dan ahora los meses gratis a los dos, como si hubiera venido con el enlace. Devuelve si se dieron.
+create or replace function public.admin_set_referrer(p_business uuid, p_referrer uuid)
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+declare
+  b businesses;
+begin
+  if not is_platform_admin() then raise exception 'NO_AUTORIZADO'; end if;
+  select * into b from businesses where id = p_business for update;
+  if not found or not exists (select 1 from businesses where id = p_referrer) then raise exception 'NEGOCIO_NO_EXISTE'; end if;
+  if p_business = p_referrer then raise exception 'INVITADO_A_SI_MISMO'; end if;
+  -- Ya ganaron su mes con otra invitación: no se cambia (los meses ya se dieron)
+  if b.referral_rewarded then raise exception 'INVITACION_YA_PREMIADA'; end if;
+  -- Sin círculos: quien invita no puede haber venido invitado (directa o indirectamente) por este
+  if exists (
+    with recursive up(id, depth) as (
+      select referred_by, 1 from businesses where id = p_referrer
+      union all
+      select x.referred_by, u.depth + 1 from businesses x join up u on x.id = u.id where u.depth < 100
+    )
+    select 1 from up where id = p_business
+  ) then raise exception 'INVITACION_EN_CIRCULO'; end if;
+
+  update businesses set referred_by = p_referrer where id = b.id;
+  -- Ya pagó (un pago de verdad, no un mes regalado): los meses gratis, ahora
+  if exists (select 1 from payments where business_id = b.id and not bonus) then
+    perform _reward_referral(b.id);
+    return jsonb_build_object('rewarded', true);
+  end if;
+  return jsonb_build_object('rewarded', false);
+end;
+$$;
+
 -- Las invitaciones del dueño: cuántos negocios se apuntaron con su enlace y cuántos ya pagaron
 create or replace function public.get_my_referrals()
 returns jsonb language sql stable security definer set search_path = public as $$
@@ -4371,6 +4405,7 @@ grant execute on function public.check_slug_available(text) to anon, authenticat
 grant execute on function public.create_business(text, text, text, text, text, text, jsonb, jsonb, text, boolean, numeric, text, text, text) to authenticated;
 grant execute on function public.get_my_referrals() to authenticated;
 grant execute on function public.admin_set_market(uuid, text) to authenticated;
+grant execute on function public.admin_set_referrer(uuid, uuid) to authenticated;
 grant execute on function public.admin_set_temp_password(uuid) to authenticated;
 grant execute on function public.get_my_business_status() to authenticated;
 grant execute on function public.get_my_progress() to authenticated;

@@ -15,7 +15,7 @@ import {
 } from './adminData'
 import { BizAvatar, Drawer, FilterPills, PageTitle, StateCell, StateChip, StateDetail, StepsBar } from './adminUi'
 import { planName } from '../../lib/plans'
-import { ActivateModal, CONFIRM, ConfirmModal, DeleteModal, payCurrency, planPrice, TempPasswordModal, TimezoneModal, type ConfirmKind, type Prices } from './OwnerModals'
+import { ActivateModal, CONFIRM, ConfirmModal, DeleteModal, payCurrency, PickBusinessModal, planPrice, TempPasswordModal, TimezoneModal, type ConfirmKind, type Prices } from './OwnerModals'
 
 export type BizFilter = 'todos' | 'prueba' | 'activo' | 'vencido' | 'atascados' | 'cortesia' | 'sin_negocio'
 type Sort = 'recientes' | 'pago' | 'reservas'
@@ -165,13 +165,13 @@ export function Businesses({ initialFilter = 'todos' }: { initialFilter?: BizFil
         </>
       )}
 
-      <BusinessDrawer row={open} prices={prices} onClose={() => setOpenId(null)} onChanged={load} />
+      <BusinessDrawer row={open} owners={rows || []} prices={prices} onClose={() => setOpenId(null)} onChanged={load} />
     </div>
   )
 }
 
 /** Ficha de un negocio: su estado, sus primeros pasos y lo que se puede hacer con él */
-function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | null; prices: Prices; onClose: () => void; onChanged: () => void }) {
+function BusinessDrawer({ row, owners, prices, onClose, onChanged }: { row: AdminRow | null; owners: AdminRow[]; prices: Prices; onClose: () => void; onChanged: () => void }) {
   const [activating, setActivating] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [zoning, setZoning] = useState(false)
@@ -179,6 +179,9 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
   const [confirming, setConfirming] = useState<ConfirmKind | null>(null)
   const [acting, setActing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Apuntar a mano quién lo invitó: primero se elige el negocio, luego se confirma
+  const [pickingRef, setPickingRef] = useState(false)
+  const [referrer, setReferrer] = useState<OwnerWithBusiness | null>(null)
 
   // Al cambiar de negocio, ninguna ventana abierta del anterior
   const id = row?.user_id
@@ -189,6 +192,8 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
     setPassword(false)
     setConfirming(null)
     setError(null)
+    setPickingRef(false)
+    setReferrer(null)
   }, [id])
 
   if (!row) return null
@@ -210,6 +215,25 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
     setConfirming(null)
     if (error) return setError(errorMessage(error))
     flash(msg)
+    onChanged()
+  }
+
+  // Quién lo invitó (si vino con un enlace de invitación o se apuntó a mano)
+  const invitedBy = r.referred_by ? owners.find((o) => o.id === r.referred_by) : null
+  const paidOnce = Boolean(a?.paid)
+
+  const saveReferrer = async () => {
+    if (!biz || !referrer) return
+    setActing(true)
+    setError(null)
+    const { data, error } = await supabase.rpc('admin_set_referrer', { p_business: biz.id, p_referrer: referrer.id })
+    setActing(false)
+    const who = referrer.name
+    setReferrer(null)
+    if (error) return setError(errorMessage(error))
+    flash((data as { rewarded?: boolean } | null)?.rewarded
+      ? `Listo: ${name} y ${who} ya tienen su mes gratis`
+      : `Apuntado: ${who} invitó a ${name}. El mes gratis llega con su primer pago`)
     onChanged()
   }
 
@@ -316,6 +340,12 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
           <p>Se registró {agoShort(r.signed_up_at)}{r.last_sign_in_at && <> · último acceso {agoShort(r.last_sign_in_at)}</>}.</p>
           {a && <p>{a.customers} {a.customers === 1 ? 'cliente' : 'clientes'} · {a.services} {a.services === 1 ? 'servicio' : 'servicios'} · {money(a.revenue_30d, a.currency)} en citas (30 días)</p>}
           {r.timezone && r.timezone !== ADMIN_TZ && <p>Usa la hora de {tzLabel(r.timezone)}.</p>}
+          {r.referred_by && (
+            <p>
+              🎁 Lo invitó <b className="text-slate-700">{invitedBy?.name || 'un negocio que ya no existe'}</b>
+              {r.referral_rewarded ? ' · ya ganaron su mes gratis los dos' : ' · el mes gratis llega con su primer pago'}.
+            </p>
+          )}
         </section>
 
         <details className="group mt-6">
@@ -325,6 +355,11 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
           <div className="mt-2 divide-y divide-slate-100 rounded-2xl ring-1 ring-slate-200">
             {biz && !r.comped && <MoreAction icon="gift" onClick={() => setConfirming('grant')}>Regalar para siempre (cortesía)</MoreAction>}
             {biz && r.comped && <MoreAction icon="gift" onClick={() => setConfirming('revoke')}>Quitar la cortesía</MoreAction>}
+            {biz && !r.referral_rewarded && (
+              <MoreAction icon="gift" onClick={() => setPickingRef(true)}>
+                {r.referred_by ? 'Cambiar quién lo invitó' : 'Apuntar quién lo invitó'}
+              </MoreAction>
+            )}
             {biz && <MoreAction icon="globe" onClick={() => setZoning(true)}>Cambiar zona horaria</MoreAction>}
             <MoreAction icon="lock" onClick={() => setPassword(true)}>Darle una contraseña provisional</MoreAction>
             {biz && (
@@ -355,6 +390,33 @@ function BusinessDrawer({ row, prices, onClose, onChanged }: { row: AdminRow | n
       {activating && biz && <ActivateModal business={biz} plan={biz.plan === 'ultra' ? 'ultra' : 'basico'} prices={prices} onClose={() => setActivating(false)} onDone={changed} />}
       {zoning && biz && <TimezoneModal business={biz} onClose={() => setZoning(false)} onDone={changed} />}
       {password && <TempPasswordModal owner={r} onClose={() => setPassword(false)} />}
+      {pickingRef && biz && (
+        <PickBusinessModal
+          owners={owners}
+          title={`¿Quién invitó a ${name}?`}
+          withComped
+          exclude={biz.id}
+          onClose={() => setPickingRef(false)}
+          onPick={(o) => {
+            setPickingRef(false)
+            setReferrer(o)
+          }}
+        />
+      )}
+      {referrer && (
+        <ConfirmModal
+          title={`¿${referrer.name} invitó a ${name}?`}
+          text={paidOnce
+            ? `${name} ya pagó su primer mes, así que ahora mismo se le suma un mes gratis${referrer.comped
+              ? `. ${referrer.name} es cortesía y no paga, así que no recibe nada.`
+              : ` y otro a ${referrer.name} (si está en prueba, se le alarga un mes), a quien le llega el aviso «¡Ganaste un mes gratis!».`} Esto no se puede deshacer.`
+            : `Cuando apruebes el primer pago de ${name}, los dos ganan un mes gratis, igual que si hubiera venido con el enlace de invitación.`}
+          confirmLabel="Sí, apuntarlo"
+          busy={acting}
+          onClose={() => setReferrer(null)}
+          onConfirm={saveReferrer}
+        />
+      )}
       {deleting && (
         <DeleteModal
           owner={r}
