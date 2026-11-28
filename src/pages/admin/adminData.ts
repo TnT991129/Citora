@@ -29,6 +29,10 @@ export interface AdminOwner {
   timezone: string | null
   /** Versión de Citora: 'cu' (Cuba) o 'int' (internacional). Null si aún no creó su negocio. */
   market?: 'cu' | 'int' | null
+  /** Negocio que lo invitó (su id), si creó la app con un enlace de invitación */
+  referred_by?: string | null
+  /** Ya pagó su primer mes y se dieron los meses gratis a los dos */
+  referral_rewarded?: boolean
   status: BusinessStatus | 'sin_negocio'
 }
 
@@ -112,6 +116,57 @@ export function trialFunnel(acts: Activity[], days: number, now = Date.now()): {
       { label: 'Pagaron', hint: 'Al menos un pago registrado', count: n((a) => a.paid) },
     ],
     inTrial: n((a) => a.status === 'prueba'),
+  }
+}
+
+// ---------------------------------------------------------------------
+// Árbol de invitaciones: quién invitó a quién (referred_by), como un árbol genealógico
+// ---------------------------------------------------------------------
+export interface ReferralNode {
+  owner: OwnerWithBusiness
+  children: ReferralNode[]
+  /** Todos los que cuelgan de él (sus invitados, los invitados de estos, …) */
+  descendants: number
+}
+
+export interface ReferralTree {
+  roots: ReferralNode[]
+  /** Negocios que vinieron con una invitación */
+  invited: number
+  /** De ellos, los que ya pagaron su primer mes (y ganaron el mes gratis los dos) */
+  rewarded: number
+  /** Negocios que invitaron al menos a uno */
+  inviters: number
+}
+
+/** Solo salen los negocios que invitaron o vinieron invitados. Arriba, quien más negocios trajo. */
+export function referralTree(owners: AdminOwner[]): ReferralTree {
+  const biz = owners.filter(hasBusiness)
+  const byId = new Map(biz.map((o) => [o.id, o]))
+  const kids = new Map<string, OwnerWithBusiness[]>()
+  for (const o of biz) {
+    // Quien lo invitó ya no existe (se borró): se queda como raíz
+    if (o.referred_by && byId.has(o.referred_by)) kids.set(o.referred_by, [...(kids.get(o.referred_by) || []), o])
+  }
+  const seen = new Set<string>()
+  const build = (o: OwnerWithBusiness): ReferralNode => {
+    seen.add(o.id)
+    const children = (kids.get(o.id) || [])
+      .filter((c) => !seen.has(c.id)) // por si acaso hubiera un círculo
+      .map(build)
+      .sort((a, b) => b.descendants - a.descendants || (a.owner.created_at || '').localeCompare(b.owner.created_at || ''))
+    return { owner: o, children, descendants: children.reduce((n, c) => n + 1 + c.descendants, 0) }
+  }
+  const roots = biz
+    .filter((o) => kids.has(o.id) && !(o.referred_by && byId.has(o.referred_by)))
+    .map(build)
+    .sort((a, b) => b.descendants - a.descendants || a.owner.name.localeCompare(b.owner.name))
+  const invited = biz.filter((o) => o.referred_by)
+  return {
+    roots,
+    invited: invited.length,
+    rewarded: invited.filter((o) => o.referral_rewarded).length,
+    inviters: kids.size,
   }
 }
 

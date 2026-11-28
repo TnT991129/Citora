@@ -3554,6 +3554,8 @@ begin
       'whatsapp', b.whatsapp, 'plan', b.plan, 'trial_ends_at', b.trial_ends_at,
       'paid_until', b.paid_until, 'created_at', b.created_at, 'comped', coalesce(b.comped, false),
       'timezone', b.timezone, 'market', b.market,
+      -- Invitaciones: quién lo invitó y si ya se dieron los meses gratis (árbol de invitaciones)
+      'referred_by', b.referred_by, 'referral_rewarded', coalesce(b.referral_rewarded, false),
       'status', case when b.id is null then 'sin_negocio'
                      else business_status(b.plan, b.trial_ends_at, b.paid_until) end
     ) order by u.created_at desc)

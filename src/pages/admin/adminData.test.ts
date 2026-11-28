@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 // Las pruebas corren sin navegador: los enlaces necesitan window.location.origin
 vi.stubGlobal('window', { location: { origin: 'https://citora-app.com', pathname: '/' } })
 
-import { messageOptions, setupHelpMessage, trialFunnel, trialReminderMessage, type Activity, type AdminRow } from './adminData'
+import { messageOptions, referralTree, setupHelpMessage, trialFunnel, trialReminderMessage, type Activity, type AdminRow } from './adminData'
 
 const DAY = 86400000
 const base: AdminRow = {
@@ -66,6 +66,25 @@ describe('mensajes para los dueños', () => {
     expect(steps.map((s) => s.count)).toEqual([3, 3, 3, 2, 1])
     expect(inTrial).toBe(2)
     expect(trialFunnel(acts, 90, now).steps[0].count).toBe(4)
+  })
+
+  it('el árbol de invitaciones pone arriba a quien trajo a otros y cuelga a sus invitados', () => {
+    const b = (id: string, extra: Partial<AdminRow> = {}) => ({ ...base, user_id: 'u' + id, id, name: 'Negocio ' + id, code: id.toUpperCase() + '-0001', ...extra })
+    const owners = [
+      b('a'),
+      b('b', { referred_by: 'a', referral_rewarded: true }),
+      b('c', { referred_by: 'b' }),
+      b('d', { referred_by: 'a', referral_rewarded: true }),
+      b('e'), // no invitó ni vino invitado: no sale
+      b('f', { referred_by: 'borrado' }), // quien lo invitó ya no está: no sale (no tiene invitados)
+      { ...base, user_id: 'sin', id: null, name: null, code: null, status: 'sin_negocio' as const },
+    ]
+    const t = referralTree(owners)
+    expect(t.roots.map((n) => n.owner.id)).toEqual(['a'])
+    expect(t.roots[0].descendants).toBe(3)
+    expect(t.roots[0].children.map((n) => n.owner.id)).toEqual(['b', 'd'])
+    expect(t.roots[0].children[0].children.map((n) => n.owner.id)).toEqual(['c'])
+    expect(t).toMatchObject({ invited: 4, rewarded: 2, inviters: 2 })
   })
 
   it('a quien paga no le sale el aviso de la prueba', () => {

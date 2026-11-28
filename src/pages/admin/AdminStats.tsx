@@ -13,6 +13,7 @@ import { Icon } from '../panel/Panel'
 import { int, trialFunnel, type Activity } from './adminData'
 import { Kpi, PageTitle, SectionTitle } from './adminUi'
 import type { RecentPayment } from './Payments'
+import { ReferralTree } from './ReferralTree'
 import { Traffic } from './Traffic'
 
 export interface AdminStatsData {
@@ -154,6 +155,12 @@ export default function AdminStats() {
           </div>
         </div>
         <TrialFunnel />
+      </section>
+
+      {/* ----- Invitaciones ----- */}
+      <section>
+        <SectionTitle title="Invitaciones" />
+        <ReferralTree />
       </section>
 
       {/* ----- Reservas ----- */}
