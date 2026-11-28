@@ -104,7 +104,8 @@ export default function Create() {
     await supabase.auth.signOut()
     setExisting(null)
     setStep(0)
-    setDraft(newDraft('otro', IS_INT ? 'USD' : 'CUP'))
+    // Empieza de cero, pero sigue viniendo invitado
+    setDraft((d) => ({ ...newDraft('otro', IS_INT ? 'USD' : 'CUP'), ref: d.ref }))
   }
 
   // Comprueba si el enlace está libre
@@ -307,7 +308,8 @@ export default function Create() {
                 key={t.key}
                 type="button"
                 onClick={() => {
-                  setDraft((d) => ({ ...newDraft(t.key, d.currency), name: d.name, slug: d.slug, whatsapp: d.whatsapp, address: d.address, color: d.color }))
+                  // El código de invitación (ref) se conserva: si no, el que invita no gana su mes
+                  setDraft((d) => ({ ...newDraft(t.key, d.currency), name: d.name, slug: d.slug, whatsapp: d.whatsapp, address: d.address, color: d.color, ref: d.ref }))
                   setStep(1)
                 }}
                 className={`card flex flex-col items-center gap-2 py-5 text-center transition hover:-translate-y-0.5 hover:border-brand/50 hover:shadow-lg active:scale-[0.98] ${draft.type === t.key ? 'border-brand bg-brand/5 ring-1 ring-brand' : ''}`}
